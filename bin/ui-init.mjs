@@ -57,7 +57,7 @@ const toolRel = mode === "vendor" ? "tools/claudes-babysitter" : null;
 const toolPath = mode === "vendor" ? join(repo, toolRel) : TOOL;
 const hookCmd = (script) => (mode === "vendor" ? `node "$CLAUDE_PROJECT_DIR/${toolRel}/bin/${script}"` : `node "${TOOL}/bin/${script}"`);
 if (mode === "vendor") {
-  const exists = existsSync(join(toolPath, "bin/ui-check.mjs"));
+  const exists = existsSync(join(TOOL, "bin/ui-check.mjs"));
   if (!exists || has("force") || TOOL === toolPath) {
     if (TOOL !== toolPath) {
       const SKIP = /(^|\/)(node_modules|reports|test-results|playwright-report|\.babysitter|fixtures|\.git)(\/|$)/;
@@ -173,9 +173,10 @@ console.log("detected:", Object.entries(detected).map(([k, v]) => `${k}=${v}`).j
 console.log(plan.join("\n"));
 if (DRY) process.exit(0);
 
-const audit = spawnSync(process.execPath, [join(toolPath, "bin/ui-audit.mjs"), repo, "--only", "theme", "--json"], { encoding: "utf8" });
+// the report runs from THIS copy of the tool (it has its dependencies; a fresh vendored copy may not yet)
+const audit = spawnSync(process.execPath, [join(TOOL, "bin/ui-audit.mjs"), repo, "--only", "theme", "--json"], { encoding: "utf8" });
 const theme = (() => { try { return JSON.parse(audit.stdout || "[]"); } catch { return []; } })();
-const check = spawnSync(process.execPath, [join(toolPath, "bin/ui-check.mjs"), "--repo", repo, "--format", "json"], { encoding: "utf8", maxBuffer: 256 * 1024 * 1024 });
+const check = spawnSync(process.execPath, [join(TOOL, "bin/ui-check.mjs"), "--repo", repo, "--format", "json"], { encoding: "utf8", maxBuffer: 256 * 1024 * 1024 });
 const problems = (() => { try { const j = JSON.parse(check.stdout || "[]"); return Array.isArray(j) ? j : j.problems; } catch { return []; } })();
 const byRule = {};
 for (const p of problems) byRule[p.rule] = (byRule[p.rule] || 0) + 1;
@@ -189,8 +190,8 @@ else if (shadcn) console.log("  • Theme: product-specific (not the stock shadc
 if (!cfg.baseURL) console.log("  • Set baseURL in babysitter.config.json (or pass --url) to enable the runtime checks.");
 if (!cfg.devServer) console.log("  • Set devServer (or pass --dev-url http://localhost:3000) to let the Stop hook check rendered contrast, rows and overflow while generating.");
 // theme contrast + fingerprint registry
-const { checkContrast, fingerprint } = await import(join(toolPath, "lib/theme.js"));
-const { lookalikes, register, DEFAULT_REGISTRY, projectName } = await import(join(toolPath, "lib/registry.js"));
+const { checkContrast, fingerprint } = await import(join(TOOL, "lib/theme.js"));
+const { lookalikes, register, DEFAULT_REGISTRY, projectName } = await import(join(TOOL, "lib/registry.js"));
 const low = checkContrast(repo, { aliases: cfg.contrastTokens || {} }).filter((r) => !r.ok);
 for (const r of low) console.log(`  • ${r.required ? "CONTRAST (blocks UI edits)" : "contrast (warning)"}: ${r.label}, ${r.scheme} theme = ${r.ratio}:1 (needs 4.5).`);
 const fp = fingerprint(repo);
