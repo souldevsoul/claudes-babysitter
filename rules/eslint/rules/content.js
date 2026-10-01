@@ -74,7 +74,9 @@ export const noInlineStyle = {
   }),
   create(context) {
     // checks a style object, following const references and ...spreads (style={base}, {{...base, color}})
-    const checkStyle = (node, expr, via, seen = new Set()) => {
+    // outside JSX a `style` key can belong to anything (docx, charts, emails); only real CSS visual properties count there
+    const VISUAL_CSS = /^(color|background(Color|Image)?|border(Top|Right|Bottom|Left)?(Color|Width|Radius|Style)?|borderRadius|boxShadow|outline(Color)?|font(Size|Family|Weight|Style)?|lineHeight|letterSpacing|textDecoration|textTransform|margin(Top|Right|Bottom|Left|Inline|Block)?|padding(Top|Right|Bottom|Left|Inline|Block)?|gap|rowGap|columnGap|zIndex|opacity|fill|stroke)$/;
+    const checkStyle = (node, expr, via, seen = new Set(), cssOnly = false) => {
       if (!expr) return;
       if (expr.type === "Identifier" || expr.type === "MemberExpression") {
         const target = expr.type === "Identifier" ? resolveConst(context, expr) : resolveMember(context, expr);
@@ -84,10 +86,11 @@ export const noInlineStyle = {
       if (expr.type === "CallExpression" || expr.type === "ConditionalExpression" || expr.type === "LogicalExpression") return context.report({ node, messageId: "opaque", data: { via: via || "" } });
       if (expr.type !== "ObjectExpression") return;
       for (const p of expr.properties) {
-        if (p.type === "SpreadElement") { checkStyle(node, p.argument, ` (via ...${context.sourceCode.getText(p.argument)})`, seen); continue; }
+        if (p.type === "SpreadElement") { checkStyle(node, p.argument, ` (via ...${context.sourceCode.getText(p.argument)})`, seen, cssOnly); continue; }
         if (p.type !== "Property") continue;
         const key = p.key.type === "Identifier" ? p.key.name : p.key.type === "Literal" ? String(p.key.value) : null;
         if (!key || key.startsWith("--") || STYLE_ALLOWED.has(key)) continue;
+        if (cssOnly && !VISUAL_CSS.test(key)) continue;
         // a theme token is fine: style={{ color: "var(--brand)" }}
         if (p.value.type === "Literal" && typeof p.value.value === "string" && /^var\(--[\w-]+\)$/.test(p.value.value.trim())) continue;
         context.report({ node: p, messageId: "prop", data: { prop: key, via: via || "" } });
@@ -98,10 +101,24 @@ export const noInlineStyle = {
         if (!node.name || node.name.name !== "style" || !node.value || node.value.type !== "JSXExpressionContainer") return;
         checkStyle(node, node.value.expression, "");
       },
+      // a `style: { … }` object written anywhere (a .ts module of shared props, a config object) is judged
+      // where it is written, so moving it to another file does not hide it
+      Property(node) {
+        const k = node.key && (node.key.name ?? node.key.value);
+        if (k !== "style" || node.value.type !== "ObjectExpression") return;
+        if (node.parent && node.parent.parent && node.parent.parent.type === "JSXSpreadAttribute") return; // handled below
+        checkStyle(node, node.value, " (in a style object)", new Set(), true);
+      },
       // <div {...{ style: {...} }} /> and <div {...props} /> where props is a const object with style
       JSXSpreadAttribute(node) {
         let obj = node.argument;
-        if (obj.type === "Identifier") obj = resolveConst(context, obj);
+        // spreading an imported object onto a DOM element: its style cannot be seen from here
+        if (obj.type === "Identifier" && /^[a-z]/.test(node.parent.name.name || "")) {
+          const scope = context.sourceCode.getScope(node);
+          let v = null; for (let sc = scope; sc && !v; sc = sc.upper) v = sc.set.get(obj.name);
+          if (v && v.defs[0] && v.defs[0].type === "ImportBinding") return context.report({ node, messageId: "opaque", data: { via: ` (props spread from the import ${obj.name})` } });
+        }
+        // a local const object with style is reported at its definition (Property visitor) — not twice
         if (!obj || obj.type !== "ObjectExpression") return;
         const style = obj.properties.find((p) => p.type === "Property" && ((p.key.name || p.key.value) === "style"));
         if (style) checkStyle(style, style.value, " (via a spread props object)");

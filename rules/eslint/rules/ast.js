@@ -23,6 +23,32 @@ export const noDynamicClasses = {
           if (m) context.report({ node, messageId: "bad", data: { fragment: m[0].trim() } });
         });
       },
+      // "px-2 bg-" + color + "-500"  — the same thing written with +
+      BinaryExpression(node) {
+        if (node.operator !== "+" || (node.parent && node.parent.type === "BinaryExpression" && node.parent.operator === "+")) return;
+        const parts = [];
+        const flat = (n) => { if (n.type === "BinaryExpression" && n.operator === "+") { flat(n.left); flat(n.right); } else parts.push(n); };
+        flat(node);
+        const lit = (n) => (n.type === "Literal" && typeof n.value === "string" ? n.value : n.type === "TemplateLiteral" && !n.expressions.length ? n.quasis[0].value.cooked : null);
+        for (let i = 0; i < parts.length - 1; i++) {
+          const L = lit(parts[i]);
+          if (L !== null && lit(parts[i + 1]) === null) {
+            const m = L.match(UTIL_PREFIX);
+            if (m) return context.report({ node, messageId: "bad", data: { fragment: m[0].trim() } });
+          }
+        }
+      },
+      // ["bg", tone, "500"].join("-")
+      CallExpression(node) {
+        const c = node.callee;
+        if (c.type !== "MemberExpression" || c.property.name !== "join" || c.object.type !== "ArrayExpression") return;
+        const sep = node.arguments[0] && node.arguments[0].type === "Literal" ? node.arguments[0].value : ",";
+        const els = c.object.elements;
+        if (!els.some((e) => e && e.type !== "Literal")) return;
+        const first = els[0] && els[0].type === "Literal" ? String(els[0].value) + sep : "";
+        const m = first.match(UTIL_PREFIX);
+        if (m) context.report({ node, messageId: "bad", data: { fragment: m[0].trim() } });
+      },
     };
   },
 };
@@ -75,6 +101,31 @@ export const noCssInJsLiterals = {
       },
       CallExpression(node) {
         if (isStyledTag(node.callee) && node.arguments[0] && node.arguments[0].type === "ObjectExpression") checkObject(node.arguments[0]);
+      },
+      // <style>{`.x { color: #bada55 }`}</style> and <style dangerouslySetInnerHTML={{ __html: "…" }} />
+      JSXElement(node) {
+        const n = node.openingElement.name;
+        if (n.type !== "JSXIdentifier" || n.name !== "style") return;
+        let css = "";
+        for (const ch of node.children) {
+          if (ch.type === "JSXText") css += ch.value;
+          else if (ch.type === "JSXExpressionContainer") {
+            const e = ch.expression;
+            if (e.type === "Literal" && typeof e.value === "string") css += e.value;
+            else if (e.type === "TemplateLiteral") css += e.quasis.map((q, i) => (q.value.cooked || "") + (i < e.expressions.length ? `__EXPR${i}__` : "")).join("");
+          }
+        }
+        for (const a of node.openingElement.attributes) {
+          if (a.type === "JSXAttribute" && a.name.name === "dangerouslySetInnerHTML" && a.value && a.value.expression && a.value.expression.type === "ObjectExpression") {
+            const h = a.value.expression.properties.find((p) => p.key && (p.key.name || p.key.value) === "__html");
+            if (h && h.value.type === "Literal") css += h.value.value;
+            if (h && h.value.type === "TemplateLiteral") css += h.value.quasis.map((q) => q.value.cooked || "").join("__EXPR__");
+          }
+        }
+        if (!css.trim()) return;
+        let root;
+        try { root = postcssScss.parse(css); } catch { return; }
+        root.walkDecls((d) => report(node, d.prop, d.value));
       },
     };
   },

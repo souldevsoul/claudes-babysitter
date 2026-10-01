@@ -9,7 +9,7 @@ let input = "";
 for await (const chunk of process.stdin) input += chunk;
 let file;
 try { const j = JSON.parse(input); file = j.tool_input?.file_path || j.tool_input?.path; } catch {}
-if (!file || !/\.(jsx|tsx|css)$/.test(file)) process.exit(0);
+if (!file || !/\.(jsx|tsx|ts|js|mjs|s?css)$/.test(file) || /\.d\.ts$/.test(file)) process.exit(0);
 
 const repo = process.env.CLAUDE_PROJECT_DIR || process.cwd();
 const r = spawnSync(process.execPath, [join(dirname(fileURLToPath(import.meta.url)), "ui-check.mjs"), "--repo", repo, "--changed", "HEAD", "--file", file, "--format", "agent"], { encoding: "utf8" });

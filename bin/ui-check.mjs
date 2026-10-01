@@ -48,28 +48,28 @@ if (changed) {
     for (const u of git("ls-files --others --exclude-standard").split("\n").filter(Boolean)) lineFilter.set(u, "all");
   }
   const list = [git(`diff --name-only --diff-filter=ACMR ${base}`), git("diff --name-only --diff-filter=ACMR"), git("ls-files --others --exclude-standard")].join("\n");
-  files = [...new Set(list.split("\n").filter(Boolean))].filter((f) => /\.(jsx|tsx|s?css)$/.test(f) && existsSync(join(repo, f)));
+  files = [...new Set(list.split("\n").filter(Boolean))].filter((f) => /\.(jsx|tsx|ts|js|mjs|s?css)$/.test(f) && !/\.d\.ts$|(^|\/)(next|tailwind|postcss|eslint|vite|playwright)\.config\./.test(f) && existsSync(join(repo, f)));
 } else {
-  files = git("ls-files --cached --others --exclude-standard").split("\n").filter((f) => /\.(jsx|tsx|s?css)$/.test(f));
+  files = git("ls-files --cached --others --exclude-standard").split("\n").filter((f) => /\.(jsx|tsx|ts|js|mjs|s?css)$/.test(f) && !/\.d\.ts$|(^|\/)(next|tailwind|postcss|eslint|vite|playwright)\.config\./.test(f));
 }
 // third-party and static assets are not the product's code: vendored libraries, minified bundles, public/
 // third-party code is not the product's: vendored dirs, minified bundles and well-known libraries.
 // public/ itself is NOT skipped — template projects keep their own theme there (e.g. public/assets/scss).
 const VENDOR_LIBS = /(^|\/)(bootstrap|font-?awesome|fontawesome-all|jquery[\w.-]*|animate|magnific-popup|swiper[\w-]*|slick[\w-]*|owl\.carousel[\w.-]*|aos|flaticon|odometer|nice-select|select2|normalize|reset)(\.[\w-]+)*\.(s?css)$/i;
-const ignore = [/(^|\/)tools\/claudes-babysitter\//, /node_modules|\.next\/|dist\/|build\/|coverage\//, /(^|\/)(vendor|vendors|third[-_]party|lib\/plugins)\//, /\.min\.(s?css)$/, VENDOR_LIBS, ...(cfg.ignore || []).map((r) => new RegExp(r))];
+const ignore = [/(^|\/)tools\/claudes-babysitter\//, /^(scripts|prisma|migrations|db)\//, /node_modules|\.next\/|dist\/|build\/|coverage\//, /(^|\/)(vendor|vendors|third[-_]party|lib\/plugins)\//, /\.min\.(s?css)$/, VENDOR_LIBS, ...(cfg.ignore || []).map((r) => new RegExp(r))];
 files = files.filter((f) => !ignore.some((r) => r.test(f)));
 const only = opt("file");
 if (only && only !== true) { const want = relative(repo, resolve(repo, only)); files = files.filter((f) => f === want); }
 const problems = [];
 
 // ESLint (only our rules — the product's own config is not our business here)
-const js = files.filter((f) => /\.(jsx|tsx)$/.test(f));
+const js = files.filter((f) => /\.(jsx|tsx|ts|js|mjs)$/.test(f));
 if (js.length) {
   const eslint = new ESLint({
     cwd: repo,
     overrideConfigFile: true,
     overrideConfig: [
-      { files: ["**/*.{jsx,tsx}"], languageOptions: { parser: tsParser, parserOptions: { ecmaFeatures: { jsx: true } } }, linterOptions: { reportUnusedDisableDirectives: "off" } },
+      { files: ["**/*.{jsx,tsx,ts,js,mjs}"], languageOptions: { parser: tsParser, parserOptions: { ecmaFeatures: { jsx: true } } }, linterOptions: { reportUnusedDisableDirectives: "off" } },
       ...ui.configs.create(cfg),
     ],
   });

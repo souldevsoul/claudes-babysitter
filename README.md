@@ -46,6 +46,20 @@ Or install it as a dev dependency: `npm i -D github:souldevsoul/claudes-babysitt
 | `docs/` | The guidelines the rules enforce |
 | `test/`, `fixtures/` | `npm test`: RuleTester, Stylelint fixtures, end-to-end cases |
 
+## What changed in 3.2 (red-team pass)
+
+A chaos agent tried seven forbidden patterns, each with one disguise after the first block. Five disguises got through 3.1; all five are blocked in 3.2, with a regression test each.
+
+| Attack (disguise that worked) | 3.2 fix |
+|---|---|
+| `"bg-" + color + "-500"`, `["bg", c, "500"].join("-")` | `ui/no-dynamic-classes` follows `+` chains and array joins |
+| `style` object moved to an imported `.ts` module and spread as props | `style: { … }` objects are judged where they are written (CSS visual keys only outside JSX); spreading an imported object onto a DOM element is unverifiable → blocked; `.ts/.js/.mjs` files are linted and hooked |
+| raw `<style>{\`…#bada55…\`}</style>` / `dangerouslySetInnerHTML` | parsed as CSS by `ui/no-css-in-js-literals` |
+| `const Field = "select"; <Field/>`, `type={"da" + "te"}`, `React.createElement("select")` | `ui/no-native-controls` statically evaluates tags and types; the rendered micro-check also looks for native controls |
+| kit component only *mentioned* (`void PaymentBadge`) | a bare mention is not a use; only render, call or passing it somewhere counts |
+
+Also fixed during the pass: route handlers (`GET`/`POST`) are no longer taken for components, and `scripts/`, `prisma/`, `migrations/`, `db/` are not UI and are ignored by default.
+
 ## What changed in 3.1 (spec compliance pass)
 
 - **Component audit on the AST** (`lib/components.js`, typescript-estree), no regexes. It reads definitions, exports, imports (aliases from tsconfig, relative paths, barrels/re-exports, `import()` and `next/dynamic`) and real uses (JSX render or call).

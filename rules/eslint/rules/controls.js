@@ -1,5 +1,5 @@
 // Native controls, native dialogs, auth-library pages, hand-built buttons.
-import { meta, elementName, getAttr, staticAttrValue, classTokens, base, fileMatches } from "../util.js";
+import { meta, elementName, getAttr, staticAttrValue, classTokens, base, fileMatches, resolveConst } from "../util.js";
 
 const UI_KIT_DEFAULT = ["**/components/ui/**"];
 
@@ -25,18 +25,41 @@ export const noNativeControls = {
       checkbox: ["Checkbox", "P01"],
       radio: ["RadioGroup", "P01"],
     };
+    // static value of an expression: literals, "da" + "te", cond ? "a" : "b", const bindings → set of strings (or null)
+    const values = (e, depth = 0) => {
+      if (!e || depth > 5) return null;
+      if (e.type === "Literal" && typeof e.value === "string") return [e.value];
+      if (e.type === "TemplateLiteral" && !e.expressions.length) return [e.quasis[0].value.cooked];
+      if (e.type === "JSXExpressionContainer") return values(e.expression, depth + 1);
+      if (e.type === "BinaryExpression" && e.operator === "+") { const l = values(e.left, depth + 1), r = values(e.right, depth + 1); return l && r ? l.flatMap((x) => r.map((y) => x + y)) : null; }
+      if (e.type === "ConditionalExpression") { const a1 = values(e.consequent, depth + 1), b1 = values(e.alternate, depth + 1); return a1 && b1 ? [...a1, ...b1] : null; }
+      if (e.type === "Identifier") { const init = resolveConst(context, e); return init ? values(init, depth + 1) : null; }
+      return null;
+    };
+    const check = (node, name, typeValues) => {
+      if (name === "select") context.report({ node, messageId: "select" });
+      else if (name === "button") context.report({ node, messageId: "button" });
+      else if (name === "input") for (const type of (typeValues || []).map((t) => t.toLowerCase())) {
+        if (INPUTS[type]) { const [replacement, pattern] = INPUTS[type]; context.report({ node, messageId: "input", data: { type, replacement, pattern } }); break; }
+      }
+    };
     return {
+      // React.createElement("select") / createElement("input", { type: "date" })
+      CallExpression(node) {
+        const c = node.callee;
+        const isCE = (c.type === "Identifier" && c.name === "createElement") || (c.type === "MemberExpression" && c.property.name === "createElement");
+        if (!isCE || !node.arguments[0]) return;
+        const tag = values(node.arguments[0]);
+        const props = node.arguments[1] && node.arguments[1].type === "ObjectExpression" ? node.arguments[1] : null;
+        const typeProp = props && props.properties.find((p) => p.key && (p.key.name || p.key.value) === "type");
+        if (tag) for (const t of tag) check(node, t, typeProp ? values(typeProp.value) : null);
+      },
       JSXOpeningElement(node) {
-        const name = elementName(node);
-        if (name === "select") context.report({ node, messageId: "select" });
-        else if (name === "button") context.report({ node, messageId: "button" });
-        else if (name === "input") {
-          const type = (staticAttrValue(getAttr(node, "type")) || "").toLowerCase();
-          if (INPUTS[type]) {
-            const [replacement, pattern] = INPUTS[type];
-            context.report({ node, messageId: "input", data: { type, replacement, pattern } });
-          }
-        }
+        let name = elementName(node);
+        // const Field = "select"; <Field />
+        if (/^[A-Z]/.test(name) && node.name.type === "JSXIdentifier") { const init = resolveConst(context, node.name); const v = init ? values(init) : null; if (v && v.length === 1 && /^[a-z]+$/.test(v[0])) name = v[0]; }
+        if (name === "input") { const t = getAttr(node, "type"); return check(node, name, t ? values(t.value) : null); }
+        if (name === "select" || name === "button") return check(node, name);
       },
     };
   },

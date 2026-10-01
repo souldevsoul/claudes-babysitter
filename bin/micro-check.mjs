@@ -9,6 +9,7 @@
  *   • no horizontal overflow at 390px                                                        [2.1]
  *   • tables keep every column visible at 390px (stacked rows, no sideways scroll)          [2.3]
  *   • fields/selects visible at rest: border ≥ 3:1 or a distinct fill                       [1.9]
+ *   • no native select/date/file/checkbox/radio in the rendered page                        [1.1]
  */
 import { chromium } from "@playwright/test";
 import { existsSync, readFileSync } from "node:fs";
@@ -74,6 +75,7 @@ for (const route of routes) {
     if (v.mobile) for (const o of await c.horizontalOverflow(page)) problems.push({ route, viewport: v.name, check: "horizontal overflow [2.1]", ...o });
     if (v.mobile) for (const o of await c.tableClipping(page)) problems.push({ route, viewport: v.name, check: "mobile table [2.3]", ...o });
     for (const o of await c.inputVisibility(page)) problems.push({ route, viewport: v.name, check: "control boundary [1.9]", ...o });
+    if (!v.mobile) for (const o of await c.nativeControls(page)) problems.push({ route, viewport: v.name, check: "native control [1.1]", ...o });
     await ctx.close();
   }
 }

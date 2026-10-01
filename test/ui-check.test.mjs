@@ -129,6 +129,15 @@ t("init installs a git pre-commit gate: a commit adding a native <select> is blo
   assert.equal(ok.status, 0, ok.stderr);
 });
 
+t("red-team: a kit component that is only mentioned (void X) is still an orphan", (mk) => {
+  const d = mk(shadcn(OWN, {
+    "src/components/ui/payment-badge.tsx": "export function PaymentBadge(){ return <span className=\"text-sm\" />; }\n",
+    "src/app/page.tsx": 'import { PaymentBadge } from "@/components/ui/payment-badge";\nvoid PaymentBadge;\nexport default function P(){ return <p>hi</p>; }\n',
+  }));
+  const r = spawnSync(process.execPath, [join(dirname(CHECK), "ui-audit.mjs"), d, "--only", "components", "--json"], { encoding: "utf8" });
+  assert.ok(JSON.parse(r.stdout).some((x) => /PaymentBadge is a shared component that nothing imports/.test(x.msg)), r.stdout);
+});
+
 t("@apply with arbitrary values is blocked, theme utilities pass", (mk) => {
   const d = mk({ "package.json": '{"devDependencies":{"tailwindcss":"^4"}}', "src/a.css": "@layer components { .promo { @apply rounded-[13px] bg-[#fef3c7] text-[11px]; } .ok { @apply rounded-lg bg-primary text-sm; } }\n" });
   const r = run(d).filter((p) => p.rule === "ui/apply-values");

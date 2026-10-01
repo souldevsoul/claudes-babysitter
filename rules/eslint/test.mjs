@@ -44,6 +44,8 @@ tester.run("no-adhoc-button", R["no-adhoc-button"], {
     // cards and badges are not buttons
     '<div className="rounded-2xl border bg-card p-6">card</div>',
     '<span className="rounded-full bg-blue-500/10 px-3 py-1">New</span>',
+    // other rules' elements must not crash this one (regression: shared helper leaked into it)
+    '<select />', 'const F = "select"; const X = () => <F />', '<input type={"da" + "te"} />',
   ],
   invalid: [
     { code: '<Link href="/x" className="bg-primary px-4 py-2 rounded-lg text-white">Start</Link>', ...err("adhoc") },
@@ -193,6 +195,38 @@ tester.run("no-inline-style (spread + references)", R["no-inline-style"], {
     { code: 'const base = { padding: 13 }; const X = () => <div style={{ ...base, width: 1 }} />', errors: [{ messageId: "prop" }] },
     { code: 'const s = { color: "red" }; const X = () => <div style={s} />', errors: [{ messageId: "prop" }] },
     { code: 'const props = { style: { margin: 4 } }; const X = () => <div {...props} />', errors: [{ messageId: "prop" }] },
+  ],
+});
+
+// ── red-team regressions (2026-10-02): every evasion that got through must stay blocked ──
+tester.run("red-team: concatenated / joined classes", R["no-dynamic-classes"], {
+  valid: ['const c = "px-2 " + (ok ? "bg-primary" : "bg-muted")', 'const u = "/api/" + id + "/bg-image"'],
+  invalid: [
+    { code: 'const X = ({ c }) => <span className={"px-2 py-1 bg-" + c + "-500 rounded"} />', ...err("bad") },
+    { code: 'const cls = ["bg", tone, "500"].join("-")', ...err("bad") },
+  ],
+});
+tester.run("red-team: style object in a .ts module", R["no-inline-style"], {
+  valid: ['export const noteProps = { style: { width: 10, "--x": 1 } };', 'const p = { style: { paragraph: { indent: { left: 720 } } } };'],
+  invalid: [
+    { code: 'export const noteProps = { style: { color: "#999999", margin: "24px" } };', errors: [{ messageId: "prop" }, { messageId: "prop" }] },
+    { code: 'import { noteProps } from "./note-props"; const X = () => <div {...noteProps} />', errors: [{ messageId: "opaque" }] },
+  ],
+});
+tester.run("red-team: raw <style> in JSX", R["no-css-in-js-literals"], {
+  valid: ["const S = () => <style>{`.x { color: var(--brand); }`}</style>"],
+  invalid: [
+    { code: "const S = () => <style>{`.billing-accent { color: #bada55; font-weight: 600; }`}</style>", ...err("bad") },
+    { code: 'const S = () => <style dangerouslySetInnerHTML={{ __html: ".x{border-radius:13px}" }} />', ...err("bad") },
+  ],
+});
+tester.run("red-team: native controls behind a mask", R["no-native-controls"], {
+  valid: ['const X = () => <input type={show ? "text" : "password"} />'],
+  invalid: [
+    { code: 'const Field = "select"; const X = () => <Field />', ...err("select") },
+    { code: 'const X = () => <input type={"da" + "te"} />', ...err("input") },
+    { code: 'const t = "date"; const X = () => <input type={t} />', ...err("input") },
+    { code: 'React.createElement("select", null)', ...err("select") },
   ],
 });
 
