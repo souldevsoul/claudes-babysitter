@@ -57,7 +57,7 @@ const toolRel = mode === "vendor" ? "tools/claudes-babysitter" : null;
 const toolPath = mode === "vendor" ? join(repo, toolRel) : TOOL;
 const hookCmd = (script) => (mode === "vendor" ? `node "$CLAUDE_PROJECT_DIR/${toolRel}/bin/${script}"` : `node "${TOOL}/bin/${script}"`);
 if (mode === "vendor") {
-  const exists = existsSync(join(TOOL, "bin/ui-check.mjs"));
+  const exists = existsSync(join(toolPath, "bin/ui-check.mjs"));
   if (!exists || has("force") || TOOL === toolPath) {
     if (TOOL !== toolPath) {
       const SKIP = /(^|\/)(node_modules|reports|test-results|playwright-report|\.babysitter|fixtures|\.git)(\/|$)/;
