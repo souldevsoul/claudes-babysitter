@@ -1,0 +1,26 @@
+# Blocks merges that break the UI guidelines. Lint runs on changed files only; runtime checks run against the preview deploy.
+name: claudes-babysitter
+on: [pull_request]
+jobs:
+  lint:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with: { fetch-depth: 0 }
+      - uses: actions/setup-node@v4
+        with: { node-version: 22 }
+      - run: npm ci --prefix tools/claudes-babysitter
+      - run: node tools/claudes-babysitter/bin/ui-check.mjs --changed origin/${{ github.base_ref }}
+  runtime:
+    runs-on: ubuntu-latest
+    needs: lint
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with: { node-version: 22 }
+      - run: npm ci --prefix tools/claudes-babysitter && npx --prefix tools/claudes-babysitter playwright install chromium --with-deps
+      # PREVIEW_URL: set by your deploy step (e.g. Vercel preview URL)
+      - run: node tools/claudes-babysitter/playwright/prepare.mjs
+        env: { BASE_URL: "${{ vars.PREVIEW_URL }}", LOGIN_EMAIL: "${{ secrets.UI_TEST_EMAIL }}", LOGIN_PASSWORD: "${{ secrets.UI_TEST_PASSWORD }}", PW_CHANNEL: chromium }
+      - run: npx --prefix tools/claudes-babysitter playwright test -c tools/claudes-babysitter/playwright/playwright.config.ts
+        env: { BASE_URL: "${{ vars.PREVIEW_URL }}", PW_CHANNEL: chromium }

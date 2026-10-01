@@ -1,0 +1,26 @@
+# dependencies
+node_modules/
+
+# secrets
+.env
+.env.*
+*.pem
+
+# Playwright / test output
+test-results/
+playwright-report/
+blob-report/
+playwright/.cache/
+
+# tool state written into projects (and by local runs)
+.babysitter/
+.ui-guardrails/
+
+# pilot reports: they contain diffs and logs of private products — never publish
+reports/
+
+# OS / editor / logs
+.DS_Store
+*.log
+.vscode/
+.idea/

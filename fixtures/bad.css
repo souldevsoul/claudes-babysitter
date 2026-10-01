@@ -1,0 +1,11 @@
+/* Unlayered global rule — beats every Tailwind utility (P24) */
+.card { padding: 13px; color: white; }
+@layer components {
+  .modal { z-index: 9999; }
+  .btn { transition: all 0.3s; }
+  .caption { font-size: 10px; }
+  .override { margin: 0 !important; }
+  /* the "write a CSS class instead" route */
+  .promo { @apply rounded-[13px] bg-[#fef3c7] text-[11px] shadow-[0_3px_9px_#0003] bg-indigo-100; }
+  .plan-card-v2 { border-radius: 22px; background: #fafafa; box-shadow: 0 8px 24px rgba(0,0,0,.08); font-family: Georgia, serif; }
+}

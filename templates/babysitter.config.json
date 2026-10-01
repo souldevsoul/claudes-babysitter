@@ -1,0 +1,33 @@
+{
+  "$comment": "Claude's Babysitter project settings. Every allowance is a design decision — write the reason next to it.",
+  "name": "my-product",
+  "baseURL": "https://your-preview.vercel.app",
+  "devServer": "http://localhost:3000",
+  "routes": ["/", "/pricing"],
+  "authRoutes": ["/dashboard"],
+  "sampleParams": { "id": "demo" },
+  "login": { "url": "/login" },
+  "crawl": { "maxPages": 25, "exclude": ["/blog/"] },
+  "colorSchemes": ["light", "dark"],
+  "kit": ["StatTile", "PlanCard", "SectionHeader"],
+  "themePaths": ["**/components/ui/**", "**/theme/**"],
+  "themeFirst": true,
+  "contrast": true,
+  "contrastTokens": {},
+  "registry": "",
+  "similarityThreshold": 0.8,
+  "allow": {
+    "rails": false,
+    "emoji": false,
+    "negativeMargins": false,
+    "lightWeights": false,
+    "palette": false,
+    "cssInJsLiterals": false
+  },
+  "allowReasons": {
+    "lightWeights": "editorial brand: 200-weight display serif — contrast is still enforced"
+  },
+  "consistency": { "buttonRadii": 2, "buttonFonts": 1, "buttonHeights": 3, "cardRadii": 3, "cardStyles": 4, "inputHeights": 2, "inputRadii": 2 },
+  "ignore": ["src/legacy/"],
+  "audit": { "exclude": ["design-lab"] }
+}

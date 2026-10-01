@@ -1,0 +1,72 @@
+{
+  "name": "claudes-babysitter",
+  "version": "3.1.0",
+  "private": true,
+  "description": "Claude's Babysitter — keeps AI code generators inside a product's UI system: AST lint rules, static WCAG contrast of theme tokens, component-reuse audit, Claude Code + git hooks and Playwright micro-checks. Enforces the UI Architecture & Consistency Guidelines (58 recurring UI bug patterns).",
+  "type": "module",
+  "bin": {
+    "babysitter": "bin/babysitter.mjs",
+    "claudes-babysitter": "bin/babysitter.mjs"
+  },
+  "exports": {
+    "./eslint": "./rules/eslint/index.js",
+    "./stylelint": "./rules/stylelint/config.js",
+    "./lib/*": "./lib/*"
+  },
+  "files": [
+    "bin",
+    "lib",
+    "rules",
+    "playwright",
+    "templates",
+    "docs",
+    "README.md"
+  ],
+  "engines": {
+    "node": ">=22.18"
+  },
+  "scripts": {
+    "test": "npm run test:eslint && npm run test:stylelint && npm run test:check",
+    "test:eslint": "node rules/eslint/test.mjs",
+    "test:stylelint": "node rules/stylelint/test.mjs",
+    "check": "node bin/ui-check.mjs",
+    "check:changed": "node bin/ui-check.mjs --changed --format agent",
+    "audit": "node bin/ui-audit.mjs",
+    "ui:prepare": "node playwright/prepare.mjs",
+    "test:ui": "playwright test -c playwright/playwright.config.ts",
+    "test:check": "node test/ui-check.test.mjs",
+    "init": "node bin/ui-init.mjs"
+  },
+  "dependencies": {
+    "@playwright/test": "^1.48.0",
+    "@typescript-eslint/parser": "^8.71.0",
+    "@typescript-eslint/typescript-estree": "^8.71.0",
+    "eslint": "^9.12.0",
+    "postcss": "^8.5.28",
+    "postcss-scss": "^4.0.9",
+    "stylelint": "^16.9.0"
+  },
+  "devDependencies": {
+    "@types/node": "^26.6.3",
+    "typescript": "^5.6.0"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/souldevsoul/claudes-babysitter.git"
+  },
+  "homepage": "https://github.com/souldevsoul/claudes-babysitter#readme",
+  "keywords": [
+    "ui",
+    "design-system",
+    "eslint",
+    "stylelint",
+    "playwright",
+    "wcag",
+    "contrast",
+    "claude-code",
+    "hooks",
+    "ai-codegen",
+    "tailwind",
+    "shadcn"
+  ]
+}

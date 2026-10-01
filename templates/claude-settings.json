@@ -1,0 +1,16 @@
+{
+  "$comment": "Merge into .claude/settings.json of a product repo. Assumes claudes-babysitter is vendored at tools/claudes-babysitter.",
+  "hooks": {
+    "PostToolUse": [
+      {
+        "matcher": "Edit|Write|MultiEdit",
+        "hooks": [{ "type": "command", "command": "node \"$CLAUDE_PROJECT_DIR/tools/claudes-babysitter/bin/hook-post-edit.mjs\"", "timeout": 60 }]
+      }
+    ],
+    "Stop": [
+      {
+        "hooks": [{ "type": "command", "command": "node \"$CLAUDE_PROJECT_DIR/tools/claudes-babysitter/bin/hook-stop.mjs\"", "timeout": 120 }]
+      }
+    ]
+  }
+}
