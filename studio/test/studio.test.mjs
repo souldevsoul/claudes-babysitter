@@ -684,6 +684,26 @@ try {
   ok("Before/After: superseded capture requests are skipped (scrolling on never queues minutes of captures)");
 }
 
+// a faint field edge: the finding names the lightest edge that passes, so the fix does not overshoot into a harsh one
+{
+  const c = await import("../../playwright/checks.js");
+  const { explain } = await import("../../lib/explain.js");
+  const b2 = await chromium.launch(); const pg = await b2.newPage();
+  await c.install(pg);
+  await pg.goto("data:text/html,<body style='background:%23fff;margin:40px'><input id=f style='border:1px solid %23d1d5dc;background:%23fff;width:300px;height:40px'></body>");
+  const [f] = (await c.inputVisibility(pg)).filter(Boolean);
+  const hex = (f.what.match(/lightest passing edge (#[0-9a-f]{6})/) || [])[1];
+  assert.ok(hex, f.what);
+  await pg.evaluate((h) => { document.getElementById("f").style.borderColor = h; }, hex);
+  assert.equal((await c.inputVisibility(pg)).filter(Boolean).length, 0, "the suggested edge passes");
+  const lum = (h) => { const v = [1, 3, 5].map((i) => parseInt(h.slice(i, i + 2), 16) / 255).map((x) => (x <= 0.03928 ? x / 12.92 : ((x + 0.055) / 1.055) ** 2.4)); return 0.2126 * v[0] + 0.7152 * v[1] + 0.0722 * v[2]; };
+  const ratio = 1.05 / (lum(hex) + 0.05);
+  assert.ok(ratio >= 3 && ratio < 3.2, `just enough, not darker: ${ratio.toFixed(2)}:1`);
+  assert.match(explain({ check: "control boundary [1.9]", ...f }).explain.ru.fix, new RegExp(`${hex} здесь уже даёт 3:1`));
+  await b2.close();
+  ok("a faint field edge: the finding suggests the lightest edge that reaches 3:1 (no harsh overshoot), and the explanation says so");
+}
+
 // 6. no studio → exit 2 so the git hook can fall back to plain blocking
 const r5 = spawn(process.execPath, [BIN, "review", "--url", "http://localhost:9"], { stdio: ["pipe", "pipe", "pipe"] });
 r5.stdin.end("[]");

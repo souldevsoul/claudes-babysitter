@@ -326,7 +326,7 @@ Some rules encode design choices rather than bugs. A project can opt out explici
 | Cards in a row: same radius and padding; same fill/border/shadow (one featured card may differ); offer cards (with price/CTA) equal height; CTAs and prices aligned; no double seams. Bento/masonry tiles without price/CTA may differ in height | 2.6 / 1.7 / 1.16 | P27 P46 P55 |
 | Repeated rows keep column positions | 2.12 | P48 |
 | Scroll containers not rounded | 5.1 | P21 |
-| Inputs visible at rest (border ≥3:1 or distinct fill) | 1.9 | P09 |
+| Inputs visible at rest (border ≥3:1 or distinct fill); the finding names the lightest edge that passes, so the fix does not overshoot | 1.9 | P09 |
 | Button label readable on hover (≥3:1) | 1.4 | P06 |
 | Every dropdown/menu/dialog trigger is opened: popup on-screen, content scrolls, header doesn't move, no overflow | 1.2 / 5.2 / 5.3 | P02 P18 P22 |
 | Cookie settings replace the banner (one "Accept"), panel fits | 4.6 | P19 P18 |

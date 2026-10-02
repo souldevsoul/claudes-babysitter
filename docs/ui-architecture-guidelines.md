@@ -26,7 +26,7 @@ Tags like `[P06]` reference the bug pattern IDs in `nexus-ui-consistency-bugs.js
 
 1.8 Selectable options (plan cards, session types, filter chips) **MUST** have a `selected` style from a token that is clearly distinct (solid border/ring + background or check icon), not an opacity tweak of the default border. `[P10]`
 
-1.9 Inputs: at rest the border **MUST** meet 3:1 contrast against its background. Exactly one focus ring per field, on one element (the wrapper OR the input, never both). Errors: destructive ring + message under the field. `[P09]`
+1.9 Inputs: at rest the border **MUST** meet 3:1 contrast against its background. Aim for just above 3:1 (the check names the lightest passing edge): a near-black edge passes too but reads harsh — it **SHOULD NOT** go much darker than needed. Keep it in one theme token. Exactly one focus ring per field, on one element (the wrapper OR the input, never both). Errors: destructive ring + message under the field. `[P09]`
 
 1.10 DatePicker: use the UI-kit calendar; constrain its width (`max-w-sm`-ish); unavailable dates use a dedicated `disabled` style (strikethrough or ≤40% + `cursor-not-allowed` + `aria-disabled`), visibly different from available ones. If a native date control is ever unavoidable, set `color-scheme` to match the theme. `[P03]`
 

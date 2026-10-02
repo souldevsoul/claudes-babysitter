@@ -614,7 +614,15 @@ export const inputVisibility = (page) => page.evaluate(() => {
         const border = mix(W.__uiRGBA(cs.borderBottomColor), fill);
         const borderOk = bw > 0 && ratio(border, bg) >= 3;
         const fillOk = ratio(fill, bg) >= 1.25;
-        return borderOk || fillOk ? null : { what: `input barely visible at rest (border ${bw ? ratio(border, bg).toFixed(2) + ":1" : "none"}, fill ${ratio(fill, bg).toFixed(2)}:1) [1.9, P09]`, where: W.__uiDescribe(el), selector: W.__uiSelector(el), human: W.__uiHuman(el) };
+        if (borderOk || fillOk) return null;
+        // the lightest edge that passes: the same colour moved toward the text side only as far as 3:1 needs —
+        // a much darker edge passes too, but reads harsh (the fix should not overshoot)
+        const target = lum(bg) > 0.4 ? [0, 0, 0] : [255, 255, 255];
+        const start = bw > 0 ? border : fill;
+        let lo = 0, hi = 1;
+        for (let k = 0; k < 24; k++) { const t = (lo + hi) / 2; const c = start.map((v, i) => v + (target[i] - v) * t); if (ratio(c, bg) >= 3.05) hi = t; else lo = t; }
+        const hex = "#" + start.map((v, i) => Math.round(v + (target[i] - v) * hi).toString(16).padStart(2, "0")).join("");
+        return { what: `input barely visible at rest (border ${bw ? ratio(border, bg).toFixed(2) + ":1" : "none"}, fill ${ratio(fill, bg).toFixed(2)}:1; lightest passing edge ${hex}) [1.9, P09]`, where: W.__uiDescribe(el), selector: W.__uiSelector(el), human: W.__uiHuman(el) };
     })
         .filter(Boolean)
         .slice(0, 10);
