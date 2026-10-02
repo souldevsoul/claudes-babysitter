@@ -184,6 +184,10 @@ export const illegibleText = (page, allowLightWeights = false) => page.evaluate(
         // 6.4: body/nav text — weight ≥400 below 16px, ≥300 from 16px; display type ≥24px free. Projects may opt out (allow.lightWeights).
         if (!allowLightWeights && size < 24 && (weight < 300 || (weight < 400 && size < 16)))
             bad.push(`weight ${weight} at ${size}px`);
+        // fully transparent through an ancestor (a reveal-on-scroll block not yet revealed, a closed tooltip):
+        // nobody can read it, so there is no contrast to judge — visibility is not this check's question
+        if (opacity < 0.01)
+            continue;
         if (opacity < 0.95)
             bad.push(`opacity ${opacity.toFixed(2)} on text`);
         if (ratio < (large ? 3 : 4.5)) {
@@ -781,9 +785,12 @@ export const tableClipping = (page) => page.evaluate(() => {
  * JSX, spreads, imported props, document.write, dangerouslySetInnerHTML, scripts.
  */
 /** Framework/library internals that write style attributes the page author never writes. */
-export const SNIPER_SKIP = ["script", "style", "noscript", "template", "next-route-announcer", "nextjs-portal", "[data-nextjs-toast]", "img[data-nimg]", "[data-radix-popper-content-wrapper]", "[data-floating-ui-portal]", "[data-sonner-toaster]"];
+// canvas + the wrappers WebGL renderers (three.js / react-three-fiber) size at runtime
+export const SNIPER_SKIP = ["script", "style", "noscript", "template", "next-route-announcer", "nextjs-portal", "[data-nextjs-toast]", "img[data-nimg]", "[data-radix-popper-content-wrapper]", "[data-floating-ui-portal]", "[data-sonner-toaster]", "canvas", ":has(> canvas)", ":has(> div > canvas)"];
 /** Written every frame by animation libraries (framer-motion, motion, GSAP): runtime state, not design tokens. */
-export const SNIPER_MOTION_PROPS = ["transform", "opacity", "translate", "scale", "rotate", "will-change", "transform-origin", "visibility"];
+export const SNIPER_MOTION_PROPS = ["transform", "opacity", "translate", "scale", "rotate", "will-change", "transform-origin", "visibility", "transition",
+    // behaviour set by UI libraries, not design: next-themes (color-scheme on <html>), Radix (pointer-events)
+    "pointer-events", "color-scheme", "touch-action", "user-select", "-webkit-user-select", "overflow-anchor"];
 export const inlineStyles = (page, allowProps = [], skip = [], strict = false) => page.evaluate(({ allowProps, skip, strict }) => {
     const W = window;
     const out = [];
@@ -800,8 +807,15 @@ export const inlineStyles = (page, allowProps = [], skip = [], strict = false) =
         const pos = getComputedStyle(el).position;
         if (!strict && (pos === "absolute" || pos === "fixed") && r.width <= 1 && r.height <= 1)
             continue;
+        // not rendered right now: a collapsed accordion panel (height 0 under overflow hidden) or a faded-out
+        // layer — animation libraries leave their state there. Judged again once it is visible.
+        const ecs = getComputedStyle(el);
+        if (!strict && (Number(ecs.opacity) === 0 || ((r.height === 0 || r.width === 0) && ecs.overflow !== "visible")))
+            continue;
         const decl = (el.getAttribute("style") || "").split(";").map((d) => d.trim()).filter(Boolean);
-        const props = [...new Set(decl.map((d) => d.split(":")[0].trim().toLowerCase()).filter((p) => p && !p.startsWith("--") && !allowProps.includes(p)))];
+        // a keyword value (height: auto, left: initial…) sets no design value — animation libraries leave them behind
+        const meaningful = decl.filter((d) => !/^\s*[^:]+:\s*(auto|initial|inherit|unset|revert|revert-layer)\s*(!important)?\s*$/i.test(d));
+        const props = [...new Set(meaningful.map((d) => d.split(":")[0].trim().toLowerCase()).filter((p) => p && !p.startsWith("--") && !allowProps.includes(p)))];
         if (!props.length)
             continue;
         const tag = el.tagName.toLowerCase();
@@ -811,3 +825,16 @@ export const inlineStyles = (page, allowProps = [], skip = [], strict = false) =
     }
     return out;
 }, { allowProps: strict ? allowProps : [...SNIPER_MOTION_PROPS, ...allowProps], skip: strict ? skip : [...SNIPER_SKIP, ...skip], strict });
+
+/**
+ * Scroll the whole page once, so reveal-on-scroll content (framer-motion whileInView, IntersectionObserver,
+ * lazy sections) renders the way a reader sees it — measured before, it is opacity 0 and reads as 1:1.
+ */
+export const revealLazy = async (page) => {
+    await page.evaluate(async () => {
+        const step = Math.max(200, Math.floor(window.innerHeight * 0.8));
+        for (let y = 0; y < document.documentElement.scrollHeight; y += step) { window.scrollTo(0, y); await new Promise((r) => setTimeout(r, 60)); }
+        window.scrollTo(0, 0);
+    });
+    await page.waitForTimeout(700); // reveal transitions finish
+};

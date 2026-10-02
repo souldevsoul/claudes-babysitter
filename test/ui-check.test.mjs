@@ -213,7 +213,7 @@ t("registry: a theme ≥80% like a registered product is a warning, not a block"
   const html = `<!doctype html><html><head><meta name=viewport content="width=device-width,initial-scale=1"><style>
     body{margin:0;font:16px sans-serif;background:#fff}
     .row{display:flex;gap:16px;padding:16px;width:1100px}.card{flex:1;border:1px solid #ddd;padding:16px}
-    .price{font-size:28px}.muted{color:#c8c8c8}
+    .price{font-size:28px}.muted{color:#c8c8c8}.far{margin-top:2400px}
   </style></head><body><main><h1>Plans</h1><div class="row">
     <div class="card"><h3>A</h3><div class="price">$9</div><a href="#" style="display:inline-block;padding:10px">Buy</a></div>
     <div class="card"><h3>B</h3><p>longer text that pushes things down a lot more than the others do</p><div class="price">$19</div><a href="#" style="display:inline-block;padding:10px">Buy</a></div>
@@ -222,7 +222,14 @@ t("registry: a theme ≥80% like a registered product is a warning, not a block"
   <button role="combobox" style="border:1px solid #eee;background:#fff;padding:6px 10px">Week</button>
   <div style="--offset: 4px" class="vars-only">vars only</div>
   <p><span style="color:#bada55;padding:12px" class="injected">injected</span></p>
-  <script>window.__x = 1</script>
+  <span style="pointer-events:none" class="lib-span">Radix sets this</span>
+  <div style="position:relative;width:100%;height:100%;overflow:hidden;pointer-events:auto" class="r3f-wrap"><div style="width:100%;height:100%"><canvas style="display:block;width:300px;height:150px"></canvas></div></div>
+  <div style="height:auto" class="accordion">accordion after its animation</div><div style="height:0px;opacity:0" class="accordion collapsed-panel"><p>collapsed answer</p></div><div style="overflow:hidden"><div style="height:0px;overflow:hidden" class="accordion collapsed-2">x</div></div>
+  <div class="tooltip" style="--x:0" ><span style="--y:0"></span></div><div style="opacity:0" class="closed-tip"><p style="--z:1">never shown tooltip text</p></div>
+  <section class="far"><p class="reveal" style="--r:1">revealed on scroll, readable once visible</p></section>
+  <script>window.__x = 1; document.documentElement.style.colorScheme = "light";
+    const io = new IntersectionObserver((es) => es.forEach((e) => { if (e.isIntersecting) e.target.style.setProperty("opacity", "1"); }));
+    document.querySelectorAll(".reveal").forEach((el) => { el.style.setProperty("opacity", "0"); el.style.setProperty("transition", "opacity .2s"); io.observe(el); });</script>
   <div style="overflow-x:auto"><table style="width:900px"><tr><th>ID</th><th>Client</th><th>Date</th><th>Status</th><th>Amount</th></tr><tr><td>1</td><td>A</td><td>today</td><td>ok</td><td>$1</td></tr></table></div>
   </main></body></html>`;
   const srv = spawn(process.execPath, ["-e", `const h=${JSON.stringify(html)};require("node:http").createServer((q,r)=>{r.writeHead(200,{"content-type":"text/html"});r.end(h)}).listen(0,function(){console.log(this.address().port)})`]);
@@ -242,6 +249,13 @@ t("registry: a theme ≥80% like a registered product is a warning, not a block"
     const dom = list.filter((p) => p.check === "inline style [DOM]");
     assert.ok(dom.some((p) => /injected/.test(p.where) && p.props.includes("color") && p.props.includes("padding")), JSON.stringify(dom));
     assert.ok(!dom.some((p) => /vars-only/.test(p.where)), "a style of only CSS custom properties is allowed");
+    // library-written runtime styles are not design: next-themes color-scheme, Radix pointer-events, a WebGL
+    // canvas and the wrappers sized for it, keyword values left by an accordion animation
+    assert.ok(!dom.some((p) => p.tag === "html" || p.tag === "canvas" || /lib-span|r3f-wrap|accordion|reveal/.test(p.where)), JSON.stringify(dom.map((p) => p.what + " @ " + p.where)));
+    // invisible text is not a contrast failure; reveal-on-scroll text is measured as the reader sees it
+    const contrast = list.filter((p) => /contrast/.test(p.check));
+    assert.ok(!contrast.some((p) => /never shown tooltip|revealed on scroll/.test(p.where) || /opacity 0\.00/.test(p.what)), JSON.stringify(contrast.map((p) => p.what + " @ " + p.where)));
+    assert.ok(contrast.some((p) => /fine print/.test(p.where)), "real low contrast is still caught");
     const human = spawnSync(process.execPath, [join(dirname(CHECK), "micro-check.mjs"), "--repo", d, "--url", url, "--routes", "/"], { encoding: "utf8", timeout: 120000 });
     assert.equal(human.status, 1);
     assert.match(human.stdout, /❌ \[Playwright\] Нарушение архитектуры! Обнаружены хардкодные inline-стили в DOM: <span> содержит запрещенные свойства color, padding/);

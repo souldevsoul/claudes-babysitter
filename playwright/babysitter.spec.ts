@@ -18,6 +18,7 @@ async function open(page: Page, route: string) {
   await page.goto(route, { waitUntil: "networkidle" }).catch(() => page.goto(route, { waitUntil: "load" }));
   await page.waitForTimeout(800); // late fonts / hydration
   if (await c.applyColorScheme(page)) await page.waitForTimeout(300); // class-based dark theme
+  await c.revealLazy(page); // reveal-on-scroll sections render as a reader sees them
 }
 
 const hard = (list: c.Offender[]) => expect(list, fmt(list)).toEqual([]);
