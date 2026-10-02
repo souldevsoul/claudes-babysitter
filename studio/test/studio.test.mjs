@@ -404,7 +404,8 @@ try {
     // style= changes nothing a person can see: listed after the visible ones, under its own heading, yellow
     assert.match(await page.locator(`${ps} .list li[data-g]`).last().innerText(), /Style hard-coded on the element/);
     assert.equal(await page.locator(`${ps} .list li[data-g]`).last().locator(".n.code").count(), 1);
-    assert.match(await page.locator(`${ps} .list li.sep`).innerText(), /Not visible on the page — only in the code \(1\)/);
+    assert.match(await page.locator(`${ps} .list li.sep.k-code`).innerText(), /Not visible on the page — only in the code \(1\)/);
+    assert.match(await page.locator(`${ps} .list li.sep.red`).innerText(), /Visible on the page — not fixed yet \(2\)/);
     assert.equal(await page.locator(`${ps} .box.code`).count(), 1, "the h1 gets a yellow frame");
     assert.equal(await page.locator(`${ps} .box.code .tag`).textContent(), "3");
     assert.equal(await page.locator(`${ps} .box.code`).evaluate((e) => getComputedStyle(e).borderTopColor), "rgb(234, 179, 8)");
@@ -486,6 +487,8 @@ try {
     assert.deepEqual(await page.locator(`${ps} .filters button`).allInnerTexts(), ["Visible · 4", "In code · 1", "Fixed · 1"]);
     assert.deepEqual(await page.locator(`${ps} .list li[data-g]`).evaluateAll((ls) => ls.map((l) => l.className)), ["k-red", "k-red", "k-red", "k-red", "k-code", "k-fixed"], "visible, then code-only, then fixed");
     assert.match(await page.locator(`${ps} .list li.sep.fixed`).innerText(), /Fixed since the previous check \(1\)/);
+    const fixedText = await page.locator(`${ps} .list li[data-g].k-fixed`).innerText();
+    assert.match(fixedText, /Was: Because it is 3\.58:1/); assert.doesNotMatch(fixedText, /→/, "a fixed entry gives no advice");
     assert.equal(await page.locator(`${ps} .box.fixed`).evaluate((e) => getComputedStyle(e).borderTopColor), "rgb(34, 197, 94)", "fixed: green frame");
     assert.equal(await page.locator(`${ps} .box.k-red`).count(), 1, "#late is not there yet; the phone-width finding is not framed on a desktop window");
     // an element a client component renders later gets its frame then
