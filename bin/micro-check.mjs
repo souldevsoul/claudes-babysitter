@@ -73,6 +73,7 @@ for (const route of routes) {
     if (res && res.err) { problems.push({ route, viewport: v.name, check: "load", what: res.err.split("\n")[0] }); await ctx.close(); continue; }
     await page.waitForLoadState("networkidle", { timeout: 5000 }).catch(() => {});
     await page.waitForTimeout(400);
+    if (await c.applyColorScheme(page)) await page.waitForTimeout(300);
     const { hard } = await c.illegibleText(page, !!(cfg.allow && cfg.allow.lightWeights));
     for (const o of hard.filter((x) => /contrast/.test(x.what))) problems.push({ route, viewport: v.name, check: "contrast [6.4]", ...o });
     for (const o of await c.rowAlignment(page)) problems.push({ route, viewport: v.name, check: "row alignment [2.6]", ...o });

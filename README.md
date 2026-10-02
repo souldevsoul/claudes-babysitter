@@ -46,6 +46,11 @@ Or install it as a dev dependency: `npm i -D github:souldevsoul/claudes-babysitt
 | `docs/` | The guidelines the rules enforce |
 | `test/`, `fixtures/` | `npm test`: RuleTester, Stylelint fixtures, end-to-end cases |
 
+## What changed in 3.3.1
+
+- **Dark-theme checks really test the dark theme.** Class-based themes (shadcn `.dark`, `data-theme`) ignore `prefers-color-scheme`. When a run emulates dark, the checks now switch `<html>` to `.dark` / `data-theme="dark"` after hydration, the way a theme toggle does. Before, the "dark" pass measured the light theme a second time.
+- **Hover checks look at the page's own document only.** Playwright's `$$` pierces shadow roots, which pulled in the Next.js dev-tools button.
+
 ## What changed in 3.3 (strict styles + DOM sniper)
 
 - **`ui/no-inline-style` rewritten** (`rules/eslint/rules/ui-no-inline-style.js`). The `style` prop is forbidden on every element, DOM or component. Spreads inside `style` are forbidden, and so are references and conditionals.

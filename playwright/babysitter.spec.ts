@@ -17,6 +17,7 @@ async function open(page: Page, route: string) {
   await c.install(page);
   await page.goto(route, { waitUntil: "networkidle" }).catch(() => page.goto(route, { waitUntil: "load" }));
   await page.waitForTimeout(800); // late fonts / hydration
+  if (await c.applyColorScheme(page)) await page.waitForTimeout(300); // class-based dark theme
 }
 
 const hard = (list: c.Offender[]) => expect(list, fmt(list)).toEqual([]);

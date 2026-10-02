@@ -73,6 +73,19 @@ export async function install(page: Page) {
   });
 }
 
+/**
+ * Class-based themes (shadcn `.dark`, data-theme) ignore prefers-color-scheme. When the run emulates dark,
+ * switch the page the way a theme toggle would — AFTER hydration (doing it earlier makes React report a
+ * mismatch) — so the dark tokens are what gets measured.
+ */
+export const applyColorScheme = (page: Page) =>
+  page.evaluate(() => {
+    if (!matchMedia("(prefers-color-scheme: dark)").matches) return false;
+    const h = document.documentElement;
+    h.classList.add("dark"); h.setAttribute("data-theme", "dark"); h.style.colorScheme = "dark";
+    return true;
+  });
+
 /** 2.1 — no horizontal page scroll; 2.10 — nothing sticks out of the viewport. */
 export const horizontalOverflow = (page: Page) =>
   page.evaluate(() => {
@@ -505,7 +518,7 @@ export async function hoverContrast(page: Page, max = 12) {
   let n = 0;
   for (const h of handles) {
     if (n >= max) break;
-    const ok = await h.evaluate((el) => (window as any).__uiVisible(el) && (el.textContent || "").trim().length > 0 && el.getBoundingClientRect().top < innerHeight * 3).catch(() => false);
+    const ok = await h.evaluate((el) => el.getRootNode() === document && (window as any).__uiVisible(el) && (el.textContent || "").trim().length > 0 && el.getBoundingClientRect().top < innerHeight * 3).catch(() => false);
     if (!ok) continue;
     n++;
     await h.scrollIntoViewIfNeeded().catch(() => {});
