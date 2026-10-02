@@ -169,7 +169,10 @@
     title.textContent = `Babysitter: ${plural(groups.length)}`;
     status.textContent = `review ${r.reviewId}`;
     const items = groups.map((g, gi) => {
-      const ex = exOf(g.p);
+      const ex = { ...exOf(g.p) };
+      // one element in several places (header and footer): name it once and list every place
+      const places = [...new Set(g.items.map(({ p }) => (p.explain && (p.explain[LANG] || p.explain.en) || {}).place).filter(Boolean))];
+      if (ex.head && places.length > 1) ex.element = `${ex.head} ${places.slice(0, -1).join(", ")} ${LANG === "ru" ? "и" : "and"} ${places.at(-1)}`;
       const routes = [...new Set(g.items.map((x) => x.p.route).filter(Boolean))];
       const here = routes.includes(location.pathname);
       const count = [routes.length > 1 ? T.pages(routes.length) : routes.length === 1 && !here ? T.otherPage(routes[0]) : "", g.items.length > routes.length && g.items.length > 1 ? T.places(g.items.length) : ""].filter(Boolean).join(" · ");

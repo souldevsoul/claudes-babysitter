@@ -252,15 +252,16 @@ try {
     const boundary = (route, selector) => ({ check: "control boundary [1.9]", what: "input barely visible at rest (border 1.43:1, fill 1.00:1) [1.9, P09]", human, route, selector });
     const rv = requestReview({ url: base, title: "Explained", timeoutMs: 30000, problems: [
       boundary("/", "#country"), boundary("/", "select#country"), boundary("/pricing", "#country"),
+      { ...boundary("/pricing", "select#country"), human: { ...human, place: { area: "footer" } } },
       { check: "native control [1.1]", what: "native <input type=checkbox>", human: { kind: "checkbox", name: "I agree", place: { area: "form", title: "Create Account" } }, route: "/", selector: "p.faint" },
     ] });
     const ps = "#__babysitter-studio";
     await page.locator(`${ps} #approve`).waitFor({ timeout: 10000 });
-    assert.equal(await page.locator(`${ps} .list li[data-g]`).count(), 2, "4 findings → 2 entries: the same switch on 2 pages / 3 places is one");
+    assert.equal(await page.locator(`${ps} .list li[data-g]`).count(), 2, "5 findings → 2 entries: the same switch on 2 pages / 4 places (header and footer) is one");
     assert.equal(await page.locator(`${ps} .title`).textContent(), "Babysitter: 2 problems");
     const first = await page.locator(`${ps} .list li[data-g]`).first().innerText();
     assert.match(first, /The control's edge is barely visible/);
-    assert.match(first, /Dropdown «€ EUR» in the site header · on 2 pages · 3 places/);
+    assert.match(first, /Dropdown «€ EUR» in the site header and in the footer · on 2 pages · 4 places/);
     assert.match(first, /3:1 \(WCAG 1\.4\.11\).*border is 1\.43:1/s);
     assert.match(first, /→ Give it the theme's input border/);
     assert.ok(!(await page.locator(`${ps} .list li[data-g] .tech`).first().isVisible()), "selectors stay out of the way");
