@@ -39,6 +39,13 @@ export function createBus({ log = () => {}, onCompare = null } = {}) {
         log(`review ${m.reviewId}: ${m.problems?.length || 0} problem(s) waiting for a human`);
         return;
       }
+      // Proposals: the CLI applied / dropped a fix, or the agent revised one — the review changes in place
+      if (role === "cli" && m.type === "REVIEW_UPDATE" && reviews.get(m.reviewId)?.cli === ws) {
+        const r = reviews.get(m.reviewId);
+        for (const k of ["problems", "fixed", "proposals", "diff"]) if (m[k] !== undefined) r.msg[k] = m[k];
+        toStudios({ type: "REVIEW_UPDATE", reviewId: m.reviewId, problems: r.msg.problems, fixed: r.msg.fixed, proposals: r.msg.proposals, diff: r.msg.diff, event: m.event });
+        return;
+      }
       // Time Travel: the CLI that owns the review swaps the files and reports which side is on disk
       if (role === "cli" && m.type === "DIFF_STATE" && reviews.get(m.reviewId)?.cli === ws) {
         reviews.get(m.reviewId).diff = m;
@@ -73,7 +80,7 @@ export function createBus({ log = () => {}, onCompare = null } = {}) {
         r.compareQ = (r.compareQ || Promise.resolve()).then(async () => {
           if (r.latest.get(ws) !== reqId) return;
           try {
-            const { before, after } = await onCompare({ repo: r.msg.diff.repo, base: r.msg.diff.base || "HEAD", path, view, progress: (stage) => send(ws, { type: "COMPARE_PROGRESS", reviewId: m.reviewId, reqId, stage }) });
+            const { before, after } = await onCompare({ repo: r.msg.diff.repo, base: r.msg.diff.base || "HEAD", mode: r.msg.diff.mode, ref: r.msg.diff.ref, path, view, progress: (stage) => send(ws, { type: "COMPARE_PROGRESS", reviewId: m.reviewId, reqId, stage }) });
             send(ws, { type: "COMPARE_READY", reviewId: m.reviewId, reqId, before: `data:image/png;base64,${before.toString("base64")}`, after: `data:image/png;base64,${after.toString("base64")}` });
           } catch (e) { fail(String(e.message || e).slice(0, 300)); }
         });
@@ -81,6 +88,11 @@ export function createBus({ log = () => {}, onCompare = null } = {}) {
       }
       if (role === "studio" && m.type === "NOTE_REMOVE") { notes = notes.filter((n) => n.id !== m.id); notesChanged(); return; }
       if (role !== "studio" || !reviews.has(m.reviewId)) return;
+      // one fix decided in the panel: only an id, an enum and a short text cross to the CLI, which owns the files
+      if (m.type === "PROPOSAL" && typeof m.id === "string" && /^[\w.-]{1,80}$/.test(m.id) && ["approve", "reject", "comment"].includes(m.decision)) {
+        send(reviews.get(m.reviewId).cli, { type: "PROPOSAL", reviewId: m.reviewId, id: m.id, decision: m.decision, text: clip(m.text, 4000) });
+        return;
+      }
       if (m.type === "TOGGLE_DIFF" && (m.side === "BEFORE" || m.side === "AFTER")) {
         send(reviews.get(m.reviewId).cli, { type: "TOGGLE_DIFF", reviewId: m.reviewId, side: m.side }); // only an enum crosses: panels never name files
         return;

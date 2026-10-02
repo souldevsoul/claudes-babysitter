@@ -8,7 +8,7 @@
 //              Vite → `vite --port`, anything else → `npm run dev -- --port` with PORT set
 //   lifetime   one server per (repo, sha) per Studio process; stopped and the worktree removed on exit
 import { spawn, execFileSync } from "node:child_process";
-import { existsSync, readFileSync, readdirSync, copyFileSync, symlinkSync, rmSync } from "node:fs";
+import { existsSync, readFileSync, readdirSync, copyFileSync, symlinkSync, rmSync, openSync, closeSync } from "node:fs";
 import { createServer } from "node:net";
 import { tmpdir } from "node:os";
 import { basename, join } from "node:path";
@@ -59,7 +59,11 @@ export function baseSite({ repo, ref = "HEAD", log = () => {}, timeoutMs = 18000
     const port = await freePort();
     const [cmd, args] = devCommand(dir, port);
     log(`base site ${ref} (${sha.slice(0, 7)}) → ${cmd.split("/").pop()} ${args.join(" ")}`);
-    const child = spawn(cmd, args, { cwd: dir, env: { ...process.env, PORT: String(port), BROWSER: "none" }, stdio: "ignore", detached: process.platform !== "win32" });
+    // its output goes to <dir>.log (next to the worktree, kept after it is removed) — the place to look when it dies
+    const logFile = `${dir}.log`;
+    const out = openSync(logFile, "w");
+    const child = spawn(cmd, args, { cwd: dir, env: { ...process.env, PORT: String(port), BROWSER: "none" }, stdio: ["ignore", out, out], detached: process.platform !== "win32" });
+    closeSync(out);
     const url = `http://127.0.0.1:${port}`;
     const stop = () => {
       try { process.platform !== "win32" ? process.kill(-child.pid, "SIGTERM") : child.kill(); } catch {}

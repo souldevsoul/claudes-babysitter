@@ -22,12 +22,22 @@ export function injectHtml(html) {
 export function startStudio({ port = 3001, target = "http://localhost:3000", host = "127.0.0.1", log = console.log } = {}) {
   const proxy = httpProxy.createProxyServer({ target, ws: true, changeOrigin: true, selfHandleResponse: true });
   // Before/After: BEFORE from a dev server of the base ref (a worktree), AFTER from the developer's own server
-  const onCompare = async ({ repo, base, path, view, progress }) => {
+  // Before/After. Base mode: Before = a dev server of the base ref, After = the developer's page.
+  // Proposals mode: Before = the developer's page (the original), After = a dev server of the original with the
+  // pending fixes applied (a commit built without touching the disk); a new set of fixes replaces that server.
+  const proposalSites = new Map(); // repo -> { ref, stop }
+  const onCompare = async ({ repo, base, mode, ref, path, view, progress }) => {
     progress("base-site");
-    const site = await baseSite({ repo, ref: base, log });
+    const site = await baseSite({ repo, ref: mode === "proposals" ? ref : base, log });
+    if (mode === "proposals") {
+      const old = proposalSites.get(repo);
+      if (old && old.ref !== site.sha) old.stop();
+      proposalSites.set(repo, { ref: site.sha, stop: site.stop });
+    }
     progress("capture");
-    const [before, after] = await Promise.all([capture(site.url + path, view), capture(target.replace(/\/$/, "") + path, view)]);
-    return { before, after };
+    const live = target.replace(/\/$/, "") + path;
+    const [a, b] = await Promise.all([capture(site.url + path, view), capture(live, view)]);
+    return mode === "proposals" ? { before: b, after: a } : { before: a, after: b };
   };
   const bus = createBus({ log, onCompare });
 

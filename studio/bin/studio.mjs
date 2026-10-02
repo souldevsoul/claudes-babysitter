@@ -33,6 +33,7 @@ if (cmd === "start") {
     fixed = fixed.concat(earlier.filter((p) => !now.has(key(p))));
   }
   const url = opt("url", process.env.BABYSITTER_STUDIO || "http://localhost:3001");
+  if (args.includes("--proposals")) { await reviewProposals({ url, problems, fixed }); }
   // Before/After: the same journaled, crash-safe swap the hooks use
   let tt = null, dispose = () => {};
   const repo = opt("repo", null);
@@ -60,4 +61,63 @@ if (cmd === "start") {
   console.error(`Babysitter Studio is not running at ${url}.`); process.exit(2);
 } else {
   console.error("usage: babysitter-studio [start|review] …"); process.exit(2);
+}
+
+/*
+ * studio review --repo . --proposals < findings.json
+ * Each finding is shown with the fix prepared for it (babysitter propose save): Before = the page as it is,
+ * After = the original with the pending fixes applied, on its own dev server. Nothing reaches the original files
+ * until a fix is approved — one by one in its entry, or all at once with Approve. Every decision is printed to
+ * stdout as one JSON line (`babysitter-event {...}`), so the agent that prepared the fixes can follow along and
+ * revise a fix the reviewer commented on (propose save --id <id>); the panel picks the new version up by itself.
+ */
+async function reviewProposals({ url, problems, fixed }) {
+  const { resolve } = await import("node:path");
+  const { statSync, readdirSync, existsSync } = await import("node:fs");
+  const P = await import("../../lib/proposals.js");
+  const repo = resolve(opt("repo", "."));
+  const event = (e) => console.log(`babysitter-event ${JSON.stringify(e)}`);
+  let open = problems, done = fixed;
+  const signature = () => { const d = P.proposalsDir(repo); return existsSync(d) ? readdirSync(d).map((f) => { try { return `${f}:${statSync(`${d}/${f}`).mtimeMs}`; } catch { return f; } }).sort().join("|") : ""; };
+  const state = () => {
+    const list = P.list(repo).filter((p) => p.kind !== "code"); // code-only fixes never wait for a person
+    open = P.assign(open.map(({ proposal, ...f }) => f), list);
+    const { sha, applied, failed } = P.proposalCommit(repo);
+    const proposals = list.map((p) => ({ id: p.id, title: p.title, status: failed.some((f) => f.id === p.id) ? "conflict" : p.status, error: failed.find((f) => f.id === p.id)?.error || p.error, files: p.files, requires: p.requires, comment: p.comments?.at(-1)?.text, findings: open.filter((f) => f.proposal === p.id).length }));
+    return { problems: open, fixed: done, proposals, diff: { repo, mode: "proposals", ref: sha, files: applied.length } };
+  };
+  let seen = signature();
+  const s0 = state();
+  const moveFixed = (ids) => { const now = open.filter((f) => ids.includes(f.proposal)); open = open.filter((f) => !ids.includes(f.proposal)); done = done.concat(now.map((f) => ({ ...f, applied: true }))); };
+  const onProposal = async ({ id, decision, text }, api) => {
+    try {
+      if (decision === "approve") { const ids = P.approve(repo, id); moveFixed(ids); event({ event: "approved", id, applied: ids }); }
+      if (decision === "reject") { P.setStatus(repo, id, "rejected"); event({ event: "rejected", id }); }
+      if (decision === "comment") { const p = P.get(repo, id); P.setStatus(repo, id, "revising", { comments: [...(p?.comments || []), { text: text || "", at: Date.now() }] }); event({ event: "comment", id, text: text || "", title: p?.title, files: p?.files }); }
+    } catch (e) { event({ event: "error", id, decision, error: e.message }); }
+    seen = signature();
+    api.update({ ...state(), event: { id, decision } });
+  };
+  let watch = null;
+  const r = await requestReview({
+    url, problems: s0.problems, fixed: s0.fixed, proposals: s0.proposals, diff: s0.diff, onProposal,
+    title: opt("title", "UI review"), timeoutMs: Number(opt("timeout", 900)) * 1000,
+    onWaiting: () => console.error(`⏳ Visual Review required. Open ${url} — ${s0.problems.length} problem(s), ${s0.proposals.filter((p) => p.status === "pending").length} fix(es) proposed`),
+    // a fix revised by the agent (propose save --id) shows up in the panel without restarting the review
+    onOpen: (api) => { watch = setInterval(() => { const sig = signature(); if (sig === seen) return; seen = sig; event({ event: "reloaded" }); api.update({ ...state(), event: { decision: "revised" } }); }, 1000); },
+  });
+  clearInterval(watch);
+  if (r.decision === "approve") {
+    // Approve all: every fix still pending goes into the original files
+    for (const p of P.list(repo).filter((x) => x.status === "pending" || x.status === "revising")) {
+      try { const ids = P.approve(repo, p.id); event({ event: "approved", id: p.id, applied: ids }); } catch (e) { event({ event: "error", id: p.id, decision: "approve", error: e.message }); }
+    }
+    console.error(`✅ Approved in Studio${r.text ? `: ${r.text}` : ""}.`); process.exit(0);
+  }
+  if (r.decision === "reject") { for (const p of P.list(repo).filter((x) => x.status === "pending" || x.status === "revising")) P.setStatus(repo, p.id, "rejected"); console.error(`❌ Rejected in Studio${r.text ? `: ${r.text}` : ""}. The original files were not changed.`); process.exit(1); }
+  const manual = (r.manual || []).map((n) => `- Element: \`${n.selector}\`\n- Instruction: ${JSON.stringify(n.comment)}`).join("\n\n");
+  if (manual) console.log(`Manual QA Feedback:\n${manual}`);
+  if (r.decision === "comment") { if (r.text) console.log(`Reviewer comment: ${r.text}`); process.exit(1); }
+  if (r.decision === "timeout") { console.error("⌛ No decision in time — nothing applied."); process.exit(1); }
+  console.error(`Babysitter Studio is not running at ${url}.`); process.exit(2);
 }

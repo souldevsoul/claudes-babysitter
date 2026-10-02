@@ -14,7 +14,7 @@ export async function closeCapture() { if (browserP) { const b = await browserP.
  * @param view     { width, height, dpr, scrollY, storage: {k: v}, cookies: "a=1; b=2" }
  * @returns        PNG buffer of the viewport at that scroll position
  */
-export async function capture(url, { width = 1280, height = 800, dpr = 1, scrollY = 0, storage = {}, cookies = "" } = {}) {
+export async function capture(url, { width = 1280, height = 800, dpr = 1, scrollY = 0, storage = {}, cookies = "", fullPage = false } = {}) {
   const b = await browser();
   const ctx = await b.newContext({ viewport: { width: Math.round(width), height: Math.round(height) }, deviceScaleFactor: Math.min(Math.max(dpr || 1, 1), 3) });
   try {
@@ -32,14 +32,29 @@ export async function capture(url, { width = 1280, height = 800, dpr = 1, scroll
       Math.random = () => { s = (s + 0x6d2b79f5) | 0; let t = Math.imul(s ^ (s >>> 15), 1 | s); t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t; return ((t ^ (t >>> 14)) >>> 0) / 4294967296; };
     });
     const page = await ctx.newPage();
+    // two captures run side by side (Before and After): only one window can have the focus, and a field with
+    // autofocus would show its focus ring on one side only — every page behaves as the focused one
+    try { const cdp = await ctx.newCDPSession(page); await cdp.send("Emulation.setFocusEmulationEnabled", { enabled: true }); } catch {}
     const T0 = new Date("2026-01-01T12:00:00Z").getTime();
     await page.clock.install({ time: T0 });
     // paused BEFORE the page loads: every timer the page sets up (a blinking cursor toggled by setInterval,
     // a rotating headline) starts at the same virtual instant on both sides, however long hydration took in
     // real time — so advancing the clock by the same amount leaves both in the same phase
     await page.clock.pauseAt(T0 + 1000);
-    await page.goto(url, { waitUntil: "load", timeout: 60000 });
+    // a dev server restarts itself now and then (Next does when it nears its memory limit): wait it out
+    for (let t0 = Date.now(); ; ) {
+      try { await page.goto(url, { waitUntil: "load", timeout: 60000 }); break; }
+      catch (e) { if (!/ERR_CONNECTION_REFUSED|ERR_EMPTY_RESPONSE|ERR_CONNECTION_RESET/.test(e.message) || Date.now() - t0 > 45000) throw e; await new Promise((r) => setTimeout(r, 1000)); }
+    }
     await page.waitForLoadState("networkidle", { timeout: 8000 }).catch(() => {});
+    // fonts and images finished, so both sides are caught with everything in place (a slow first compile on a dev
+    // server must not mean a fallback font or a missing picture on one side only)
+    // (the limit is a Node timer: the page's own clock is frozen, its timers never fire; lazy images off screen never
+    // load, so only eager ones are awaited)
+    await Promise.race([
+      page.evaluate(() => Promise.all([document.fonts?.ready, ...Array.from(document.images).filter((i) => !i.complete && i.loading !== "lazy").map((i) => new Promise((r) => { i.addEventListener("load", r); i.addEventListener("error", r); }))])).catch(() => {}),
+      new Promise((r) => setTimeout(r, 8000)),
+    ]);
     await page.evaluate((y) => window.scrollTo(0, y), scrollY);
     await page.waitForTimeout(400);                 // real time for fonts and lazy images
     // the same virtual minute on both sides, jumped over (each due timer fires once) rather than stepped
@@ -58,6 +73,6 @@ export async function capture(url, { width = 1280, height = 800, dpr = 1, scroll
     }).catch(() => {});
     await page.addStyleTag({ content: "*,*::before,*::after{animation-play-state:paused!important;caret-color:transparent!important}" }).catch(() => {});
     await page.waitForTimeout(150);
-    return await page.screenshot({ type: "png" });
+    return await page.screenshot({ type: "png", fullPage });
   } finally { await ctx.close().catch(() => {}); }
 }

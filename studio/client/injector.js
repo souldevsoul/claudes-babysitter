@@ -20,11 +20,12 @@
   :host { all: initial; }
   * { box-sizing: border-box; font-family: ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif; }
   .layer { position: fixed; inset: 0; pointer-events: none; }
-  .box { position: fixed; border: 2px solid #ef4444; border-radius: 4px; background: rgb(239 68 68 / 0.08); box-shadow: 0 0 0 1px rgb(255 255 255 / 0.6); transition: box-shadow .2s; }
+  .box { position: fixed; border: 2px solid #ef4444; border-radius: 4px; background: none; box-shadow: 0 0 0 1px rgb(255 255 255 / 0.6); transition: box-shadow .2s; } /* outline only: nothing tints the element being judged */
   .box.pulse { box-shadow: 0 0 0 6px rgb(239 68 68 / 0.35); }
   .layer.off .box { display: none; }
   /* Before/After by screenshots: laid exactly over the viewport, flipped instantly */
   .layer.cmp-hide { display: none; }
+  .layer.over { z-index: 2; } /* one element's After: its frame and Before/After stay above the snapshot */
   .cmp { position: fixed; inset: 0; pointer-events: none; display: none; }
   .cmp.on { display: block; }
   .cmp img, .cmp canvas { position: absolute; inset: 0; width: 100%; height: 100%; }
@@ -44,7 +45,7 @@
   .tools .chip[aria-pressed="true"] { background: #facc15; border-color: #facc15; color: #1c1503; }
   .layer.off .box.peek { display: block; }
   .tag { position: absolute; top: -12px; left: -12px; min-width: 20px; height: 20px; padding: 0 6px; border-radius: 10px; background: #ef4444; color: #fff; font: 600 11px/20px ui-sans-serif, system-ui; text-align: center; }
-  .panel { position: fixed; left: 50%; bottom: 16px; transform: translateX(-50%); width: min(560px, calc(100vw - 32px)); pointer-events: auto;
+  .panel { z-index: 3; position: fixed; left: 50%; bottom: 16px; transform: translateX(-50%); width: min(560px, calc(100vw - 32px)); pointer-events: auto;
     background: #111318; color: #f4f4f5; border: 1px solid #2a2d35; border-radius: 14px; box-shadow: 0 12px 40px rgb(0 0 0 / .45); overflow: hidden; }
   .head button { flex: none; white-space: nowrap; }
   .head { display: flex; align-items: center; gap: 8px; padding: 10px 14px; border-bottom: 1px solid #23262d; font-size: 13px; cursor: grab; user-select: none; touch-action: none; }
@@ -101,6 +102,24 @@
   .list li.sep.fixed { color: #4ade80; }
   .list li.sep.red { color: #f87171; border-top: 0; margin-top: 0; }
   .list li.k-fixed .t::after { content: attr(data-done); margin-left: 6px; padding: 0 6px; border-radius: 6px; background: #14532d; color: #bbf7d0; font-size: 10.5px; font-weight: 600; }
+  .prop { margin-top: 6px; padding: 8px 10px; border-radius: 8px; background: #17191f; border: 1px solid #2a2d35; display: grid; gap: 6px; cursor: default; }
+  .prop .ptitle { font-size: 12px; color: #e4e4e7; } .prop .ptitle b { font-weight: 600; }
+  .prop .pst { margin-left: 6px; font-size: 11px; color: #a1a1aa; }
+  .prop.s-approved .pst { color: #4ade80; } .prop.s-rejected .pst, .prop.s-conflict .pst { color: #fca5a5; } .prop.s-revising .pst { color: #facc15; }
+  .prop .pnote { font-size: 11.5px; color: #a1a1aa; } .prop .perr { font-size: 11.5px; color: #fca5a5; }
+  .prop .pbtn { display: flex; flex-wrap: wrap; gap: 6px; }
+  .prop .pbtn button, .prop .pc button { padding: 4px 10px; border-radius: 6px; font-size: 12px; font-weight: 600; border: 1px solid #3f3f46; background: #23262d; color: #f4f4f5; cursor: pointer; }
+  .prop .pbtn button[data-pa=approve] { background: #16a34a; border-color: #16a34a; color: #fff; }
+  .prop .pbtn button[data-pa=reject] { background: #3f1d1d; border-color: #7f1d1d; color: #fecaca; }
+  .prop .pbtn button:disabled { opacity: .5; cursor: default; }
+  .prop .pc { display: grid; gap: 6px; } .prop .pc[hidden] { display: none; }
+  .prop .pc textarea { min-height: 54px; resize: vertical; border-radius: 6px; border: 1px solid #3f3f46; background: #0b0c0f; color: #f4f4f5; padding: 6px 8px; font-size: 12px; }
+  .ba { position: absolute; top: -13px; right: -2px; display: inline-flex; border-radius: 999px; overflow: hidden; pointer-events: auto; box-shadow: 0 2px 8px rgb(0 0 0 / .3); opacity: .5; transition: opacity .15s; }
+  .box.narrow .ba { right: auto; left: 12px; } /* a small frame: Before/After next to the number, not on it */
+  .ba:hover, .ba:focus-within, .ba:has(button[data-ba=AFTER][aria-pressed="true"]) { opacity: 1; }
+  .ba button { padding: 2px 8px; font: 600 11px/16px ui-sans-serif, system-ui; border: 0; background: #111318; color: #d4d4d8; cursor: pointer; }
+  .ba button[aria-pressed="true"] { background: #facc15; color: #1c1503; }
+  .codesum { padding: 6px 14px 0; font-size: 11.5px; color: #a1a1aa; }
   .filters { display: flex; flex-wrap: wrap; gap: 6px; padding: 8px 14px 0; }
   .filters button { display: inline-flex; align-items: center; gap: 6px; padding: 3px 9px; border-radius: 999px; border: 1px solid #3f3f46; background: #18181b; color: #f4f4f5; font-size: 12px; cursor: pointer; }
   .filters button i { width: 9px; height: 9px; border-radius: 50%; }
@@ -158,8 +177,8 @@
   const prefs = { get() { try { return JSON.parse(localStorage.getItem(PREF_KEY) || "{}"); } catch { return {}; } }, set(v) { try { localStorage.setItem(PREF_KEY, JSON.stringify({ ...prefs.get(), ...v })); } catch {} } };
   let LANG = prefs.get().lang || (/^ru\b/i.test(navigator.language || "") ? "ru" : "en");
   const DICT = {
-    en: { problems: (n) => `${n} problem${n === 1 ? "" : "s"}`, paused: "the CLI is paused until you decide", after: "After", before: "👁 Before", viewing: (b) => `Viewing ${b} · frames hidden`, differ: (n, b) => `Your changes · ${n} file(s) differ from ${b}`, cmpHint: (n, b) => `Your changes · ${n} file(s) differ from ${b} · Before = a snapshot right here, no reload (B)`, switching: "Swapping the files and waiting for the dev server to rebuild (~5 s)…", startingBase: (b) => `Starting a dev server of ${b} next to yours (first time ~10–30 s)…`, capturing: "Capturing both versions at your scroll position…", cmpBefore: (b) => `Snapshot of ${b} · B flips · scroll re-captures`, cmpAfter: "Snapshot of your changes · B flips", slider: "⇆ Slider", diffs: "◫ Differences", exit: "✕ Live page", live: "↻ Live", liveBack: "↺ Back to your changes", noDiffHere: "No visible differences on this screen", diffCount: (n) => `${n} changed area(s) highlighted`, badgeBefore: (b) => `BEFORE · ${b}`, badgeAfter: "AFTER", framesOn: "Frames on the page: on", framesOff: "Frames on the page: off (click an entry to see its frame)", nothing: "Nothing to compare — no changed UI files", noRepo: "Before/After needs the review's repository (the hooks pass it; studio review --repo)", details: "details", fVisible: "Visible", fCode: "In code", fFixed: "Fixed", was: "Was:", openHead: (n) => `Visible on the page — not fixed yet (${n})`, done: "fixed", fixedHead: (n) => `Fixed since the previous check (${n}) <span>· green frames: these were problems and are gone now</span>`, split: (v, c) => `${v} visible · ${c} in code`, codeOnly: (n) => `Not visible on the page — only in the code (${n}) <span>· yellow frames: fixing them changes nothing you can see</span>`, pages: (n) => `on ${n} pages`, places: (n) => `${n} places`, otherPage: (r) => `on ${r}`, placeholder: "What should change? Send Comment returns the work to its author with this brief…", send: "Send Comment", reject: "Reject", approve: "Approve" },
-    ru: { problems: (n) => `${n} ${n % 10 === 1 && n % 100 !== 11 ? "проблема" : n % 10 >= 2 && n % 10 <= 4 && (n % 100 < 12 || n % 100 > 14) ? "проблемы" : "проблем"}`, paused: "проверка ждёт вашего решения", after: "После", before: "👁 До", viewing: (b) => `Показано состояние ${b} · рамки скрыты`, differ: (n, b) => `Ваши изменения · ${n} файл(ов) отличаются от ${b}`, cmpHint: (n, b) => `Ваши изменения · ${n} файл(ов) отличаются от ${b} · «До» — снимок прямо здесь, без перезагрузки (B)`, switching: "Подменяю файлы и жду, пока dev-сервер пересоберёт (~5 с)…", startingBase: (b) => `Запускаю рядом dev-сервер версии ${b} (в первый раз ~10–30 с)…`, capturing: "Снимаю обе версии на вашей прокрутке…", cmpBefore: (b) => `Снимок версии ${b} · B — переключить · при прокрутке пересниму`, cmpAfter: "Снимок ваших изменений · B — переключить", slider: "⇆ Шторка", diffs: "◫ Отличия", exit: "✕ Живая страница", live: "↻ Вживую", liveBack: "↺ Вернуть ваши изменения", noDiffHere: "На этом экране видимых отличий нет", diffCount: (n) => `Подсвечено изменённых мест: ${n}`, badgeBefore: (b) => `ДО · ${b}`, badgeAfter: "ПОСЛЕ", framesOn: "Рамки на странице: включены", framesOff: "Рамки на странице: выключены (клик по пункту покажет его рамку)", nothing: "Сравнивать нечего — изменённых UI-файлов нет", noRepo: "Для «До / После» ревью нужен репозиторий (хуки передают его сами; studio review --repo)", details: "подробности", fVisible: "Видно", fCode: "В коде", fFixed: "Исправлено", was: "Было:", openHead: (n) => `Видно глазами — ещё не исправлено (${n})`, done: "исправлено", fixedHead: (n) => `Исправлено с прошлой проверки (${n}) <span>· зелёные рамки: здесь были проблемы, теперь их нет</span>`, split: (v, c) => `${v} видно · ${c} в коде`, codeOnly: (n) => `Глазами не видно — только в коде (${n}) <span>· жёлтые рамки: их исправление ничего на странице не меняет</span>`, pages: (n) => `на ${n} страницах`, places: (n) => `${n} мест`, otherPage: (r) => `на странице ${r}`, placeholder: "Что изменить? Send Comment вернёт работу автору с этим заданием…", send: "Send Comment", reject: "Reject", approve: "Approve" },
+    en: { problems: (n) => `${n} problem${n === 1 ? "" : "s"}`, paused: "the CLI is paused until you decide", after: "After", before: "👁 Before", viewing: (b) => `Viewing ${b} · frames hidden`, differ: (n, b) => `Your changes · ${n} file(s) differ from ${b}`, cmpHint: (n, b) => `Your changes · ${n} file(s) differ from ${b} · Before = a snapshot right here, no reload (B)`, switching: "Swapping the files and waiting for the dev server to rebuild (~5 s)…", startingBase: (b) => `Starting a dev server of ${b} next to yours (first time ~10–30 s)…`, capturing: "Capturing both versions at your scroll position…", cmpBefore: (b) => `Snapshot of ${b} · B flips · scroll re-captures`, cmpAfter: "Snapshot of your changes · B flips", slider: "⇆ Slider", diffs: "◫ Differences", exit: "✕ Live page", live: "↻ Live", liveBack: "↺ Back to your changes", noDiffHere: "No visible differences on this screen", diffCount: (n) => `${n} changed area(s) highlighted`, badgeBefore: (b) => `BEFORE · ${b}`, badgeAfter: "AFTER", framesOn: "Frames on the page: on", framesOff: "Frames on the page: off (click an entry to see its frame)", nothing: "Nothing to compare — no changed UI files", noRepo: "Before/After needs the review's repository (the hooks pass it; studio review --repo)", details: "details", beforeNow: "Before (now)", afterFix: "👁 After (with fixes)", startingFix: "Starting a dev server with the proposed fixes next to yours (first time ~10–30 s)…", beforeShort: "Before", afterShort: "After", propHint: (n) => `${n} fix(es) proposed · the page is the original; After shows it with the fixes, nothing applied yet (B)`, cmpAfterProp: "With the proposed fixes · B flips · the original files are untouched", cmpBeforeProp: "Snapshot of the original · B flips", clipInfo: "After for this element only · the Before/After buttons on its frame switch", badgeOrig: "BEFORE · original", badgeFixed: "AFTER · with fixes", fix: "Fix", accept: "Accept", decline: "Reject", comment: "Comment", send2: "Send", pcPlaceholder: "What should be different in this fix?", covers: (n) => `fixes ${n} findings at once`, pstatus: { pending: "waiting for your decision", approved: "applied to the files", rejected: "rejected — not applied", revising: "being revised after your comment…", conflict: "does not apply to the files as they are now" }, applying: "applying…", approveAll: "Approve all", rejectAll: "Reject all", applied: "applied", codeSum: (n) => `${n} finding(s) only in the code (style= …) are fixed without your approval — the page looks exactly the same.`, fVisible: "Visible", fCode: "In code", fFixed: "Fixed", was: "Was:", openHead: (n) => `Visible on the page — not fixed yet (${n})`, done: "fixed", fixedHead: (n) => `Fixed since the previous check (${n}) <span>· green frames: these were problems and are gone now</span>`, split: (v, c) => `${v} visible · ${c} in code`, codeOnly: (n) => `Not visible on the page — only in the code (${n}) <span>· yellow frames: fixing them changes nothing you can see</span>`, pages: (n) => `on ${n} pages`, places: (n) => `${n} places`, otherPage: (r) => `on ${r}`, placeholder: "What should change? Send Comment returns the work to its author with this brief…", send: "Send Comment", reject: "Reject", approve: "Approve" },
+    ru: { problems: (n) => `${n} ${n % 10 === 1 && n % 100 !== 11 ? "проблема" : n % 10 >= 2 && n % 10 <= 4 && (n % 100 < 12 || n % 100 > 14) ? "проблемы" : "проблем"}`, paused: "проверка ждёт вашего решения", after: "После", before: "👁 До", viewing: (b) => `Показано состояние ${b} · рамки скрыты`, differ: (n, b) => `Ваши изменения · ${n} файл(ов) отличаются от ${b}`, cmpHint: (n, b) => `Ваши изменения · ${n} файл(ов) отличаются от ${b} · «До» — снимок прямо здесь, без перезагрузки (B)`, switching: "Подменяю файлы и жду, пока dev-сервер пересоберёт (~5 с)…", startingBase: (b) => `Запускаю рядом dev-сервер версии ${b} (в первый раз ~10–30 с)…`, capturing: "Снимаю обе версии на вашей прокрутке…", cmpBefore: (b) => `Снимок версии ${b} · B — переключить · при прокрутке пересниму`, cmpAfter: "Снимок ваших изменений · B — переключить", slider: "⇆ Шторка", diffs: "◫ Отличия", exit: "✕ Живая страница", live: "↻ Вживую", liveBack: "↺ Вернуть ваши изменения", noDiffHere: "На этом экране видимых отличий нет", diffCount: (n) => `Подсвечено изменённых мест: ${n}`, badgeBefore: (b) => `ДО · ${b}`, badgeAfter: "ПОСЛЕ", framesOn: "Рамки на странице: включены", framesOff: "Рамки на странице: выключены (клик по пункту покажет его рамку)", nothing: "Сравнивать нечего — изменённых UI-файлов нет", noRepo: "Для «До / После» ревью нужен репозиторий (хуки передают его сами; studio review --repo)", details: "подробности", beforeNow: "До (сейчас)", afterFix: "👁 После (с исправлениями)", startingFix: "Запускаю рядом dev-сервер с предложенными исправлениями (в первый раз ~10–30 с)…", beforeShort: "До", afterShort: "После", propHint: (n) => `Предложено исправлений: ${n} · страница — оригинал; «После» — она же с исправлениями, ничего ещё не применено (B)`, cmpAfterProp: "С предложенными исправлениями · B — переключить · оригинальные файлы не тронуты", cmpBeforeProp: "Снимок оригинала · B — переключить", clipInfo: "«После» только для этого элемента · кнопки До/После на рамке переключают", badgeOrig: "ДО · оригинал", badgeFixed: "ПОСЛЕ · с исправлениями", fix: "Исправление", accept: "Принять", decline: "Отклонить", comment: "Комментарий", send2: "Отправить", pcPlaceholder: "Что изменить в этом исправлении?", covers: (n) => `исправляет сразу ${n} пункт(ов)`, pstatus: { pending: "ждёт вашего решения", approved: "применено к файлам", rejected: "отклонено — не применено", revising: "дорабатывается по вашему комментарию…", conflict: "не применяется к текущим файлам" }, applying: "применяю…", approveAll: "Approve all", rejectAll: "Reject all", applied: "применено", codeSum: (n) => `Замечаний только в коде (style= и т.п.): ${n} — их исправляю без вашего одобрения, вид страницы при этом не меняется.`, fVisible: "Видно", fCode: "В коде", fFixed: "Исправлено", was: "Было:", openHead: (n) => `Видно глазами — ещё не исправлено (${n})`, done: "исправлено", fixedHead: (n) => `Исправлено с прошлой проверки (${n}) <span>· зелёные рамки: здесь были проблемы, теперь их нет</span>`, split: (v, c) => `${v} видно · ${c} в коде`, codeOnly: (n) => `Глазами не видно — только в коде (${n}) <span>· жёлтые рамки: их исправление ничего на странице не меняет</span>`, pages: (n) => `на ${n} страницах`, places: (n) => `${n} мест`, otherPage: (r) => `на странице ${r}`, placeholder: "Что изменить? Send Comment вернёт работу автору с этим заданием…", send: "Send Comment", reject: "Reject", approve: "Approve" },
   };
   let T = DICT[LANG];
   const plural = (n) => T.problems(n);
@@ -202,6 +221,11 @@
   let reqSeq = 0, recapture = 0;
   const viewKey = () => `${location.pathname}${location.search}|${innerWidth}x${innerHeight}@${devicePixelRatio || 1}|${Math.round(scrollY)}`;
   const canCompare = () => !!current?.diff?.repo && side !== "BEFORE";
+  // proposals: the live page is the ORIGINAL (Before) and the snapshot shows it with the fixes (After);
+  // base mode: the live page is the developer's work (After) and the snapshot is the base ref (Before)
+  const propMode = () => current?.diff?.mode === "proposals";
+  const liveSide = () => (propMode() ? "BEFORE" : "AFTER");
+  const otherSide = () => (propMode() ? "AFTER" : "BEFORE");
   const cmpInfo = (text) => { const i = $(".tt .info"); if (i) i.textContent = text; };
   function requestCompare() {
     const reqId = String(++reqSeq);
@@ -214,7 +238,7 @@
   function compareShow(next) {
     if (!canCompare()) return;
     cmp.side = next;
-    if (next === "AFTER" && !cmp.on && !cmp.want && !cmp.slider && !cmp.diffs) { renderCompare(); return; } // the live page is AFTER
+    if (next === liveSide() && !cmp.on && !cmp.want && !cmp.slider && !cmp.diffs) { cmp.clipG = null; renderCompare(); return; } // that side is the live page
     cmp.want = true;
     const hit = shots.get(viewKey());
     if (hit) { Object.assign(cmp, hit, { key: viewKey(), on: true }); renderCompare(); return; }
@@ -223,32 +247,45 @@
     if (!(cmp.pending && cmp.pending.key === viewKey())) requestCompare();
     renderCompare();
   }
-  function exitCompare() { Object.assign(cmp, { on: false, want: false, side: "AFTER", slider: false, diffs: false, pending: null }); renderCompare(); }
+  function exitCompare() { Object.assign(cmp, { on: false, want: false, side: liveSide(), slider: false, diffs: false, pending: null, clipG: null }); renderCompare(); }
+  // one element's After: the snapshot with the fixes shown only inside that element's frame
+  function elementAfter(gi) { Object.assign(cmp, { clipG: gi, slider: false, diffs: false }); compareShow("AFTER"); }
+  function clipRect() {
+    if (cmp.clipG == null) return null;
+    const b = boxes.find((x) => Number(x.box.dataset.g) === cmp.clipG && x.el.getBoundingClientRect().width > 0);
+    if (!b) return null;
+    const r = b.el.getBoundingClientRect();
+    return { top: Math.max(0, r.top - GAP), left: Math.max(0, r.left - GAP), bottom: Math.max(0, innerHeight - r.bottom - GAP), right: Math.max(0, innerWidth - r.right - GAP) };
+  }
   function renderCompare() {
     cmpEl.classList.toggle("on", cmp.on);
     cmpEl.classList.toggle("slider", cmp.on && cmp.slider);
     // frames out of the way while BEFORE, the slider or the difference map is on; over the AFTER snapshot they stay
     // (it is the page at this very scroll), so going Before → After never leaves the page without its frames
-    layer.classList.toggle("cmp-hide", cmp.on && (cmp.side === "BEFORE" || cmp.slider || cmp.diffs));
+    layer.classList.toggle("cmp-hide", cmp.on && cmp.clipG == null && (cmp.side !== liveSide() || cmp.slider || cmp.diffs));
+    layer.classList.toggle("over", cmp.on && cmp.clipG != null);
     if (cmp.on) {
       if (imgA.getAttribute("src") !== cmp.after) imgA.src = cmp.after;
       if (imgB.getAttribute("src") !== cmp.before) imgB.src = cmp.before;
       const showB = cmp.slider || cmp.side === "BEFORE";
       imgB.classList.toggle("show", showB); imgA.classList.toggle("show", cmp.slider || !showB);
       imgB.style.clipPath = cmp.slider ? `inset(0 ${((1 - cmp.x) * 100).toFixed(2)}% 0 0)` : "";
+      const cr = !cmp.slider && cmp.side === "AFTER" ? clipRect() : null;
+      imgA.style.clipPath = cr ? `inset(${cr.top}px ${cr.right}px ${cr.bottom}px ${cr.left}px round 6px)` : "";
       handle.style.left = `${(cmp.x * 100).toFixed(2)}%`;
       const bb = $(".cmp .badge.b"), ba = $(".cmp .badge.a");
-      bb.textContent = T.badgeBefore(current?.diff?.base || "HEAD"); ba.textContent = T.badgeAfter;
+      bb.textContent = propMode() ? T.badgeOrig : T.badgeBefore(current?.diff?.base || "HEAD"); ba.textContent = propMode() ? T.badgeFixed : T.badgeAfter;
       bb.style.display = showB ? "" : "none"; ba.style.display = cmp.slider || !showB ? "block" : "none";
       diffC.classList.toggle("show", cmp.diffs);
       if (cmp.diffs) drawDiffs();
     }
-    root.querySelectorAll(".seg button").forEach((b) => b.setAttribute("aria-pressed", String(b.dataset.side === (cmp.want ? cmp.side : "AFTER"))));
+    root.querySelectorAll(".seg button").forEach((b) => b.setAttribute("aria-pressed", String(b.dataset.side === (cmp.want && cmp.clipG == null ? cmp.side : liveSide()))));
+    layer.querySelectorAll(".ba button").forEach((b) => { const mine = cmp.want && cmp.clipG === Number(b.closest(".box").dataset.g); b.setAttribute("aria-pressed", String(b.dataset.ba === (mine && cmp.side === "AFTER" ? "AFTER" : "BEFORE"))); });
     if ($("#cmp-slider")) $("#cmp-slider").setAttribute("aria-pressed", String(cmp.slider));
     if ($("#cmp-diff")) $("#cmp-diff").setAttribute("aria-pressed", String(cmp.diffs));
     if ($("#cmp-exit")) $("#cmp-exit").hidden = !cmp.want;
-    if (cmp.on) cmpInfo(cmp.diffs && cmp.diffN !== null && cmp.diffKey === cmp.key ? (cmp.diffN ? T.diffCount(cmp.diffN) : T.noDiffHere) : cmp.side === "BEFORE" || cmp.slider ? T.cmpBefore(current?.diff?.base || "HEAD") : T.cmpAfter);
-    else if (!cmp.want && current?.diff?.repo && side !== "BEFORE") cmpInfo(T.cmpHint(current.diff.files ?? 0, current.diff.base || "HEAD"));
+    if (cmp.on) cmpInfo(cmp.diffs && cmp.diffN !== null && cmp.diffKey === cmp.key ? (cmp.diffN ? T.diffCount(cmp.diffN) : T.noDiffHere) : cmp.clipG != null && cmp.side === "AFTER" ? T.clipInfo : propMode() ? (cmp.side === "AFTER" && !cmp.slider ? T.cmpAfterProp : T.cmpBeforeProp) : cmp.side === "BEFORE" || cmp.slider ? T.cmpBefore(current?.diff?.base || "HEAD") : T.cmpAfter);
+    else if (!cmp.want && current?.diff?.repo && side !== "BEFORE") cmpInfo(propMode() ? T.propHint(current.diff.files ?? 0) : T.cmpHint(current.diff.files ?? 0, current.diff.base || "HEAD"));
   }
   // changed areas between the two snapshots (same renderer, so only real differences): a grid of cells,
   // tinted where pixels differ, counted as connected areas
@@ -306,7 +343,7 @@
     if (!current || picking || e.metaKey || e.ctrlKey || e.altKey) return;
     const t = e.composedPath()[0];
     if (t && (t.isContentEditable || /^(input|textarea|select)$/i.test(t.tagName || ""))) return;
-    if (/^[bBиИ]$/.test(e.key) && canCompare()) { e.preventDefault(); compareShow(cmp.want && cmp.side === "BEFORE" ? "AFTER" : "BEFORE"); }
+    if (/^[bBиИ]$/.test(e.key) && canCompare()) { e.preventDefault(); cmp.clipG = null; compareShow(cmp.want && cmp.side === otherSide() ? liveSide() : otherSide()); }
     else if (e.key === "Escape" && cmp.want) { e.preventDefault(); exitCompare(); }
   }, true);
 
@@ -328,11 +365,13 @@
       if (!map.has(key)) map.set(key, { key, items: [], p });
       map.get(key).items.push({ p, i });
     });
-    // what a person can see on the page first (red), what lives only in the code after it (yellow)
-    // fixed since the previous check last (green)
-    const gs = [...map.values()].map((g) => { const fixed = !!g.p.__fixed, code = !fixed && g.items.every(({ p }) => codeOnly(p)); return { ...g, fixed, code, kind: fixed ? "fixed" : code ? "code" : "red" }; });
-    return ["red", "code", "fixed"].flatMap((k) => gs.filter((g) => g.kind === k));
+    // only what a person can see is listed: open (red) first, fixed (green) after. Findings that live only in
+    // the code (style=…) change nothing on screen — the agent fixes them without asking; they are just counted.
+    const gs = [...map.values()].map((g) => { const fixed = !!g.p.__fixed, code = g.items.every(({ p }) => codeOnly(p)); return { ...g, fixed, code, kind: code ? "code" : fixed ? "fixed" : "red" }; });
+    codeCount = gs.filter((g) => g.kind === "code" && !g.fixed).length;
+    return ["red", "fixed"].flatMap((k) => gs.filter((g) => g.kind === k));
   }
+  let codeCount = 0;
   const allOf = (r) => r ? (r.__all ||= [...(r.problems || []), ...(r.fixed || []).map((p) => ({ ...p, __fixed: true }))]) : [];
   // which kinds are shown (list + frames): the reviewer can hide the yellow, the red or the green ones
   const shown = () => ({ red: true, code: true, fixed: true, ...(prefs.get().show || {}) });
@@ -351,8 +390,10 @@
   function renderReview(r) {
     groups = groupsOf(allOf(r));
     dot.className = "dot alert";
-    const n = { red: 0, code: 0, fixed: 0 }; groups.forEach((g) => n[g.kind]++);
-    title.textContent = `Babysitter: ${plural(n.red + n.code)}`;
+    const n = { red: 0, fixed: 0 }; groups.forEach((g) => n[g.kind]++);
+    title.textContent = `Babysitter: ${plural(n.red)}`;
+    const props = new Map((r.proposals || []).map((x) => [x.id, x]));
+    const pm = propMode();
     status.textContent = `review ${r.reviewId}`;
     const items = groups.map((g, gi) => {
       const ex = { ...exOf(g.p) };
@@ -364,35 +405,48 @@
       const count = [routes.length > 1 ? T.pages(routes.length) : routes.length === 1 && !here ? T.otherPage(routes[0]) : "", g.items.length > routes.length && g.items.length > 1 ? T.places(g.items.length) : ""].filter(Boolean).join(" · ");
       const tech = [...new Set(g.items.map(({ p }) => [p.route, p.selector || [p.file, p.line].filter(Boolean).join(":"), p.check || p.rule].filter(Boolean).join("  ")))].slice(0, 12).join("\n");
       const first = gi === 0 || groups[gi - 1].kind !== g.kind;
-      const sep = first && g.kind === "red" && (n.code || n.fixed) ? `<li class="sep red k-red">${T.openHead(n.red)}</li>` : first && g.kind === "code" ? `<li class="sep k-code">${T.codeOnly(n.code)}</li>` : first && g.kind === "fixed" ? `<li class="sep fixed k-fixed">${T.fixedHead(n.fixed)}</li>` : "";
+      const sep = first && g.kind === "red" && n.fixed ? `<li class="sep red k-red">${T.openHead(n.red)}</li>` : first && g.kind === "fixed" ? `<li class="sep fixed k-fixed">${T.fixedHead(n.fixed)}</li>` : "";
+      // the fix prepared for this finding: decided right here, applied to the original only on Accept
+      const pid = !g.fixed && g.items.map((x) => x.p.proposal).find(Boolean);
+      const pr = pid && props.get(pid);
+      const busy = pr && pr.status === "pending";
+      const prop = pr ? `<div class="prop s-${esc(pr.status)}" data-prop="${esc(pr.id)}">
+            <div class="ptitle">🔧 ${esc(T.fix)}: <b>${esc(pr.title)}</b><span class="pst">${esc(T.pstatus[pr.status] || pr.status)}</span></div>
+            ${pr.findings > 1 ? `<div class="pnote">${esc(T.covers(pr.findings))}</div>` : ""}
+            ${pr.error && pr.status === "conflict" ? `<div class="perr">⚠ ${esc(pr.error)}</div>` : ""}
+            ${pr.status === "revising" && pr.comment ? `<div class="pnote">💬 ${esc(pr.comment)}</div>` : ""}
+            ${busy ? `<div class="pbtn"><button type="button" data-pa="approve">✓ ${esc(T.accept)}</button><button type="button" data-pa="reject">✗ ${esc(T.decline)}</button><button type="button" data-pa="comment">💬 ${esc(T.comment)}</button></div>
+            <div class="pc" hidden><textarea aria-label="${esc(T.comment)}" placeholder="${esc(T.pcPlaceholder)}"></textarea><button type="button" data-pa="send">${esc(T.send2)}</button></div>` : ""}
+          </div>` : "";
       return `${sep}
       <li data-g="${gi}" class="k-${g.kind}"><span class="n${g.kind !== "red" ? " " + g.kind : g.items.some((x) => x.p.selector) ? "" : " static"}">${gi + 1}</span>
         <span class="ex">
-          <span class="t"${g.fixed ? ` data-done="${esc(T.done)}"` : ""}>${esc(ex.title)}</span>
+          <span class="t"${g.fixed ? ` data-done="${esc(g.p.applied ? T.applied : T.done)}"` : ""}>${esc(ex.title)}</span>
           ${ex.element ? `<span class="el">${esc(ex.element)}${count ? ` <span class="cnt">· ${esc(count)}</span>` : ""}</span>` : ""}
           ${ex.why ? `<span class="why">${g.fixed ? `${esc(T.was)} ` : ""}${esc(ex.why)}</span>` : ""}
-          ${ex.fix && !g.fixed ? `<span class="fix">→ ${esc(ex.fix)}</span>` : ""}
+          ${ex.fix && !g.fixed && !pr ? `<span class="fix">→ ${esc(ex.fix)}</span>` : ""}
           <button class="more" type="button" data-more="${gi}">${T.details}</button>
           <span class="tech">${esc(tech)}</span>
+          ${prop}
         </span></li>`;
     }).join("");
     body.innerHTML = `
       <div class="min"><strong>${esc(r.title || "UI review")}</strong><span class="muted">· ${T.paused}</span></div>
-      <div class="tt"><span class="seg" role="group" aria-label="Before / After"><button type="button" data-side="AFTER" aria-pressed="true">${T.after}</button><button type="button" data-side="BEFORE" aria-pressed="false">${T.before}${r.diff?.base ? ` (${esc(r.diff.base)})` : " (HEAD)"}</button></span><span class="muted info"></span></div>
+      <div class="tt"><span class="seg" role="group" aria-label="Before / After">${pm ? `<button type="button" data-side="BEFORE" aria-pressed="true">${T.beforeNow}</button><button type="button" data-side="AFTER" aria-pressed="false">${T.afterFix}</button>` : `<button type="button" data-side="AFTER" aria-pressed="true">${T.after}</button><button type="button" data-side="BEFORE" aria-pressed="false">${T.before}${r.diff?.base ? ` (${esc(r.diff.base)})` : " (HEAD)"}</button>`}</span><span class="muted info"></span></div>
       ${r.diff ? `<div class="tools">${r.diff.repo ? `<button class="chip" id="cmp-slider" type="button" aria-pressed="false">${T.slider}</button><button class="chip" id="cmp-diff" type="button" aria-pressed="false">${T.diffs}</button><button class="chip" id="cmp-exit" type="button" hidden>${T.exit}</button>` : ""}${r.diff.live ? `<button class="chip" id="live" type="button">${T.live}</button>` : ""}</div>` : ""}
       <div class="filters" role="group" aria-label="Show">
         <button type="button" data-f="red" aria-pressed="true"><i style="background:#ef4444"></i>${T.fVisible} · ${n.red}</button>
-        <button type="button" data-f="code" aria-pressed="true"><i style="background:#facc15"></i>${T.fCode} · ${n.code}</button>
         ${n.fixed ? `<button type="button" data-f="fixed" aria-pressed="true"><i style="background:#22c55e"></i>${T.fFixed} · ${n.fixed}</button>` : ""}
       </div>
+      ${codeCount ? `<div class="codesum">${esc(T.codeSum(codeCount))}</div>` : ""}
       <ul class="list">${items}</ul>
       <div class="notes"></div>
       <div class="foot">
         <textarea id="comment-text" placeholder="${esc(T.placeholder)}" aria-label="Comment"></textarea>
         <div class="row">
           <button class="ghost" id="comment-send" type="button" disabled>${T.send}</button>
-          <button class="reject" id="reject" type="button">${T.reject}</button>
-          <button class="approve" id="approve" type="button">${T.approve}</button>
+          <button class="reject" id="reject" type="button">${pm ? T.rejectAll : T.reject}</button>
+          <button class="approve" id="approve" type="button">${pm ? T.approveAll : T.approve}</button>
         </div>
       </div>`;
     const text = () => $("#comment-text").value.trim();
@@ -403,9 +457,21 @@
     root.querySelectorAll(".list li[data-g]").forEach((li) => (li.onclick = () => focusGroup(Number(li.dataset.g))));
     root.querySelectorAll(".filters button").forEach((b) => (b.onclick = () => { prefs.set({ show: { ...shown(), [b.dataset.f]: !shown()[b.dataset.f] } }); applyFilters(); }));
     applyFilters();
+    // a decision on one fix: the CLI applies or drops it and sends the review back changed (REVIEW_UPDATE)
+    root.querySelectorAll(".prop").forEach((box) => (box.onclick = (e) => {
+      e.stopPropagation();
+      const b = e.target.closest("button[data-pa]"); if (!b) return;
+      const id = box.dataset.prop, pa = b.dataset.pa;
+      if (pa === "comment") { const pc = box.querySelector(".pc"); pc.hidden = !pc.hidden; if (!pc.hidden) pc.querySelector("textarea").focus(); return; }
+      const text = pa === "send" ? box.querySelector(".pc textarea").value.trim() : undefined;
+      if (pa === "send" && !text) return;
+      box.querySelectorAll("button").forEach((x) => (x.disabled = true));
+      box.querySelector(".pst").textContent = T.applying;
+      send({ type: "PROPOSAL", reviewId: current.reviewId, id, decision: pa === "send" ? "comment" : pa, text });
+    }));
     root.querySelectorAll("[data-more]").forEach((b) => (b.onclick = (e) => { e.stopPropagation(); b.closest("li").classList.toggle("open"); }));
     root.querySelectorAll(".seg button").forEach((b) => (b.onclick = () => compareShow(b.dataset.side)));
-    if ($("#cmp-slider")) $("#cmp-slider").onclick = () => { cmp.slider = !cmp.slider; if (cmp.slider && !cmp.on) compareShow("BEFORE"); else renderCompare(); };
+    if ($("#cmp-slider")) $("#cmp-slider").onclick = () => { cmp.slider = !cmp.slider; if (cmp.slider && !cmp.on) compareShow(otherSide()); else renderCompare(); };
     if ($("#cmp-diff")) $("#cmp-diff").onclick = () => { cmp.diffs = !cmp.diffs; if (cmp.diffs && !cmp.on) compareShow(cmp.side); else renderCompare(); };
     if ($("#cmp-exit")) $("#cmp-exit").onclick = exitCompare;
     if ($("#live")) $("#live").onclick = () => { exitCompare(); toggle(side === "BEFORE" ? "AFTER" : "BEFORE"); };
@@ -414,7 +480,8 @@
     let want = null; try { want = sessionStorage.getItem("babysitter-studio-focus"); sessionStorage.removeItem("babysitter-studio-focus"); } catch {}
     if (want) { const gi = groups.findIndex((g) => g.key === want); if (gi >= 0) focusSoon(gi); }
     if (restoreView) { const v = restoreView; restoreView = null; requestAnimationFrame(() => scrollTo(0, v.y)); if (v.draft) $("#comment-text").value = v.draft; }
-    if (r.diff) { setSide(r.state?.side || "AFTER"); if (cmp.want) compareShow(cmp.side); else renderCompare(); }
+    if (r.diff && pm) { if (cmp.want) compareShow(cmp.side); else renderCompare(); }
+    else if (r.diff) { setSide(r.state?.side || "AFTER"); if (cmp.want) compareShow(cmp.side); else renderCompare(); }
     else {
       // always visible, so reviewers know it exists; says why it is off
       root.querySelectorAll(".seg button").forEach((b) => (b.disabled = true));
@@ -455,6 +522,7 @@
       const shown = b.el.isConnected && (r.width || r.height);
       // 6px of air between the element and the 2px frame, so the frame never sits on the element's own edge
       b.box.style.cssText = shown ? `left:${r.left - GAP}px;top:${r.top - GAP}px;width:${r.width + GAP * 2}px;height:${r.height + GAP * 2}px` : "display:none";
+      b.box.classList.toggle("narrow", r.width + GAP * 2 < 120);
     }
   }
   const GAP = 8; // 2px border + 6px of air
@@ -476,13 +544,13 @@
 
   function syncFrames() {
     clearBoxes(); missing = 0; framesPath = location.pathname; framesNarrow = innerWidth < 640;
-    const add = (sel, route, cls, tag, key) => {
+    const add = (sel, route, cls, tag, key, extra = "") => {
       if (!sel || (route && route !== location.pathname)) return; // only frames of THIS page
       let el = null; try { el = document.querySelector(sel); } catch {}
       if (!el) { missing++; return; }
       const box = document.createElement("div");
       box.className = cls; Object.assign(box.dataset, key);
-      box.innerHTML = `<span class="tag">${tag}</span>`;
+      box.innerHTML = `<span class="tag">${tag}</span>${extra}`;
       layer.appendChild(box);
       boxes.push({ el, box, selector: sel });
       ro.observe(el);
@@ -492,11 +560,27 @@
     // selector may point at a different element in the other layout
     const sameLayout = (p) => !Number(p.viewport) || (Number(p.viewport) < 640) === (innerWidth < 640);
     const seen = new Set();
-    allOf(current).forEach((p, i) => { if (!sameLayout(p) || seen.has(`${gOf.get(i)}|${p.selector}`)) return; seen.add(`${gOf.get(i)}|${p.selector}`); const g = groups[gOf.get(i)]; const kind = g?.kind || (codeOnly(p) ? "code" : "red"); add(p.selector, p.route, `box k-${kind}${kind === "red" ? "" : " " + kind}`, (gOf.get(i) ?? i) + 1, { i, g: gOf.get(i) ?? i }); });
+        // only listed findings get a frame (code-only ones are not listed); a finding with a fix waiting for a decision
+    // gets Before/After on its frame: After shows the fixed version inside this frame only
+    const props = new Map((current?.proposals || []).map((x) => [x.id, x]));
+    allOf(current).forEach((p, i) => {
+      const gi = gOf.get(i), g = groups[gi];
+      if (!g || !sameLayout(p) || seen.has(`${gi}|${p.selector}`)) return;
+      seen.add(`${gi}|${p.selector}`);
+      const pending = propMode() && !g.fixed && props.get(p.proposal)?.status === "pending";
+      add(p.selector, p.route, `box k-${g.kind}${g.kind === "red" ? "" : " " + g.kind}`, gi + 1, { i, g: gi }, pending ? `<span class="ba"><button type="button" data-ba="BEFORE" aria-pressed="true">${esc(T.beforeShort)}</button><button type="button" data-ba="AFTER" aria-pressed="false">${esc(T.afterShort)}</button></span>` : "");
+    });
     notes.forEach((n, i) => add(n.selector, n.route, "box note", `M${i + 1}`, { note: n.id }));
     markFocus();
     place();
   }
+  // Before/After on a frame: After = the fixed version of this element only; Before = the live page (original)
+  layer.addEventListener("click", (e) => {
+    const b = e.target.closest?.("[data-ba]"); if (!b) return;
+    e.stopPropagation();
+    const gi = Number(b.closest(".box").dataset.g);
+    if (b.dataset.ba === "AFTER") elementAfter(gi); else exitCompare();
+  });
   function clearBoxes() { cancelAnimationFrame(raf); raf = 0; ro.disconnect(); layer.innerHTML = ""; boxes = []; }
   function focusNote(id) {
     const n = notes.find((x) => x.id === id);
@@ -759,7 +843,22 @@
         if (current) queue.push(m); else { current = m; renderReview(m); }
         if (panel.classList.contains("collapsed")) setCollapsed(false); // a review waiting must not hide in a folded panel
       }
-      if (m.type === "COMPARE_PROGRESS" && cmp.pending?.reqId === m.reqId) cmpInfo(m.stage === "base-site" ? T.startingBase(current?.diff?.base || "HEAD") : T.capturing);
+      // the review changed in place: a fix applied / dropped / revised. Same list position, same draft; a new set of
+      // fixes means new After snapshots
+      if (m.type === "REVIEW_UPDATE") {
+        const target = current?.reviewId === m.reviewId ? current : queue.find((q) => q.reviewId === m.reviewId);
+        if (target) {
+          const refChanged = target.diff?.ref !== m.diff?.ref;
+          Object.assign(target, { problems: m.problems, fixed: m.fixed, proposals: m.proposals, diff: m.diff }); delete target.__all;
+          if (target === current) {
+            const y = $(".list")?.scrollTop || 0, draft = $("#comment-text")?.value || "";
+            if (refChanged) { shots.clear(); cmp.on = false; cmp.pending = null; }
+            renderReview(current);
+            const l = $(".list"); if (l) l.scrollTop = y; if (draft) $("#comment-text").value = draft;
+          }
+        }
+      }
+      if (m.type === "COMPARE_PROGRESS" && cmp.pending?.reqId === m.reqId) cmpInfo(m.stage === "base-site" ? (propMode() ? T.startingFix : T.startingBase(current?.diff?.base || "HEAD")) : T.capturing);
       if (m.type === "COMPARE_READY" && cmp.pending?.reqId === m.reqId) {
         const key = cmp.pending.key; cmp.pending = null;
         shots.set(key, { before: m.before, after: m.after });

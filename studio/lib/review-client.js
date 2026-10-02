@@ -5,17 +5,24 @@
 //   reject / comment also carry manual: [{ selector, comment, route, text, classes }] — notes pinned in the panel
 //   diff: { files } advertises Time Travel; onToggle(side) must switch the disk and return { side, files } or throw
 //   no studio running → resolves { decision: "unavailable" } so the caller can fall back to plain blocking
+//   proposals: [{ id, title, status, … }] — fixes kept next to the original; onProposal({ id, decision, text }, api)
+//   handles a decision on one of them; api.update({ problems, fixed, proposals, diff, event }) changes the review in place
 //   no answer within timeoutMs → { decision: "timeout" } (callers should treat it as a reject: fail closed)
 import WebSocket from "ws";
 import { randomUUID } from "node:crypto";
 import { PATH } from "./protocol.js";
 import { explain } from "../../lib/explain.js";
 
-export function requestReview({ url = "http://localhost:3001", title = "UI review", problems = [], fixed = [], timeoutMs = 15 * 60_000, onWaiting = () => {}, diff = null, onToggle = null, diffNote = null } = {}) {
+export function requestReview({ url = "http://localhost:3001", title = "UI review", problems = [], fixed = [], proposals = null, onProposal = null, onOpen = null, timeoutMs = 15 * 60_000, onWaiting = () => {}, diff = null, onToggle = null, diffNote = null } = {}) {
   return new Promise((resolve) => {
     const reviewId = randomUUID().slice(0, 8);
     const ws = new WebSocket(url.replace(/^http/, "ws") + PATH + "?role=cli");
-    let done = false, toggling = Promise.resolve();
+    let done = false, toggling = Promise.resolve(), deciding = Promise.resolve();
+    // the review changes in place (a fix applied, dropped or revised): problems are explained again as they are sent
+    const api = {
+      reviewId,
+      update: (u) => { if (ws.readyState !== 1) return; const m = { type: "REVIEW_UPDATE", reviewId, ...u }; if (u.problems) m.problems = u.problems.map(explain); if (u.fixed) m.fixed = u.fixed.map(explain); ws.send(JSON.stringify(m)); },
+    };
     const finish = (r) => { if (done) return; done = true; clearTimeout(timer); try { ws.close(); } catch {} resolve({ reviewId, ...r }); };
     const timer = setTimeout(() => finish({ decision: "timeout" }), timeoutMs);
     ws.on("error", () => finish({ decision: "unavailable" }));
@@ -24,8 +31,9 @@ export function requestReview({ url = "http://localhost:3001", title = "UI revie
       const explained = problems.map(explain);
       // diff: { repo, base, files, live } — repo/base let Studio capture Before/After; live = files can also be swapped
       const d = diff ? { ...diff, live: !!onToggle } : null;
-      ws.send(JSON.stringify({ type: "REVIEW_REQUIRED", reviewId, title, problems: explained, fixed: fixed.map(explain), diff: d && d.repo ? d : onToggle ? d : null, diffNote: d ? null : diffNote || "no-repo" }));
+      ws.send(JSON.stringify({ type: "REVIEW_REQUIRED", reviewId, title, problems: explained, fixed: fixed.map(explain), ...(proposals ? { proposals } : {}), diff: d && d.repo ? d : onToggle ? d : null, diffNote: d ? null : diffNote || "no-repo" }));
       onWaiting({ reviewId, url });
+      if (onOpen) onOpen(api);
     });
     ws.on("message", (raw) => {
       let m; try { m = JSON.parse(String(raw)); } catch { return; }
@@ -38,6 +46,8 @@ export function requestReview({ url = "http://localhost:3001", title = "UI revie
           if (ws.readyState === 1) ws.send(JSON.stringify({ type: "DIFF_STATE", reviewId, ...state }));
         });
       }
+      // one decision at a time: applying a patch and rebuilding the After side must not interleave
+      if (m.type === "PROPOSAL" && onProposal) deciding = deciding.then(() => onProposal({ id: m.id, decision: m.decision, text: m.text }, api)).catch(() => {});
       if (m.type === "DECISION") finish({ decision: m.decision, text: m.text, manual: m.manual || [] });
     });
     ws.on("close", () => finish({ decision: "unavailable" }));

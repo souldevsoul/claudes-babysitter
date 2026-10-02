@@ -64,6 +64,34 @@ Or install it as a dev dependency: `npm i -D github:souldevsoul/claudes-babysitt
 | `docs/` | The guidelines the rules enforce |
 | `test/`, `fixtures/` | `npm test`: RuleTester, Stylelint fixtures, end-to-end cases |
 
+## What changed in 4.0 (fixes wait next to the original; only what a person sees asks for approval)
+
+The agent no longer edits the original to show you a fix. It scans, prepares each fix as a **proposal** next to the
+original, and Studio shows them; the original files change only when you accept.
+
+```bash
+babysitter propose start                                   # the files as they are now = the original
+# …edit: the fix…
+babysitter propose save --title "Visible field edges" --for "control boundary"     # files go back to the original
+babysitter propose save --title "style= → classes" --for "inline style" --kind code  # an invisible fix
+babysitter propose auto --routes /,/pricing,/signup        # applies the code-only fixes — only if every page is
+                                                           # pixel-identical with and without them (desktop + phone)
+babysitter studio review --repo . --proposals < findings.json
+babysitter propose edit <id> / save --id <id>              # revise a fix the reviewer commented on
+```
+
+- **Only what a person can see is listed.** Each entry has its fix with **Accept / Reject / Comment**; its frame on
+  the page has **Before / After**: After shows the fixed version inside that frame only. The page itself is the
+  original; *After (with fixes)* shows the whole page from a second dev server with the pending fixes applied — a
+  commit built in a throwaway index, so the disk, the index and HEAD are never touched.
+- **Accept** writes that fix (and any fix it `--requires`) into the original files; the entry moves to *Fixed*.
+  **Reject** drops it. **Comment** prints `babysitter-event {"event":"comment",…}` for the agent, which revises the
+  fix (`propose edit` → `propose save --id`); the panel picks the new version up by itself. **Approve all** applies
+  every fix still waiting.
+- **Code-only findings** (`style=`…) change nothing on screen, so they are not listed (only counted) and their fixes
+  are applied without asking — but only after `propose auto` has rendered every given page from both versions and
+  found them identical, pixel for pixel. A "code-only" fix that moves a pixel is refused and its differences listed.
+
 ## What changed in 3.14 (Before/After without a reload: snapshots at your view)
 
 - **The Before/After switch no longer touches your files or reloads your page.** Swapping files under a dev server makes Next reload the page (twice per switch, scroll lost), and no staging avoids that. Studio now starts the base ref on a **second dev server in a git worktree** (node_modules linked, `.env*` copied; Next runs with `--webpack` there because Turbopack refuses a linked node_modules). It captures **both sides at your window's size, pixel ratio and scroll position**, with your localStorage and cookies (a closed cookie banner stays closed), and lays them over the page.
