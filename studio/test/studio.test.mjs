@@ -135,7 +135,7 @@ try {
   await page.evaluate(() => { window.removeEventListener("wheel", window.__smooth); document.querySelector("#__babysitter-studio").shadowRoot.getElementById("short-list").remove(); scrollTo(0, 0); });
   ok("the problem list scrolls under a smooth-scroll library (Lenis) that takes the wheel; the page still scrolls outside the panel");
 
-  assert.ok(await page.locator("#__babysitter-studio #comment-send").isDisabled(), "Send Comment needs text");
+  assert.ok(!(await page.locator("#__babysitter-studio #comment-send").isVisible()), "Send Comment is not shown until there is something to send");
   await page.locator("#__babysitter-studio #comment-text").fill("Use the kit Select here, please");
   await page.locator("#__babysitter-studio #comment-send").click();
   const c1 = await r1.done;
@@ -156,9 +156,10 @@ try {
   const { requestReview } = await import("../lib/review-client.js");
   const sides = [];
   const rv = requestReview({ url: base, problems: PROBLEMS, diff: { files: 2 }, onToggle: (side) => { sides.push(side); return { side, files: 2 }; } });
-  await page.locator("#__babysitter-studio .seg").waitFor({ timeout: 10000 });
+  await page.locator("#__babysitter-studio #live").waitFor({ timeout: 10000 });
   assert.ok(await page.locator("#__babysitter-studio .box").first().isVisible());
-  assert.equal(await page.locator("#__babysitter-studio .seg button[data-side=AFTER]").getAttribute("aria-pressed"), "true", "After by default");
+  assert.equal(await page.locator("#__babysitter-studio .seg").isVisible(), false, "no snapshots without a repository: only the live swap is offered");
+  assert.match(await page.locator("#__babysitter-studio #live").textContent(), /Live/, "After (the work) by default; the button offers the swap");
   // a switch reloads the page once the swap is done (the browser then shows what the dev server rebuilt)
   const reloaded = () => page.waitForEvent("framenavigated", { predicate: (f) => f === page.mainFrame(), timeout: 10000 });
   await page.evaluate(() => scrollTo(0, 120));
@@ -175,7 +176,7 @@ try {
   assert.match(await page.locator("#__babysitter-studio .tt .info").textContent(), /Viewing HEAD/);
   nav = reloaded();
   await clickSide("AFTER");
-  await nav; await page.locator("#__babysitter-studio .panel:not(.before) .seg").waitFor({ timeout: 5000 });
+  await nav; await page.locator("#__babysitter-studio .panel:not(.before) #live").waitFor({ timeout: 5000 });
   await page.evaluate(() => scrollTo(0, 0));
   assert.ok(await page.locator("#__babysitter-studio .box").first().isVisible(), "frames back on AFTER");
   await page.evaluate(() => { const w = new WebSocket(`ws://${location.host}/__babysitter/ws?role=studio`); w.onopen = () => w.send(JSON.stringify({ type: "TOGGLE_DIFF", reviewId: "x", side: "../../etc/passwd" })); });
@@ -371,7 +372,7 @@ try {
       ok("scrolling re-captures at the new position; Esc returns to the live page; still no reload");
 
       // the bus refuses a path that would leave the dev server
-      const rid = (await p2.locator(`${ps} .status`).textContent()).replace(/^review /, "");
+      const rid = await p2.locator(`${ps} .status`).getAttribute("data-review");
       const bad = await p2.evaluate((rid) => new Promise((r) => { const w = new WebSocket(`ws://${location.host}/__babysitter/ws?role=studio`); w.onmessage = (e) => { const m = JSON.parse(e.data); if (m.type === "COMPARE_FAILED" && m.reqId === "evil") { w.close(); r(m.error); } }; w.onopen = () => w.send(JSON.stringify({ type: "COMPARE", reviewId: rid, reqId: "evil", path: "//evil.example/" })); }), rid);
       assert.equal(bad, "bad path", "a capture can only open a path on the dev servers, never another host");
       await p2.locator(`${ps} #approve`).click();
@@ -419,10 +420,10 @@ try {
     assert.equal(await page.locator(`${ps} .box`).first().locator(".tag").textContent(), "1", "frames carry the entry's number");
     ok("findings say what is wrong, why and how to fix it, name the element as a person would, and group repeats; code-only ones (style=) are only counted");
 
-    // Before/After is always there; without a repository it is off and says why
-    assert.ok(await page.locator(`${ps} .seg button[data-side=BEFORE]`).isDisabled());
-    assert.match(await page.locator(`${ps} .tt .info`).textContent(), /needs the review's repository/);
-    ok("Before/After is always shown; off with the reason when the review has no repository");
+    // without a repository there is nothing to compare: no Before/After at all (nothing on screen that cannot work)
+    assert.equal(await page.locator(`${ps} .tt`).isVisible(), false);
+    assert.equal(await page.locator(`${ps} #cmp-slider`).count() + await page.locator(`${ps} #cmp-diff`).count(), 0);
+    ok("no repository → no Before/After controls at all; only what can work is on screen")
 
     // the panel moves, remembers where, folds, and goes back on double-click
     const hb = await page.locator(`${ps} .head`).boundingBox(), pb0 = await page.locator(`${ps} .panel`).boundingBox();
@@ -437,6 +438,7 @@ try {
     assert.ok(pbc.x === 8 && pbc.y === 8, `clamped ${JSON.stringify(pbc)}`);
     await page.mouse.move(pbc.x + 40, pbc.y + 10); await page.mouse.down(); await page.mouse.move(pb1.x + 40, pb1.y + 10, { steps: 4 }); await page.mouse.up();
     await page.reload(); await page.locator(`${ps} #approve`).waitFor({ timeout: 10000 });
+    await page.waitForTimeout(350); // the panel's entrance animation (0.2 s) moves it a few px while it plays
     const pb2 = await page.locator(`${ps} .panel`).boundingBox();
     assert.ok(Math.abs(pb2.x - pb1.x) <= 2 && Math.abs(pb2.y - pb1.y) <= 2, "the place survives a reload");
     await page.locator(`${ps} #collapse`).click();
@@ -484,7 +486,7 @@ try {
     await page.locator(`${ps} #approve`).waitFor({ timeout: 10000 });
     assert.deepEqual(await page.locator(`${ps} .filters button`).allInnerTexts(), ["Visible · 4", "Fixed · 1"]);
     assert.deepEqual(await page.locator(`${ps} .list li[data-g]`).evaluateAll((ls) => ls.map((l) => l.className)), ["k-red", "k-red", "k-red", "k-red", "k-fixed"], "visible, then fixed; code-only not listed");
-    assert.match(await page.locator(`${ps} .list li.sep.fixed`).innerText(), /Fixed since the previous check \(1\)/);
+    assert.match(await page.locator(`${ps} .list li.sep.fixed`).innerText(), /Fixed since the previous check \(1\)/i);
     const fixedText = await page.locator(`${ps} .list li[data-g].k-fixed`).innerText();
     assert.match(fixedText, /Was: Because it is 3\.58:1/); assert.doesNotMatch(fixedText, /→/, "a fixed entry gives no advice");
     assert.equal(await page.locator(`${ps} .box.fixed`).evaluate((e) => getComputedStyle(e).borderTopColor), "rgb(34, 197, 94)", "fixed: green frame");
@@ -690,9 +692,10 @@ try {
       const ps = "#__babysitter-studio";
       await p3.locator(`${ps} #approve`).waitFor({ timeout: 15000 });
       assert.equal(await p3.locator(`${ps} .list li[data-g]`).count(), 2, "the two visible findings; the code-only one is not listed");
-      assert.match(await p3.locator(`${ps} .list li[data-g]`).first().innerText(), /Fix: Darker title[\s\S]*waiting for your decision[\s\S]*Accept[\s\S]*Reject[\s\S]*Comment/);
-      assert.equal(await p3.locator(`${ps} #approve`).textContent(), "Approve all");
-      assert.deepEqual(await p3.locator(`${ps} .seg button`).allInnerTexts(), ["Before (now)", "👁 After (with fixes)"]);
+      assert.match(await p3.locator(`${ps} .list li[data-g]`).first().innerText(), /Fix\s*Darker title[\s\S]*waiting for your decision[\s\S]*Accept[\s\S]*Reject[\s\S]*Comment/);
+      assert.equal(await p3.locator(`${ps} #approve`).textContent(), "Approve all (2)", "says how many fixes it applies");
+      assert.equal(await p3.locator(`${ps} #cmp-slider`).isVisible(), false, "Slider only while comparing");
+      assert.deepEqual(await p3.locator(`${ps} .seg button`).allInnerTexts(), ["Before (now)", "After (with fixes)"]);
       // Before/After on the frame: After shows the fixed title inside this frame only
       await p3.locator(`${ps} .box[data-g="0"] .ba button[data-ba=AFTER]`).click();
       await p3.locator(`${ps} .cmp.on`).waitFor({ timeout: 90000 });
@@ -709,7 +712,7 @@ try {
       assert.ok(blue, "After: the title is blue (the fix)");
       assert.equal(await p3.locator(`${ps} .box[data-g="0"] .ba button[data-ba=AFTER]`).getAttribute("aria-pressed"), "true");
       assert.ok(await p3.locator(`${ps} .box[data-g="0"]`).isVisible(), "the frame stays above the snapshot");
-      assert.match(await p3.locator(`${ps} .tt .info`).textContent(), /After for this element: [\d.]+% of its frame changes/, "says how much the fix changes in this frame");
+      assert.match(await p3.locator(`${ps} .tt .info`).textContent(), /After inside the element's frame: [\d.]+% changed/, "says how much the fix changes in this frame");
       await p3.locator(`${ps} .box[data-g="0"] .ba button[data-ba=BEFORE]`).click();
       assert.equal(await p3.locator(`${ps} .cmp.on`).count(), 0, "Before = the live page");
       // the same from the entry itself: "Before/After on the page" goes to the element and shows its After
@@ -723,7 +726,11 @@ try {
       // the whole page: After (with fixes) is a snapshot; Before (now) is the live page again
       await p3.locator(`${ps} .seg button[data-side=AFTER]`).click();
       await p3.locator(`${ps} .cmp.on`).waitFor({ timeout: 30000 });
+      // while comparing: Slider and Differences are offered, Inspect and the frames switch are not (nothing live to act on)
+      assert.ok(await p3.locator(`${ps} #cmp-slider`).isVisible() && await p3.locator(`${ps} #cmp-diff`).isVisible());
+      assert.ok(!(await p3.locator(`${ps} #inspect`).isVisible()) && !(await p3.locator(`${ps} #frames`).isVisible()));
       await p3.locator(`${ps} .seg button[data-side=BEFORE]`).click();
+      assert.ok(!(await p3.locator(`${ps} #cmp-slider`).isVisible()) && await p3.locator(`${ps} #inspect`).isVisible(), "back on the live page: the comparison tools go, Inspect comes back");
       assert.equal(await p3.locator(`${ps} .cmp.on`).count(), 0, "Before (now) = the live page, not a snapshot");
       assert.equal(readFileSync(join(proj, "index.html"), "utf8"), page0("#ff9999", "#cccccc"), "nothing applied yet");
       ok("proposals: only visible findings, each with its fix; Before/After on a frame shows the fix inside that frame; the original untouched");
@@ -750,10 +757,14 @@ try {
       await p3.locator(`${ps} .prop.s-rejected`).waitFor({ timeout: 10000 });
       assert.equal(readFileSync(join(proj, "index.html"), "utf8"), page0("#0000ff", "#cccccc"));
       assert.equal(P.get(proj, "darker-note").status, "rejected");
+      // nothing waits any more: no Reject all, and Approve says what it does now
+      assert.equal(await p3.locator(`${ps} #reject`).isVisible(), false);
+      assert.equal(await p3.locator(`${ps} #approve`).textContent(), "Finish review");
+      assert.equal(await p3.locator(`${ps} .prop button[data-pa=approve]`).count(), 0, "no Accept on a fix already decided");
       await p3.locator(`${ps} #approve`).click();
       assert.equal(await new Promise((r) => cli.on("exit", r)), 0);
       assert.equal(readFileSync(join(proj, "index.html"), "utf8"), page0("#0000ff", "#cccccc"), "Approve all leaves a rejected fix out");
-      ok("Accept applies one fix to the original file (the entry moves to fixed); Reject drops it; Approve all ends the review");
+      ok("Accept applies one fix to the original file (the entry moves to fixed); Reject drops it; the controls follow the state (Approve all (n) → Finish review, no Reject all with nothing waiting, comparison tools only while comparing)");
       await p3.close();
     } finally {
       cli.kill(); live.kill(); await studio3.close();

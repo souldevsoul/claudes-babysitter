@@ -18,146 +18,205 @@
   root.innerHTML = `
 <style>
   :host { all: initial; }
-  * { box-sizing: border-box; font-family: ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif; }
+  /* ── design tokens ── */
+  .panel, .pop { --bg: #0e1014; --bg-2: #15181e; --bg-3: #1c2027; --line: rgb(255 255 255 / .08); --line-2: rgb(255 255 255 / .14);
+    --text: #f4f4f5; --text-2: #c9cbd1; --muted: #9a9ca6; --dim: #6b6e78;
+    --red: #ef4444; --red-soft: rgb(239 68 68 / .14); --green: #22c55e; --green-ink: #052e16; --amber: #facc15; --amber-ink: #1c1503; --blue: #3b82f6;
+    --r-sm: 8px; --r-md: 10px; --r-lg: 16px; --ease: cubic-bezier(.2, .8, .2, 1); }
+  * { box-sizing: border-box; font-family: "Inter", ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif; -webkit-font-smoothing: antialiased; }
+  [hidden] { display: none !important; }
+
+  /* ── frames on the page ── */
   .layer { position: fixed; inset: 0; pointer-events: none; }
-  .box { position: fixed; border: 2px solid #ef4444; border-radius: 4px; background: none; box-shadow: 0 0 0 1px rgb(255 255 255 / 0.6); transition: box-shadow .2s; } /* outline only: nothing tints the element being judged */
-  .box.pulse { box-shadow: 0 0 0 6px rgb(239 68 68 / 0.35); }
+  .box { position: fixed; border: 2px solid #ef4444; border-radius: 6px; background: none; box-shadow: 0 0 0 1px rgb(255 255 255 / .7), 0 0 0 4px rgb(239 68 68 / .12); transition: box-shadow .2s var(--ease, ease); } /* outline only: nothing tints the element being judged */
+  .box.pulse { box-shadow: 0 0 0 1px rgb(255 255 255 / .7), 0 0 0 8px rgb(239 68 68 / .35); }
   .layer.off .box { display: none; }
-  /* Before/After by screenshots: laid exactly over the viewport, flipped instantly */
-  .layer.cmp-hide { display: none; }
+  .layer.off .box.peek { display: block; }
+  .layer.cmp-hide, .layer.hidden { display: none; }
   .layer.over { z-index: 2; } /* one element's After: its frame and Before/After stay above the snapshot */
+  .tag { position: absolute; top: -11px; left: -11px; min-width: 20px; height: 20px; padding: 0 6px; border-radius: 10px; background: #ef4444; color: #fff; font: 700 11px/20px "Inter", ui-sans-serif, system-ui; text-align: center; box-shadow: 0 2px 6px rgb(0 0 0 / .3); }
+  .box.code { border: 2px dashed #eab308; }
+  .box.code .tag { background: #facc15; color: #1c1503; }
+  .box.fixed { border-color: #22c55e; box-shadow: 0 0 0 1px rgb(255 255 255 / .7), 0 0 0 4px rgb(34 197 94 / .14); }
+  .box.fixed.pulse { box-shadow: 0 0 0 1px rgb(255 255 255 / .7), 0 0 0 8px rgb(34 197 94 / .35); }
+  .box.fixed .tag { background: #22c55e; color: #052e16; }
+  .box.note { border-color: #3b82f6; box-shadow: 0 0 0 1px rgb(255 255 255 / .7), 0 0 0 4px rgb(59 130 246 / .14); }
+  .box.note .tag { background: #2563eb; }
+  .layer.hide-red .box.k-red, .layer.hide-code .box.k-code, .layer.hide-fixed .box.k-fixed { display: none !important; }
+  /* Before/After on a frame */
+  .ba { position: absolute; top: -14px; right: -2px; display: inline-flex; padding: 2px; gap: 2px; border-radius: 999px; background: #0e1014; pointer-events: auto;
+    box-shadow: 0 4px 14px rgb(0 0 0 / .35), 0 0 0 1px rgb(255 255 255 / .1); opacity: .62; transition: opacity .15s, transform .15s; }
+  .box.narrow .ba { right: auto; left: 13px; } /* a small frame: Before/After next to the number, not on it */
+  .ba:hover, .ba:focus-within, .ba:has(button[data-ba=AFTER][aria-pressed="true"]) { opacity: 1; }
+  .ba button { padding: 2px 9px; border: 0; border-radius: 999px; background: transparent; color: #c9cbd1; font: 600 11px/16px "Inter", ui-sans-serif, system-ui; cursor: pointer; }
+  .ba button:hover { color: #fff; }
+  .ba button[aria-pressed="true"] { background: #facc15; color: #1c1503; }
+
+  /* ── snapshots: Before/After laid exactly over the viewport ── */
   .cmp { position: fixed; inset: 0; pointer-events: none; display: none; }
-  .cmp.on { display: block; }
+  .cmp.on { display: block; animation: fade .12s ease-out; }
   .cmp img, .cmp canvas { position: absolute; inset: 0; width: 100%; height: 100%; }
-  .cmp img { display: none; }
-  .cmp img.show { display: block; }
-  .cmp canvas { display: none; }
-  .cmp canvas.show { display: block; }
+  .cmp img, .cmp canvas { display: none; }
+  .cmp img.show, .cmp canvas.show { display: block; }
   .cmp .handle { position: absolute; top: 0; bottom: 0; width: 24px; margin-left: -12px; pointer-events: auto; cursor: ew-resize; display: none; touch-action: none; }
   .cmp .handle::before { content: ""; position: absolute; left: 11px; top: 0; bottom: 0; width: 2px; background: #facc15; box-shadow: 0 0 0 1px rgb(0 0 0 / .35); }
-  .cmp .handle::after { content: "◀ ▶"; position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); padding: 6px 8px; border-radius: 999px; background: #facc15; color: #1c1503; font: 700 11px/1 ui-sans-serif, system-ui; white-space: nowrap; }
+  .cmp .handle::after { content: "◀ ▶"; position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); padding: 7px 10px; border-radius: 999px; background: #facc15; color: #1c1503; font: 700 11px/1 "Inter", ui-sans-serif, system-ui; white-space: nowrap; box-shadow: 0 4px 14px rgb(0 0 0 / .35); }
   .cmp.slider .handle { display: block; }
-  .cmp .badge { position: absolute; bottom: 14px; padding: 4px 10px; border-radius: 999px; font: 700 12px/18px ui-sans-serif, system-ui; box-shadow: 0 2px 10px rgb(0 0 0 / .35); }
-  .cmp .badge.b { left: 12px; background: #facc15; color: #1c1503; }
-  .cmp .badge.a { right: 12px; background: #22c55e; color: #052e16; display: none; }
+  .cmp .badge { position: absolute; bottom: 14px; padding: 5px 12px; border-radius: 999px; font: 700 11.5px/18px "Inter", ui-sans-serif, system-ui; letter-spacing: .02em; box-shadow: 0 4px 14px rgb(0 0 0 / .35); }
+  .cmp .badge.b { left: 14px; background: #facc15; color: #1c1503; }
+  .cmp .badge.a { right: 14px; background: #22c55e; color: #052e16; display: none; }
   .cmp.slider .badge.a { display: block; }
-  .tools { display: flex; flex-wrap: wrap; gap: 6px; padding: 0 14px 8px; }
-  .tools .chip[aria-pressed="true"] { background: #facc15; border-color: #facc15; color: #1c1503; }
-  .layer.off .box.peek { display: block; }
-  .tag { position: absolute; top: -12px; left: -12px; min-width: 20px; height: 20px; padding: 0 6px; border-radius: 10px; background: #ef4444; color: #fff; font: 600 11px/20px ui-sans-serif, system-ui; text-align: center; }
-  .panel { z-index: 3; position: fixed; left: 50%; bottom: 16px; transform: translateX(-50%); width: min(560px, calc(100vw - 32px)); pointer-events: auto;
-    background: #111318; color: #f4f4f5; border: 1px solid #2a2d35; border-radius: 14px; box-shadow: 0 12px 40px rgb(0 0 0 / .45); overflow: hidden; }
-  .head button { flex: none; white-space: nowrap; }
-  .head { display: flex; align-items: center; gap: 8px; padding: 10px 14px; border-bottom: 1px solid #23262d; font-size: 13px; cursor: grab; user-select: none; touch-action: none; }
+  @keyframes fade { from { opacity: 0; } to { opacity: 1; } }
+  @keyframes rise { from { opacity: 0; transform: translateY(6px); } to { opacity: 1; transform: none; } }
+  @keyframes spin { to { transform: rotate(360deg); } }
+
+  /* ── the panel ── */
+  .panel { z-index: 3; position: fixed; left: 50%; bottom: 16px; transform: translateX(-50%); width: min(560px, calc(100vw - 32px)); max-height: calc(100vh - 16px); pointer-events: auto;
+    display: flex; flex-direction: column; overflow: hidden; color: var(--text); font-size: 13px;
+    background: linear-gradient(180deg, rgb(28 32 39 / .97), rgb(14 16 20 / .97)); backdrop-filter: blur(14px) saturate(1.2);
+    border: 1px solid var(--line-2); border-radius: var(--r-lg);
+    box-shadow: 0 1px 0 rgb(255 255 255 / .06) inset, 0 24px 60px rgb(0 0 0 / .5), 0 2px 8px rgb(0 0 0 / .3); animation: rise .2s var(--ease); }
+  .panel.dragging { transition: none; box-shadow: 0 30px 70px rgb(0 0 0 / .6); }
+  .panel.before { border-color: #a16207; background: linear-gradient(180deg, #2a220c, #1a1607); }
+  .head { flex: none; display: flex; align-items: center; gap: 8px; padding: 10px 10px 10px 12px; border-bottom: 1px solid var(--line); cursor: grab; user-select: none; touch-action: none; }
   .panel.dragging .head { cursor: grabbing; }
-  .panel.dragging { transition: none; box-shadow: 0 18px 50px rgb(0 0 0 / .55); }
-  .grip { color: #52525b; font-size: 12px; letter-spacing: -2px; }
-  .collapse { padding: 2px 8px; font-size: 14px; line-height: 18px; background: transparent; color: #a1a1aa; border-color: #3f3f46; }
-  /* never taller than the window: the list gives up its height first, the decision buttons stay */
-  .panel { max-height: calc(100vh - 16px); display: flex; flex-direction: column; }
-  .panel > .head { flex: none; }
+  .panel.collapsed .head { border-bottom: 0; }
+  .grip { color: var(--dim); font-size: 12px; letter-spacing: -2px; }
+  .dot { flex: none; width: 8px; height: 8px; border-radius: 50%; background: var(--dim); box-shadow: 0 0 0 3px rgb(255 255 255 / .05); }
+  .dot.on { background: var(--green); box-shadow: 0 0 0 3px rgb(34 197 94 / .18); } .dot.alert { background: var(--red); box-shadow: 0 0 0 3px rgb(239 68 68 / .2); }
+  .title { flex: 1 0 auto; font-weight: 650; font-size: 13.5px; letter-spacing: -.01em; white-space: nowrap; }
+  .status { flex: 0 1 auto; min-width: 0; color: var(--dim); font-size: 11.5px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .icons { flex: none; display: flex; gap: 4px; }
+  .ib { display: inline-grid; place-items: center; min-width: 30px; height: 30px; padding: 0 8px; border-radius: var(--r-sm); border: 1px solid var(--line); background: rgb(255 255 255 / .03); color: var(--text-2); font: 600 12px/1 "Inter", ui-sans-serif, system-ui; cursor: pointer; transition: background .15s, color .15s, border-color .15s; }
+  .ib:hover { background: rgb(255 255 255 / .08); color: var(--text); }
+  .ib[aria-pressed="true"] { background: rgb(59 130 246 / .18); border-color: rgb(59 130 246 / .5); color: #bfdbfe; }
+  .ib svg { width: 15px; height: 15px; }
+  .ib.inspect { gap: 6px; grid-auto-flow: column; }
+  #collapse svg { transition: transform .2s var(--ease); } .panel.collapsed #collapse svg { transform: rotate(180deg); }
+  #frames[aria-pressed="true"] svg rect { fill: currentColor; fill-opacity: .25; }
   .body { flex: 1 1 auto; min-height: 0; display: flex; flex-direction: column; }
   .body > * { flex: none; }
   .body > .list { flex: 0 1 auto; min-height: 48px; }
   .panel.collapsed .body { display: none; }
-  .panel.collapsed .head { border-bottom: 0; }
-  .list li .ex { display: grid; gap: 3px; min-width: 0; }
-  .ex .t { font-weight: 600; color: #f4f4f5; }
-  .ex .el { color: #d4d4d8; }
-  .ex .el .cnt { color: #a1a1aa; }
-  .ex .why { color: #a1a1aa; }
-  .ex .fix { color: #86efac; }
-  .ex .tech { display: none; color: #71717a; font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 10.5px; word-break: break-all; }
-  li.open .ex .tech { display: block; }
-  .more { justify-self: start; padding: 0; border: 0; background: none; color: #71717a; font-size: 11px; font-weight: 500; text-decoration: underline; }
-  .seg button:disabled { opacity: .45; }
-  .dot { width: 8px; height: 8px; border-radius: 50%; background: #71717a; }
-  .dot.on { background: #22c55e; } .dot.alert { background: #ef4444; }
-  .title { font-weight: 600; flex: 1 0 auto; white-space: nowrap; } .status { flex: 0 1 auto; min-width: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; } .muted { color: #a1a1aa; font-size: 12px; }
-  .list { max-height: min(46vh, 360px); overflow: auto; overscroll-behavior: contain; margin: 0; padding: 6px 0; list-style: none; }
-  .list li { display: flex; gap: 8px; padding: 6px 14px; font-size: 12.5px; line-height: 1.4; cursor: pointer; }
-  .list li:hover { background: #1b1e25; }
-  .n { flex: none; width: 20px; height: 20px; border-radius: 10px; background: #ef4444; color: #fff; font-size: 11px; font-weight: 600; text-align: center; line-height: 20px; }
-  .n.static { background: #3f3f46; }
-  .where { color: #a1a1aa; font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 11px; }
-  .foot { display: grid; gap: 8px; padding: 10px 14px 14px; border-top: 1px solid #23262d; }
-  textarea { width: 100%; min-height: 44px; resize: vertical; padding: 8px 10px; border-radius: 8px; border: 1px solid #3f3f46; background: #0b0c0f; color: #f4f4f5; font-size: 13px; }
-  textarea:focus-visible, button:focus-visible { outline: 2px solid #60a5fa; outline-offset: 2px; }
-  .row { display: flex; gap: 8px; justify-content: flex-end; }
-  button { appearance: none; border: 1px solid transparent; border-radius: 8px; padding: 8px 14px; font-size: 13px; font-weight: 600; cursor: pointer; }
-  .approve { background: #16a34a; color: #fff; } .reject { background: #dc2626; color: #fff; } .ghost { background: transparent; color: #e4e4e7; border-color: #3f3f46; }
-  button:disabled { opacity: .5; cursor: default; }
-  .min { padding: 8px 14px; font-size: 12px; display: flex; align-items: center; gap: 8px; }
-  /* Time Travel: After / Before (HEAD) */
-  .tt { display: flex; align-items: center; gap: 10px; padding: 8px 14px; border-bottom: 1px solid #23262d; font-size: 12px; }
-  .seg { flex: none; display: inline-flex; padding: 2px; border-radius: 8px; background: #0b0c0f; border: 1px solid #3f3f46; }
-  .seg button { white-space: nowrap; padding: 4px 10px; font-size: 12px; font-weight: 600; border-radius: 6px; background: transparent; color: #a1a1aa; }
-  .seg button[aria-pressed="true"] { background: #f4f4f5; color: #111318; }
-  .panel.before { background: #231d0b; border-color: #a16207; }
-  .panel.before .head, .panel.before .tt, .panel.before .foot { border-color: #3d3210; }
-  .panel.before .seg button[aria-pressed="true"] { background: #facc15; color: #1c1503; }
-  .tt .err { color: #fca5a5; }
-  .layer.hidden { display: none; }
-  /* Visual Prompting: blue = a human's note, red = the automation's finding */
-  .box.code { border: 2px dashed #eab308; background: none; }
-  .box.code.pulse { box-shadow: 0 0 0 6px rgb(234 179 8 / 0.35); }
-  .box.code .tag, .n.code { background: #facc15; color: #1c1503; }
-  .box.fixed { border: 2px solid #22c55e; background: none; }
-  .box.fixed.pulse { box-shadow: 0 0 0 6px rgb(34 197 94 / 0.35); }
-  .box.fixed .tag, .n.fixed { background: #22c55e; color: #052e16; }
-  .list li.sep.fixed { color: #4ade80; }
-  .list li.sep.red { color: #f87171; border-top: 0; margin-top: 0; }
-  .list li.k-fixed .t::after { content: attr(data-done); margin-left: 6px; padding: 0 6px; border-radius: 6px; background: #14532d; color: #bbf7d0; font-size: 10.5px; font-weight: 600; }
-  .prop { margin-top: 6px; padding: 8px 10px; border-radius: 8px; background: #17191f; border: 1px solid #2a2d35; display: grid; gap: 6px; cursor: default; }
-  .prop .ptitle { font-size: 12px; color: #e4e4e7; } .prop .ptitle b { font-weight: 600; }
-  .prop .pst { margin-left: 6px; font-size: 11px; color: #a1a1aa; }
-  .prop.s-approved .pst { color: #4ade80; } .prop.s-rejected .pst, .prop.s-conflict .pst { color: #fca5a5; } .prop.s-revising .pst { color: #facc15; }
-  .prop .pnote { font-size: 11.5px; color: #a1a1aa; } .prop .perr { font-size: 11.5px; color: #fca5a5; }
-  .prop .pbtn { display: flex; flex-wrap: wrap; gap: 6px; }
-  .prop .pbtn button, .prop .pc button { padding: 4px 10px; border-radius: 6px; font-size: 12px; font-weight: 600; border: 1px solid #3f3f46; background: #23262d; color: #f4f4f5; cursor: pointer; }
-  .prop .pbtn button[data-pa=approve] { background: #16a34a; border-color: #16a34a; color: #fff; }
-  .prop .pbtn button[data-pa=reject] { background: #3f1d1d; border-color: #7f1d1d; color: #fecaca; }
-  .prop .pbtn button:disabled { opacity: .5; cursor: default; }
-  .prop .pc { display: grid; gap: 6px; } .prop .pc[hidden] { display: none; }
-  .prop .pc textarea { min-height: 54px; resize: vertical; border-radius: 6px; border: 1px solid #3f3f46; background: #0b0c0f; color: #f4f4f5; padding: 6px 8px; font-size: 12px; }
-  .ba { position: absolute; top: -13px; right: -2px; display: inline-flex; border-radius: 999px; overflow: hidden; pointer-events: auto; box-shadow: 0 2px 8px rgb(0 0 0 / .3); opacity: .5; transition: opacity .15s; }
-  .box.narrow .ba { right: auto; left: 12px; } /* a small frame: Before/After next to the number, not on it */
-  .ba:hover, .ba:focus-within, .ba:has(button[data-ba=AFTER][aria-pressed="true"]) { opacity: 1; }
-  .ba button { padding: 2px 8px; font: 600 11px/16px ui-sans-serif, system-ui; border: 0; background: #111318; color: #d4d4d8; cursor: pointer; }
-  .ba button[aria-pressed="true"] { background: #facc15; color: #1c1503; }
-  .codesum { padding: 6px 14px 0; font-size: 11.5px; color: #a1a1aa; }
-  .filters { display: flex; flex-wrap: wrap; gap: 6px; padding: 8px 14px 0; }
-  .filters button { display: inline-flex; align-items: center; gap: 6px; padding: 3px 9px; border-radius: 999px; border: 1px solid #3f3f46; background: #18181b; color: #f4f4f5; font-size: 12px; cursor: pointer; }
-  .filters button i { width: 9px; height: 9px; border-radius: 50%; }
-  .filters button[aria-pressed="false"] { opacity: .45; text-decoration: line-through; }
-  .list.hide-red .k-red, .list.hide-code .k-code, .list.hide-fixed .k-fixed { display: none; }
-  .layer.hide-red .box.k-red, .layer.hide-code .box.k-code, .layer.hide-fixed .box.k-fixed { display: none !important; }
-  .list li.sep { display: block; cursor: default; padding: 10px 14px 4px; font-size: 11.5px; color: #facc15; border-top: 1px solid #23262d; margin-top: 4px; }
+
+  /* header line of a review */
+  .min { padding: 10px 14px 0; font-size: 12px; display: flex; align-items: baseline; gap: 6px; color: var(--muted); }
+  .min strong { color: var(--text); font-weight: 600; }
+  .muted { color: var(--muted); font-size: 12px; }
+
+  /* compare bar: segmented switch + what is on screen */
+  .tt { display: grid; grid-template-columns: auto 1fr; align-items: center; gap: 12px; padding: 10px 14px; font-size: 12px; }
+  .seg { position: relative; display: inline-flex; padding: 3px; border-radius: 10px; background: rgb(0 0 0 / .35); border: 1px solid var(--line); }
+  .seg button { position: relative; padding: 6px 12px; border: 0; border-radius: 7px; background: transparent; color: var(--muted); font: 600 12px/16px "Inter", ui-sans-serif, system-ui; white-space: nowrap; cursor: pointer; transition: color .15s, background .2s var(--ease), box-shadow .2s; }
+  .seg button:hover { color: var(--text); }
+  .seg button[aria-pressed="true"] { background: #f4f4f5; color: #0e1014; box-shadow: 0 1px 2px rgb(0 0 0 / .3); }
+  .panel.before .seg button[aria-pressed="true"] { background: var(--amber); color: var(--amber-ink); }
+  .tt .info { color: var(--muted); line-height: 1.35; }
+  .tt .info.busy::before { content: ""; display: inline-block; width: 10px; height: 10px; margin-right: 7px; vertical-align: -1px; border-radius: 50%; border: 2px solid rgb(255 255 255 / .2); border-top-color: var(--amber); animation: spin .8s linear infinite; }
+  .tt .err, .tt .info.warn { color: #fca5a5; }
+  .tools { display: flex; flex-wrap: wrap; gap: 6px; padding: 0 14px 10px; }
+  .chip { display: inline-flex; align-items: center; gap: 6px; padding: 5px 11px; border-radius: 999px; border: 1px solid var(--line-2); background: rgb(255 255 255 / .03); color: var(--text-2); font: 600 12px/16px "Inter", ui-sans-serif, system-ui; cursor: pointer; transition: background .15s, color .15s, border-color .15s; }
+  .chip:hover { background: rgb(255 255 255 / .08); color: var(--text); }
+  .chip[aria-pressed="true"] { background: var(--amber); border-color: var(--amber); color: var(--amber-ink); }
+
+  /* filters */
+  .filters { display: flex; flex-wrap: wrap; gap: 6px; padding: 0 14px 6px; }
+  .filters button { display: inline-flex; align-items: center; gap: 7px; padding: 4px 10px; border-radius: 999px; border: 1px solid var(--line-2); background: transparent; color: var(--text-2); font: 600 11.5px/16px "Inter", ui-sans-serif, system-ui; cursor: pointer; transition: opacity .15s, background .15s; }
+  .filters button:hover { background: rgb(255 255 255 / .06); }
+  .filters button i { width: 8px; height: 8px; border-radius: 50%; }
+  .filters button[aria-pressed="false"] { opacity: .45; }
+  .filters button[aria-pressed="false"] i { background: transparent !important; box-shadow: inset 0 0 0 1.5px currentColor; }
+  .codesum { padding: 0 14px 6px; font-size: 11.5px; color: var(--dim); }
+
+  /* the list */
+  .list { max-height: min(46vh, 380px); overflow: auto; overscroll-behavior: contain; margin: 0; padding: 4px 6px 8px; list-style: none; border-top: 1px solid var(--line); scrollbar-width: thin; scrollbar-color: rgb(255 255 255 / .18) transparent; }
+  .list li { display: flex; gap: 10px; padding: 10px 8px; border-radius: var(--r-md); font-size: 12.5px; line-height: 1.45; cursor: pointer; transition: background .15s; }
+  .list li:hover { background: rgb(255 255 255 / .04); }
+  .list li.focus { background: rgb(255 255 255 / .06); box-shadow: inset 2px 0 0 var(--red); }
+  .list li.sep { display: block; cursor: default; padding: 12px 8px 4px; font-size: 10.5px; font-weight: 700; letter-spacing: .06em; text-transform: uppercase; color: var(--muted); }
   .list li.sep:hover { background: none; }
-  .list li.sep span { color: #a1a1aa; }
-  .box.note { border-color: #3b82f6; background: rgb(59 130 246 / 0.08); }
-  .box.note .tag { background: #2563eb; }
+  .list li.sep span { text-transform: none; letter-spacing: 0; font-weight: 500; color: var(--dim); }
+  .list li.sep.red { color: #fca5a5; } .list li.sep.fixed { color: #86efac; }
+  .list.hide-red .k-red, .list.hide-code .k-code, .list.hide-fixed .k-fixed { display: none; }
+  .n { flex: none; width: 22px; height: 22px; border-radius: 11px; background: var(--red); color: #fff; font-size: 11px; font-weight: 700; text-align: center; line-height: 22px; box-shadow: 0 0 0 3px var(--red-soft); }
+  .n.static { background: #3f3f46; box-shadow: none; }
+  .n.code { background: var(--amber); color: var(--amber-ink); }
+  .n.fixed { background: var(--green); color: var(--green-ink); box-shadow: 0 0 0 3px rgb(34 197 94 / .15); }
+  .n.note { background: #2563eb; width: auto; min-width: 26px; padding: 0 6px; box-shadow: 0 0 0 3px rgb(59 130 246 / .18); }
+  .list li .ex { display: grid; gap: 4px; min-width: 0; flex: 1; }
+  .ex .t { font-weight: 650; color: var(--text); font-size: 13px; letter-spacing: -.005em; }
+  .ex .el { color: var(--text-2); }
+  .ex .el .cnt { color: var(--dim); }
+  .ex .why { color: var(--muted); }
+  .ex .fix { color: #86efac; }
+  .ex .tech { display: none; color: var(--dim); font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 10.5px; word-break: break-all; white-space: pre-wrap; }
+  li.open .ex .tech { display: block; }
+  .more { justify-self: start; padding: 0; border: 0; background: none; color: var(--dim); font-size: 11px; font-weight: 500; cursor: pointer; }
+  .more:hover { color: var(--text-2); text-decoration: underline; }
+  .list li.k-fixed .t::after { content: attr(data-done); margin-left: 8px; padding: 1px 7px; border-radius: 999px; background: rgb(34 197 94 / .16); color: #86efac; font-size: 10.5px; font-weight: 700; vertical-align: 1px; }
+
+  /* a proposed fix inside an entry */
+  .prop { margin-top: 8px; padding: 10px 12px; border-radius: var(--r-md); background: rgb(255 255 255 / .035); border: 1px solid var(--line); display: grid; gap: 8px; cursor: default; }
+  .prop .ptitle { display: flex; align-items: baseline; flex-wrap: wrap; gap: 6px 8px; font-size: 12px; color: var(--text-2); }
+  .prop .ptitle b { color: var(--text); font-weight: 650; }
+  .prop .pst { padding: 1px 8px; border-radius: 999px; font-size: 10.5px; font-weight: 700; background: rgb(255 255 255 / .08); color: var(--muted); }
+  .prop.s-pending .pst { background: rgb(250 204 21 / .14); color: #fde68a; }
+  .prop.s-approved .pst { background: rgb(34 197 94 / .16); color: #86efac; }
+  .prop.s-rejected .pst, .prop.s-conflict .pst { background: rgb(239 68 68 / .16); color: #fca5a5; }
+  .prop.s-revising .pst { background: rgb(59 130 246 / .18); color: #bfdbfe; }
+  .prop.busy .pst::before { content: ""; display: inline-block; width: 8px; height: 8px; margin-right: 5px; border-radius: 50%; border: 1.5px solid rgb(255 255 255 / .25); border-top-color: currentColor; animation: spin .8s linear infinite; vertical-align: -1px; }
+  .prop .pnote { font-size: 11.5px; color: var(--muted); } .prop .perr { font-size: 11.5px; color: #fca5a5; }
+  .prop .pbtn { display: flex; flex-wrap: wrap; gap: 6px; }
+  .prop .pbtn button, .prop .pc button { display: inline-flex; align-items: center; gap: 6px; padding: 6px 12px; border-radius: var(--r-sm); font: 600 12px/16px "Inter", ui-sans-serif, system-ui; border: 1px solid var(--line-2); background: rgb(255 255 255 / .04); color: var(--text); cursor: pointer; transition: background .15s, border-color .15s, transform .08s; }
+  .prop .pbtn button:hover, .prop .pc button:hover { background: rgb(255 255 255 / .09); }
+  .prop .pbtn button:active { transform: translateY(1px); }
+  .prop .pbtn button[data-pa=approve] { background: var(--green); border-color: var(--green); color: var(--green-ink); }
+  .prop .pbtn button[data-pa=approve]:hover { background: #16a34a; color: #fff; }
+  .prop .pbtn button[data-pa=reject] { background: transparent; border-color: rgb(239 68 68 / .45); color: #fca5a5; }
+  .prop .pbtn button[data-pa=reject]:hover { background: rgb(239 68 68 / .12); }
+  .prop .pbtn button[data-pa=show][aria-pressed="true"] { background: var(--amber); border-color: var(--amber); color: var(--amber-ink); }
+  .prop .pbtn .show { margin-left: auto; }
+  .prop .pc { display: grid; gap: 6px; }
+  .prop .pc textarea { min-height: 56px; }
+  .prop .pc .send { justify-self: end; }
+
+  /* notes (Visual Prompting) */
+  .sec { padding: 10px 14px 2px; color: #93c5fd; font-size: 10.5px; font-weight: 700; letter-spacing: .06em; text-transform: uppercase; }
+  .where { color: var(--muted); font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 11px; }
+  .x { margin-left: auto; padding: 0 6px; border: 0; background: transparent; color: var(--muted); font-size: 16px; line-height: 20px; cursor: pointer; }
+  .x:hover { color: var(--text); }
+
+  /* footer */
+  .foot { display: grid; gap: 8px; padding: 10px 14px 14px; border-top: 1px solid var(--line); background: rgb(0 0 0 / .18); }
+  textarea { width: 100%; min-height: 40px; resize: vertical; padding: 9px 11px; border-radius: var(--r-md); border: 1px solid var(--line-2); background: rgb(0 0 0 / .35); color: var(--text); font: 13px/1.4 "Inter", ui-sans-serif, system-ui; transition: border-color .15s, box-shadow .15s; }
+  textarea::placeholder { color: var(--dim); }
+  textarea:focus { outline: none; border-color: rgb(59 130 246 / .7); box-shadow: 0 0 0 3px rgb(59 130 246 / .2); }
+  button:focus-visible { outline: 2px solid #60a5fa; outline-offset: 2px; }
+  .row { display: flex; gap: 8px; justify-content: flex-end; align-items: center; }
+  .row .grow { flex: 1; }
+  button { appearance: none; border: 1px solid transparent; border-radius: var(--r-sm); padding: 9px 16px; font: 650 13px/16px "Inter", ui-sans-serif, system-ui; cursor: pointer; transition: background .15s, transform .08s, box-shadow .15s, opacity .15s; }
+  button:active { transform: translateY(1px); }
+  button:disabled { opacity: .45; cursor: default; transform: none; }
+  .approve { background: var(--green); color: var(--green-ink); box-shadow: 0 6px 18px rgb(34 197 94 / .22); } .approve:hover { background: #16a34a; color: #fff; }
+  .reject { background: transparent; color: #fca5a5; border-color: rgb(239 68 68 / .5); } .reject:hover { background: rgb(239 68 68 / .12); }
+  .ghost { background: rgb(255 255 255 / .04); color: var(--text); border-color: var(--line-2); } .ghost:hover { background: rgb(255 255 255 / .09); }
+  .small { padding: 6px 11px; font-size: 12px; }
+  .save { background: #2563eb; color: #fff; } .save:hover { background: #1d4ed8; }
+
+  /* Visual Prompting: blue = a human's note */
   .pick { position: fixed; inset: 0; pointer-events: none; }
-  .hover { position: fixed; display: none; border: 2px solid #3b82f6; border-radius: 3px; background: rgb(59 130 246 / 0.12);
+  .hover { position: fixed; display: none; border: 2px solid #3b82f6; border-radius: 4px; background: rgb(59 130 246 / 0.10);
     transition: left 60ms ease-out, top 60ms ease-out, width 60ms ease-out, height 60ms ease-out; }
   .hover.locked { box-shadow: 0 0 0 4px rgb(59 130 246 / 0.28); transition: none; }
-  .hover .label { position: absolute; left: -2px; bottom: 100%; margin-bottom: 4px; padding: 0 6px; border-radius: 4px; background: #1d4ed8; color: #fff;
-    font: 600 11px/18px ui-monospace, SFMono-Regular, Menlo, monospace; white-space: nowrap; max-width: 60vw; overflow: hidden; text-overflow: ellipsis; }
+  .hover .label { position: absolute; left: -2px; bottom: 100%; margin-bottom: 4px; padding: 0 7px; border-radius: 5px; background: #1d4ed8; color: #fff;
+    font: 600 11px/19px ui-monospace, SFMono-Regular, Menlo, monospace; white-space: nowrap; max-width: 60vw; overflow: hidden; text-overflow: ellipsis; }
   .hover.flip .label { bottom: auto; top: 100%; margin: 4px 0 0; }
-  .pop { position: fixed; display: none; width: 320px; pointer-events: auto; padding: 10px; border-radius: 12px; background: #111318; color: #f4f4f5;
-    border: 1px solid #1d4ed8; box-shadow: 0 12px 32px rgb(0 0 0 / .45); }
-  .pop .sel { margin: 0 0 6px; color: #93c5fd; font: 11px/1.4 ui-monospace, SFMono-Regular, Menlo, monospace; word-break: break-all; }
-  .pop textarea { min-height: 64px; }
-  .pop .row { margin-top: 8px; justify-content: space-between; }
+  .pop { position: fixed; display: none; width: 340px; pointer-events: auto; padding: 12px; border-radius: 14px; color: var(--text);
+    background: linear-gradient(180deg, #1c2027, #0e1014); border: 1px solid rgb(59 130 246 / .6); box-shadow: 0 20px 50px rgb(0 0 0 / .5); }
+  .pop .sel { margin: 0 0 8px; color: #93c5fd; font: 11px/1.4 ui-monospace, SFMono-Regular, Menlo, monospace; word-break: break-all; }
+  .pop textarea { min-height: 70px; }
+  .pop .row { margin-top: 10px; justify-content: space-between; }
   .pop .row span { display: flex; gap: 6px; }
-  .save { background: #2563eb; color: #fff; }
-  .small { padding: 6px 10px; font-size: 12px; }
-  .chip { padding: 4px 10px; font-size: 12px; background: transparent; color: #e4e4e7; border-color: #3f3f46; }
-  .chip[aria-pressed="true"] { background: #2563eb; border-color: #2563eb; color: #fff; }
-  .sec { padding: 6px 14px 0; color: #93c5fd; font-size: 11px; font-weight: 600; letter-spacing: .04em; text-transform: uppercase; }
-  .n.note { background: #2563eb; width: auto; min-width: 24px; padding: 0 5px; }
-  .x { margin-left: auto; padding: 0 6px; background: transparent; color: #a1a1aa; font-size: 15px; line-height: 20px; }
-  .x:hover { color: #f4f4f5; }
 </style>
 <div class="layer" part="layer"></div>
 <div class="cmp" aria-hidden="true"><img class="a" alt=""><img class="b" alt=""><canvas class="d"></canvas><div class="handle"></div><span class="badge b"></span><span class="badge a"></span></div>
@@ -169,7 +228,13 @@
       <span><button class="ghost small" id="note-cancel" type="button">Cancel</button><button class="save small" id="note-save" type="button" disabled>Save</button></span></div>
   </div></div>
 <div class="panel" role="region" aria-label="Babysitter Studio">
-  <div class="head" title="Drag to move · double-click to put back"><span class="grip" aria-hidden="true">⋮⋮</span><span class="dot"></span><span class="title">Babysitter Studio</span><span class="muted status">connecting…</span><button class="chip" id="frames" type="button" aria-pressed="true" title="Frames on the page: on / off">▢</button><button class="chip" id="lang" type="button" title="Language / Язык">EN</button><button class="chip collapse" id="collapse" type="button" aria-expanded="true" title="Collapse / expand">–</button><button class="chip" id="inspect" type="button" aria-pressed="false" title="Point at any element and leave a note for Claude (Esc to stop)">🎯 Inspect</button></div>
+  <div class="head" title="Drag to move · double-click to put back"><span class="grip" aria-hidden="true">⋮⋮</span><span class="dot"></span><span class="title">Babysitter Studio</span><span class="status">connecting…</span>
+    <span class="icons">
+      <button class="ib inspect" id="inspect" type="button" aria-pressed="false" title="Point at any element and leave a note for Claude (Esc to stop)"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="12" cy="12" r="8"/><circle cx="12" cy="12" r="3"/><path d="M12 2v3M12 19v3M2 12h3M19 12h3"/></svg><span>Inspect</span></button>
+      <button class="ib" id="frames" type="button" aria-pressed="true" title="Frames on the page: on / off"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="4" y="4" width="16" height="16" rx="3"/></svg></button>
+      <button class="ib" id="lang" type="button" title="Language / Язык">EN</button>
+      <button class="ib" id="collapse" type="button" aria-expanded="true" title="Collapse / expand"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><path d="M6 9l6 6 6-6"/></svg></button>
+    </span></div>
   <div class="body"></div>
 </div>`;
   const $ = (s) => root.querySelector(s);
@@ -183,8 +248,8 @@
   const prefs = { get() { try { return JSON.parse(localStorage.getItem(PREF_KEY) || "{}"); } catch { return {}; } }, set(v) { try { localStorage.setItem(PREF_KEY, JSON.stringify({ ...prefs.get(), ...v })); } catch {} } };
   let LANG = prefs.get().lang || (/^ru\b/i.test(navigator.language || "") ? "ru" : "en");
   const DICT = {
-    en: { problems: (n) => `${n} problem${n === 1 ? "" : "s"}`, paused: "the CLI is paused until you decide", after: "After", before: "👁 Before", viewing: (b) => `Viewing ${b} · frames hidden`, differ: (n, b) => `Your changes · ${n} file(s) differ from ${b}`, cmpHint: (n, b) => `Your changes · ${n} file(s) differ from ${b} · Before = a snapshot right here, no reload (B)`, switching: "Swapping the files and waiting for the dev server to rebuild (~5 s)…", startingBase: (b) => `Starting a dev server of ${b} next to yours (first time ~10–30 s)…`, capturing: "Capturing both versions at your scroll position…", cmpBefore: (b) => `Snapshot of ${b} · B flips · scroll re-captures`, cmpAfter: "Snapshot of your changes · B flips", slider: "⇆ Slider", diffs: "◫ Differences", exit: "✕ Live page", live: "↻ Live", liveBack: "↺ Back to your changes", noDiffHere: "No visible differences on this screen", diffCount: (n) => `${n} changed area(s) highlighted`, badgeBefore: (b) => `BEFORE · ${b}`, badgeAfter: "AFTER", framesOn: "Frames on the page: on", framesOff: "Frames on the page: off (click an entry to see its frame)", nothing: "Nothing to compare — no changed UI files", noRepo: "Before/After needs the review's repository (the hooks pass it; studio review --repo)", details: "details", beforeNow: "Before (now)", afterFix: "👁 After (with fixes)", startingFix: "Starting a dev server with the proposed fixes next to yours (first time ~10–30 s)…", beforeShort: "Before", afterShort: "After", cmpTimeout: "⚠ No snapshot in 2 minutes — the dev server may have stopped. Press Before/After again.", clipChanged: (p) => `After for this element: ${p}% of its frame changes · Before/After on the frame switch`, clipSame: "⚠ In this frame the two versions look the same — this fix does not change this element (tell the agent with Comment)", propHint: (n) => `${n} fix(es) proposed · the page is the original; After shows it with the fixes, nothing applied yet (B)`, cmpAfterProp: "With the proposed fixes · B flips · the original files are untouched", cmpBeforeProp: "Snapshot of the original · B flips", clipInfo: "After for this element only · the Before/After buttons on its frame switch", badgeOrig: "BEFORE · original", badgeFixed: "AFTER · with fixes", fix: "Fix", accept: "Accept", decline: "Reject", comment: "Comment", send2: "Send", pcPlaceholder: "What should be different in this fix?", covers: (n) => `fixes ${n} findings at once`, pstatus: { pending: "waiting for your decision", approved: "applied to the files", rejected: "rejected — not applied", revising: "being revised after your comment…", conflict: "does not apply to the files as they are now" }, applying: "applying…", approveAll: "Approve all", rejectAll: "Reject all", applied: "applied", codeSum: (n) => `${n} finding(s) only in the code (style= …) are fixed without your approval — the page looks exactly the same.`, fVisible: "Visible", fCode: "In code", fFixed: "Fixed", showOnPage: "Before/After on the page", was: "Was:", openHead: (n) => `Visible on the page — not fixed yet (${n})`, done: "fixed", fixedHead: (n) => `Fixed since the previous check (${n}) <span>· green frames: these were problems and are gone now</span>`, split: (v, c) => `${v} visible · ${c} in code`, codeOnly: (n) => `Not visible on the page — only in the code (${n}) <span>· yellow frames: fixing them changes nothing you can see</span>`, pages: (n) => `on ${n} pages`, places: (n) => `${n} places`, otherPage: (r) => `on ${r}`, placeholder: "What should change? Send Comment returns the work to its author with this brief…", send: "Send Comment", reject: "Reject", approve: "Approve" },
-    ru: { problems: (n) => `${n} ${n % 10 === 1 && n % 100 !== 11 ? "проблема" : n % 10 >= 2 && n % 10 <= 4 && (n % 100 < 12 || n % 100 > 14) ? "проблемы" : "проблем"}`, paused: "проверка ждёт вашего решения", after: "После", before: "👁 До", viewing: (b) => `Показано состояние ${b} · рамки скрыты`, differ: (n, b) => `Ваши изменения · ${n} файл(ов) отличаются от ${b}`, cmpHint: (n, b) => `Ваши изменения · ${n} файл(ов) отличаются от ${b} · «До» — снимок прямо здесь, без перезагрузки (B)`, switching: "Подменяю файлы и жду, пока dev-сервер пересоберёт (~5 с)…", startingBase: (b) => `Запускаю рядом dev-сервер версии ${b} (в первый раз ~10–30 с)…`, capturing: "Снимаю обе версии на вашей прокрутке…", cmpBefore: (b) => `Снимок версии ${b} · B — переключить · при прокрутке пересниму`, cmpAfter: "Снимок ваших изменений · B — переключить", slider: "⇆ Шторка", diffs: "◫ Отличия", exit: "✕ Живая страница", live: "↻ Вживую", liveBack: "↺ Вернуть ваши изменения", noDiffHere: "На этом экране видимых отличий нет", diffCount: (n) => `Подсвечено изменённых мест: ${n}`, badgeBefore: (b) => `ДО · ${b}`, badgeAfter: "ПОСЛЕ", framesOn: "Рамки на странице: включены", framesOff: "Рамки на странице: выключены (клик по пункту покажет его рамку)", nothing: "Сравнивать нечего — изменённых UI-файлов нет", noRepo: "Для «До / После» ревью нужен репозиторий (хуки передают его сами; studio review --repo)", details: "подробности", beforeNow: "До (сейчас)", afterFix: "👁 После (с исправлениями)", startingFix: "Запускаю рядом dev-сервер с предложенными исправлениями (в первый раз ~10–30 с)…", beforeShort: "До", afterShort: "После", cmpTimeout: "⚠ Снимок не пришёл за 2 минуты — возможно, dev-сервер остановился. Нажмите «До/После» ещё раз.", clipChanged: (p) => `«После» для этого элемента: в рамке изменилось ${p}% · кнопки До/После на рамке переключают`, clipSame: "⚠ В этой рамке версии выглядят одинаково — исправление этот элемент не меняет (напишите об этом в «Комментарий»)", propHint: (n) => `Предложено исправлений: ${n} · страница — оригинал; «После» — она же с исправлениями, ничего ещё не применено (B)`, cmpAfterProp: "С предложенными исправлениями · B — переключить · оригинальные файлы не тронуты", cmpBeforeProp: "Снимок оригинала · B — переключить", clipInfo: "«После» только для этого элемента · кнопки До/После на рамке переключают", badgeOrig: "ДО · оригинал", badgeFixed: "ПОСЛЕ · с исправлениями", fix: "Исправление", accept: "Принять", decline: "Отклонить", comment: "Комментарий", send2: "Отправить", pcPlaceholder: "Что изменить в этом исправлении?", covers: (n) => `исправляет сразу ${n} пункт(ов)`, pstatus: { pending: "ждёт вашего решения", approved: "применено к файлам", rejected: "отклонено — не применено", revising: "дорабатывается по вашему комментарию…", conflict: "не применяется к текущим файлам" }, applying: "применяю…", approveAll: "Approve all", rejectAll: "Reject all", applied: "применено", codeSum: (n) => `Замечаний только в коде (style= и т.п.): ${n} — их исправляю без вашего одобрения, вид страницы при этом не меняется.`, fVisible: "Видно", fCode: "В коде", fFixed: "Исправлено", showOnPage: "До/После на странице", was: "Было:", openHead: (n) => `Видно глазами — ещё не исправлено (${n})`, done: "исправлено", fixedHead: (n) => `Исправлено с прошлой проверки (${n}) <span>· зелёные рамки: здесь были проблемы, теперь их нет</span>`, split: (v, c) => `${v} видно · ${c} в коде`, codeOnly: (n) => `Глазами не видно — только в коде (${n}) <span>· жёлтые рамки: их исправление ничего на странице не меняет</span>`, pages: (n) => `на ${n} страницах`, places: (n) => `${n} мест`, otherPage: (r) => `на странице ${r}`, placeholder: "Что изменить? Send Comment вернёт работу автору с этим заданием…", send: "Send Comment", reject: "Reject", approve: "Approve" },
+    en: { problems: (n) => `${n} problem${n === 1 ? "" : "s"}`, paused: "the CLI is paused until you decide", after: "After", before: "👁 Before", viewing: (b) => `Viewing ${b} · frames hidden`, differ: (n, b) => `Your changes · ${n} file(s) differ from ${b}`, cmpHint: (n, b) => `Your changes · ${n} file(s) differ from ${b} · Before = a snapshot right here, no reload (B)`, switching: "Swapping the files and waiting for the dev server to rebuild (~5 s)…", startingBase: (b) => `Starting a dev server of ${b} next to yours (first time ~10–30 s)…`, capturing: "Capturing both versions at your scroll position…", cmpBefore: (b) => `Snapshot of ${b} · B flips · scroll re-captures`, cmpAfter: "Snapshot of your changes · B flips", slider: "⇆ Slider", diffs: "◫ Differences", exit: "✕ Live page", live: "↻ Live", liveBack: "↺ Back to your changes", noDiffHere: "No visible differences on this screen", diffCount: (n) => `${n} changed area(s) highlighted`, badgeBefore: (b) => `BEFORE · ${b}`, badgeAfter: "AFTER", framesOn: "Frames on the page: on", framesOff: "Frames on the page: off (click an entry to see its frame)", nothing: "Nothing to compare — no changed UI files", noRepo: "Before/After needs the review's repository (the hooks pass it; studio review --repo)", details: "details", beforeNow: "Before (now)", afterFix: "👁 After (with fixes)", startingFix: "Starting a dev server with the proposed fixes next to yours (first time ~10–30 s)…", beforeShort: "Before", afterShort: "After", cmpTimeout: "⚠ No snapshot in 2 minutes — the dev server may have stopped. Press Before/After again.", clipChanged: (p) => `After inside the element's frame: ${p}% changed`, clipSame: "⚠ In this frame the two versions look the same — this fix does not change this element (tell the agent with Comment)", propHint: (n) => `${n} fix(es) wait for you · the page is the original · B flips`, cmpAfterProp: "With the fixes · the files are untouched · B flips", cmpBeforeProp: "Snapshot of the original · B flips", clipInfo: "After for this element only · the Before/After buttons on its frame switch", badgeOrig: "BEFORE · original", badgeFixed: "AFTER · with fixes", fix: "Fix", accept: "Accept", decline: "Reject", comment: "Comment", send2: "Send", pcPlaceholder: "What should be different in this fix?", covers: (n) => `fixes ${n} findings at once`, pstatus: { pending: "waiting for your decision", approved: "applied to the files", rejected: "rejected — not applied", revising: "being revised after your comment…", conflict: "does not apply to the files as they are now" }, applying: "applying…", approveAll: "Approve all", approveAllN: (n) => `Approve all (${n})`, finish: "Finish review", rejectAll: "Reject all", applied: "applied", codeSum: (n) => `${n} finding(s) only in the code (style= …) are fixed without your approval — the page looks exactly the same.`, fVisible: "Visible", fCode: "In code", fFixed: "Fixed", showOnPage: "Before/After on the page", was: "Was:", openHead: (n) => `Visible on the page — not fixed yet (${n})`, done: "fixed", fixedHead: (n) => `Fixed since the previous check (${n}) <span>· green frames: these were problems and are gone now</span>`, split: (v, c) => `${v} visible · ${c} in code`, codeOnly: (n) => `Not visible on the page — only in the code (${n}) <span>· yellow frames: fixing them changes nothing you can see</span>`, pages: (n) => `on ${n} pages`, places: (n) => `${n} places`, otherPage: (r) => `on ${r}`, placeholder: "What should change? Send Comment returns the work to its author with this brief…", send: "Send Comment", reject: "Reject", approve: "Approve" },
+    ru: { problems: (n) => `${n} ${n % 10 === 1 && n % 100 !== 11 ? "проблема" : n % 10 >= 2 && n % 10 <= 4 && (n % 100 < 12 || n % 100 > 14) ? "проблемы" : "проблем"}`, paused: "проверка ждёт вашего решения", after: "После", before: "👁 До", viewing: (b) => `Показано состояние ${b} · рамки скрыты`, differ: (n, b) => `Ваши изменения · ${n} файл(ов) отличаются от ${b}`, cmpHint: (n, b) => `Ваши изменения · ${n} файл(ов) отличаются от ${b} · «До» — снимок прямо здесь, без перезагрузки (B)`, switching: "Подменяю файлы и жду, пока dev-сервер пересоберёт (~5 с)…", startingBase: (b) => `Запускаю рядом dev-сервер версии ${b} (в первый раз ~10–30 с)…`, capturing: "Снимаю обе версии на вашей прокрутке…", cmpBefore: (b) => `Снимок версии ${b} · B — переключить · при прокрутке пересниму`, cmpAfter: "Снимок ваших изменений · B — переключить", slider: "⇆ Шторка", diffs: "◫ Отличия", exit: "✕ Живая страница", live: "↻ Вживую", liveBack: "↺ Вернуть ваши изменения", noDiffHere: "На этом экране видимых отличий нет", diffCount: (n) => `Подсвечено изменённых мест: ${n}`, badgeBefore: (b) => `ДО · ${b}`, badgeAfter: "ПОСЛЕ", framesOn: "Рамки на странице: включены", framesOff: "Рамки на странице: выключены (клик по пункту покажет его рамку)", nothing: "Сравнивать нечего — изменённых UI-файлов нет", noRepo: "Для «До / После» ревью нужен репозиторий (хуки передают его сами; studio review --repo)", details: "подробности", beforeNow: "До (сейчас)", afterFix: "👁 После (с исправлениями)", startingFix: "Запускаю рядом dev-сервер с предложенными исправлениями (в первый раз ~10–30 с)…", beforeShort: "До", afterShort: "После", cmpTimeout: "⚠ Снимок не пришёл за 2 минуты — возможно, dev-сервер остановился. Нажмите «До/После» ещё раз.", clipChanged: (p) => `«После» в рамке элемента: изменилось ${p}%`, clipSame: "⚠ В этой рамке версии выглядят одинаково — исправление этот элемент не меняет (напишите об этом в «Комментарий»)", propHint: (n) => `Ждут решения: ${n} · на странице оригинал · B — переключить`, cmpAfterProp: "С исправлениями · файлы не тронуты · B — переключить", cmpBeforeProp: "Снимок оригинала · B — переключить", clipInfo: "«После» только для этого элемента · кнопки До/После на рамке переключают", badgeOrig: "ДО · оригинал", badgeFixed: "ПОСЛЕ · с исправлениями", fix: "Исправление", accept: "Принять", decline: "Отклонить", comment: "Комментарий", send2: "Отправить", pcPlaceholder: "Что изменить в этом исправлении?", covers: (n) => `исправляет сразу ${n} пункт(ов)`, pstatus: { pending: "ждёт вашего решения", approved: "применено к файлам", rejected: "отклонено — не применено", revising: "дорабатывается по вашему комментарию…", conflict: "не применяется к текущим файлам" }, applying: "применяю…", approveAll: "Approve all", approveAllN: (n) => `Approve all (${n})`, finish: "Завершить ревью", rejectAll: "Reject all", applied: "применено", codeSum: (n) => `Замечаний только в коде (style= и т.п.): ${n} — их исправляю без вашего одобрения, вид страницы при этом не меняется.`, fVisible: "Видно", fCode: "В коде", fFixed: "Исправлено", showOnPage: "До/После на странице", was: "Было:", openHead: (n) => `Видно глазами — ещё не исправлено (${n})`, done: "исправлено", fixedHead: (n) => `Исправлено с прошлой проверки (${n}) <span>· зелёные рамки: здесь были проблемы, теперь их нет</span>`, split: (v, c) => `${v} видно · ${c} в коде`, codeOnly: (n) => `Глазами не видно — только в коде (${n}) <span>· жёлтые рамки: их исправление ничего на странице не меняет</span>`, pages: (n) => `на ${n} страницах`, places: (n) => `${n} мест`, otherPage: (r) => `на странице ${r}`, placeholder: "Что изменить? Send Comment вернёт работу автору с этим заданием…", send: "Send Comment", reject: "Reject", approve: "Approve" },
   };
   let T = DICT[LANG];
   const plural = (n) => T.problems(n);
@@ -208,6 +273,7 @@
     const base = current?.diff?.base || "HEAD";
     if (info) info.innerHTML = note ? `<span class="err">${esc(note)}</span>` : side === "BEFORE" ? esc(T.viewing(base)) : current?.diff?.repo ? esc(T.cmpHint(current?.diff?.files ?? 0, base)) : esc(T.differ(current?.diff?.files ?? 0, base));
     if (side === "AFTER") schedule();
+    if (current) syncUI();
   }
   function toggle(next) {
     if (!current?.diff || next === side) return;
@@ -232,7 +298,12 @@
   const propMode = () => current?.diff?.mode === "proposals";
   const liveSide = () => (propMode() ? "BEFORE" : "AFTER");
   const otherSide = () => (propMode() ? "AFTER" : "BEFORE");
-  const cmpInfo = (text) => { const i = $(".tt .info"); if (i) i.textContent = text; };
+  const cmpInfo = (text) => {
+    const i = $(".tt .info"); if (!i) return;
+    i.textContent = text;
+    i.classList.toggle("warn", /^⚠/.test(text));
+    i.classList.toggle("busy", !!cmp.pending && !/^⚠/.test(text)); // a spinner while a snapshot is on its way
+  };
   function requestCompare() {
     const reqId = String(++reqSeq);
     cmp.pending = { reqId, key: viewKey() };
@@ -310,9 +381,9 @@
     layer.querySelectorAll(".ba button").forEach((b) => { const mine = cmp.want && cmp.clipG === Number(b.closest(".box").dataset.g); b.setAttribute("aria-pressed", String(b.dataset.ba === (mine && cmp.side === "AFTER" ? "AFTER" : "BEFORE"))); });
     if ($("#cmp-slider")) $("#cmp-slider").setAttribute("aria-pressed", String(cmp.slider));
     if ($("#cmp-diff")) $("#cmp-diff").setAttribute("aria-pressed", String(cmp.diffs));
-    if ($("#cmp-exit")) $("#cmp-exit").hidden = !cmp.want;
     if (cmp.on) cmpInfo(cmp.diffs && cmp.diffN !== null && cmp.diffKey === cmp.key ? (cmp.diffN ? T.diffCount(cmp.diffN) : T.noDiffHere) : cmp.clipG != null && cmp.side === "AFTER" ? T.clipInfo : propMode() ? (cmp.side === "AFTER" && !cmp.slider ? T.cmpAfterProp : T.cmpBeforeProp) : cmp.side === "BEFORE" || cmp.slider ? T.cmpBefore(current?.diff?.base || "HEAD") : T.cmpAfter);
     else if (!cmp.want && current?.diff?.repo && side !== "BEFORE") cmpInfo(propMode() ? T.propHint(current.diff.files ?? 0) : T.cmpHint(current.diff.files ?? 0, current.diff.base || "HEAD"));
+    syncUI();
   }
   // changed areas between the two snapshots (same renderer, so only real differences): a grid of cells,
   // tinted where pixels differ, counted as connected areas
@@ -374,13 +445,41 @@
     else if (e.key === "Escape" && cmp.want) { e.preventDefault(); exitCompare(); }
   }, true);
 
+  /* What is on screen follows the state: a control that cannot do anything right now is not shown at all.
+   *   Inspect          — not over a snapshot or the base version (there is nothing live to point at)
+   *   frames on/off    — only when this page has frames
+   *   Before/After     — only when the review can compare (a repository); Slider / Differences only while comparing
+   *   Live swap        — base mode only, not while comparing
+   *   filters          — only when there is more than one kind to filter
+   *   Send Comment     — only with something to send (text or pinned notes)
+   *   Reject all       — only while fixes wait; Approve all says how many, or "Finish review" when none wait */
+  function syncUI() {
+    const r = current, pm = propMode(), comparing = cmp.want || cmp.on;
+    inspectBtn.hidden = cmp.on || side === "BEFORE";
+    $("#frames").hidden = !boxes.length || (cmp.on && layer.classList.contains("cmp-hide"));
+    const seg = $(".tt .seg"); if (seg) seg.hidden = !r?.diff?.repo;
+    const tt = $(".tt"); if (tt) tt.hidden = !r?.diff;
+    const sl = $("#cmp-slider"), df = $("#cmp-diff"), lv = $("#live");
+    if (sl) sl.hidden = !comparing; if (df) df.hidden = !comparing; if (lv) lv.hidden = comparing || pm;
+    const tools = $(".tools"); if (tools) tools.hidden = ![...tools.children].some((c) => !c.hidden);
+    const fl = $(".filters"); if (fl) fl.hidden = fl.children.length < 2;
+    const text = $("#comment-text")?.value.trim();
+    const cs = $("#comment-send"); if (cs) { cs.hidden = !(text || notes.length); cs.disabled = false; }
+    const waiting = (r?.proposals || []).filter((p) => p.status === "pending" || p.status === "revising").length;
+    const ap = $("#approve"), rj = $("#reject");
+    if (ap && pm) ap.textContent = waiting ? T.approveAllN(waiting) : T.finish;
+    if (rj && pm) rj.hidden = !waiting;
+    root.querySelectorAll(".prop button[data-pa=show]").forEach((b) => b.setAttribute("aria-pressed", String(cmp.want && cmp.clipG === Number(b.closest("li").dataset.g))));
+    root.querySelectorAll(".prop .pc").forEach((pc) => { const btn = pc.querySelector("[data-pa=send]"); if (btn) btn.hidden = !pc.querySelector("textarea").value.trim(); });
+  }
+
   function renderIdle(note) {
     dot.className = "dot" + (ws && ws.readyState === 1 ? " on" : "");
     title.textContent = "Babysitter Studio";
     panel.classList.remove("before"); layer.classList.remove("hidden"); side = "AFTER"; inspectBtn.disabled = false;
     exitCompare(); shots.clear();
     body.innerHTML = `<div class="min muted">${note || "Watching. Reviews from the Babysitter CLI appear here. 🎯 Inspect leaves a note on any element."}</div><div class="notes"></div>`;
-    syncFrames(); renderNotes();
+    syncFrames(); renderNotes(); syncUI();
   }
 
   // one entry per issue × element as a person names it (the same switch in the header, the mobile menu and
@@ -421,7 +520,8 @@
     title.textContent = `Babysitter: ${plural(n.red)}`;
     const props = new Map((r.proposals || []).map((x) => [x.id, x]));
     const pm = propMode();
-    status.textContent = `review ${r.reviewId}`;
+    // the review id is for people who debug, not for the reviewer: a tooltip on the dot, not text in the header
+    status.textContent = ""; status.dataset.review = r.reviewId; dot.title = `review ${r.reviewId}`;
     const items = groups.map((g, gi) => {
       const ex = { ...exOf(g.p) };
       // one element in several places (header and footer): name it once and list every place
@@ -438,13 +538,12 @@
       const pr = pid && props.get(pid);
       const busy = pr && pr.status === "pending";
       const prop = pr ? `<div class="prop s-${esc(pr.status)}" data-prop="${esc(pr.id)}">
-            <div class="ptitle">🔧 ${esc(T.fix)}: <b>${esc(pr.title)}</b><span class="pst">${esc(T.pstatus[pr.status] || pr.status)}</span></div>
+            <div class="ptitle"><span>${esc(T.fix)}</span><b>${esc(pr.title)}</b><span class="pst">${esc(T.pstatus[pr.status] || pr.status)}</span></div>
             ${pr.findings > 1 ? `<div class="pnote">${esc(T.covers(pr.findings))}</div>` : ""}
             ${pr.error && pr.status === "conflict" ? `<div class="perr">⚠ ${esc(pr.error)}</div>` : ""}
             ${pr.status === "revising" && pr.comment ? `<div class="pnote">💬 ${esc(pr.comment)}</div>` : ""}
-            ${busy && g.items.some((x) => x.p.selector) ? `<div class="pbtn"><button type="button" data-pa="show">👁 ${esc(T.showOnPage)}</button></div>` : ""}
-            ${busy ? `<div class="pbtn"><button type="button" data-pa="approve">✓ ${esc(T.accept)}</button><button type="button" data-pa="reject">✗ ${esc(T.decline)}</button><button type="button" data-pa="comment">💬 ${esc(T.comment)}</button></div>
-            <div class="pc" hidden><textarea aria-label="${esc(T.comment)}" placeholder="${esc(T.pcPlaceholder)}"></textarea><button type="button" data-pa="send">${esc(T.send2)}</button></div>` : ""}
+            ${busy ? `<div class="pbtn"><button type="button" data-pa="approve">✓ ${esc(T.accept)}</button><button type="button" data-pa="reject">${esc(T.decline)}</button><button type="button" data-pa="comment">${esc(T.comment)}</button>${g.items.some((x) => x.p.selector) ? `<button type="button" class="show" data-pa="show" aria-pressed="false"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M2 12s3.5-7 10-7 10 7 10 7-3.5 7-10 7S2 12 2 12z"/><circle cx="12" cy="12" r="3"/></svg>${esc(T.showOnPage)}</button>` : ""}</div>
+            <div class="pc" hidden><textarea aria-label="${esc(T.comment)}" placeholder="${esc(T.pcPlaceholder)}"></textarea><button type="button" class="send" data-pa="send" hidden>${esc(T.send2)}</button></div>` : ""}
           </div>` : "";
       return `${sep}
       <li data-g="${gi}" class="k-${g.kind}"><span class="n${g.kind !== "red" ? " " + g.kind : g.items.some((x) => x.p.selector) ? "" : " static"}">${gi + 1}</span>
@@ -459,9 +558,9 @@
         </span></li>`;
     }).join("");
     body.innerHTML = `
-      <div class="min"><strong>${esc(r.title || "UI review")}</strong><span class="muted">· ${T.paused}</span></div>
-      <div class="tt"><span class="seg" role="group" aria-label="Before / After">${pm ? `<button type="button" data-side="BEFORE" aria-pressed="true">${T.beforeNow}</button><button type="button" data-side="AFTER" aria-pressed="false">${T.afterFix}</button>` : `<button type="button" data-side="AFTER" aria-pressed="true">${T.after}</button><button type="button" data-side="BEFORE" aria-pressed="false">${T.before}${r.diff?.base ? ` (${esc(r.diff.base)})` : " (HEAD)"}</button>`}</span><span class="muted info"></span></div>
-      ${r.diff ? `<div class="tools">${r.diff.repo ? `<button class="chip" id="cmp-slider" type="button" aria-pressed="false">${T.slider}</button><button class="chip" id="cmp-diff" type="button" aria-pressed="false">${T.diffs}</button><button class="chip" id="cmp-exit" type="button" hidden>${T.exit}</button>` : ""}${r.diff.live ? `<button class="chip" id="live" type="button">${T.live}</button>` : ""}</div>` : ""}
+      <div class="min"><strong>${esc(r.title || "UI review")}</strong></div>
+      <div class="tt"><span class="seg" role="group" aria-label="Before / After">${pm ? `<button type="button" data-side="BEFORE" aria-pressed="true">${T.beforeNow}</button><button type="button" data-side="AFTER" aria-pressed="false">${T.afterFix.replace(/^👁\s*/, "")}</button>` : `<button type="button" data-side="AFTER" aria-pressed="true">${T.after}</button><button type="button" data-side="BEFORE" aria-pressed="false">${T.before.replace(/^👁\s*/, "")}${r.diff?.base ? ` (${esc(r.diff.base)})` : " (HEAD)"}</button>`}</span><span class="muted info"></span></div>
+      ${r.diff ? `<div class="tools">${r.diff.repo ? `<button class="chip" id="cmp-slider" type="button" aria-pressed="false"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M12 3v18M8 8l-4 4 4 4M16 8l4 4-4 4"/></svg>${T.slider.replace(/^\S+\s/, "")}</button><button class="chip" id="cmp-diff" type="button" aria-pressed="false"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="18" height="18" rx="3"/><path d="M3 12h18M12 3v18" stroke-dasharray="2 2"/></svg>${T.diffs.replace(/^\S+\s/, "")}</button>` : ""}${r.diff.live ? `<button class="chip" id="live" type="button">${T.live}</button>` : ""}</div>` : ""}
       <div class="filters" role="group" aria-label="Show">
         <button type="button" data-f="red" aria-pressed="true"><i style="background:#ef4444"></i>${T.fVisible} · ${n.red}</button>
         ${n.fixed ? `<button type="button" data-f="fixed" aria-pressed="true"><i style="background:#22c55e"></i>${T.fFixed} · ${n.fixed}</button>` : ""}
@@ -502,15 +601,16 @@
       const text = pa === "send" ? box.querySelector(".pc textarea").value.trim() : undefined;
       if (pa === "send" && !text) return;
       box.querySelectorAll("button").forEach((x) => (x.disabled = true));
+      box.classList.add("busy");
       box.querySelector(".pst").textContent = T.applying;
       send({ type: "PROPOSAL", reviewId: current.reviewId, id, decision: pa === "send" ? "comment" : pa, text });
     }));
+    root.querySelectorAll(".prop .pc textarea").forEach((t) => (t.oninput = syncUI));
     root.querySelectorAll("[data-more]").forEach((b) => (b.onclick = (e) => { e.stopPropagation(); b.closest("li").classList.toggle("open"); }));
     // the live side of the switch is the live page itself (no snapshot), unless the slider or the map is on
     root.querySelectorAll(".seg button").forEach((b) => (b.onclick = () => (b.dataset.side === liveSide() && !cmp.slider && !cmp.diffs ? exitCompare() : compareShow(b.dataset.side))));
     if ($("#cmp-slider")) $("#cmp-slider").onclick = () => { cmp.slider = !cmp.slider; if (cmp.slider && !cmp.on) compareShow(otherSide()); else renderCompare(); };
     if ($("#cmp-diff")) $("#cmp-diff").onclick = () => { cmp.diffs = !cmp.diffs; if (cmp.diffs && !cmp.on) compareShow(cmp.side); else renderCompare(); };
-    if ($("#cmp-exit")) $("#cmp-exit").onclick = exitCompare;
     if ($("#live")) $("#live").onclick = () => { exitCompare(); toggle(side === "BEFORE" ? "AFTER" : "BEFORE"); };
     syncFrames(); renderNotes();
     // an entry clicked on another page: this page was opened for it — find its frame and point at it
@@ -525,11 +625,12 @@
       // always visible, so reviewers know it exists; says why it is off
       root.querySelectorAll(".seg button").forEach((b) => (b.disabled = true));
       $(".tt .info").textContent = r.diffNote === "no-repo" ? T.noRepo : T.nothing;
+      syncUI();
     }
   }
 
   // Send Comment needs either text or at least one note; the bus attaches the notes to REJECT / COMMENT
-  function canSend() { const b = $("#comment-send"); if (b) b.disabled = !($("#comment-text").value.trim() || notes.length); }
+  function canSend() { syncUI(); }
 
   function renderNotes() {
     const here = (n) => !n.route || n.route === location.pathname;
@@ -612,6 +713,7 @@
     notes.forEach((n, i) => add(n.selector, n.route, "box note", `M${i + 1}`, { note: n.id }));
     markFocus();
     place();
+    if (current) syncUI();
   }
   // Before/After on a frame: After = the fixed version of this element only; Before = the live page (original)
   layer.addEventListener("click", (e) => {
@@ -631,6 +733,8 @@
   }
   function focusGroup(gi) {
     const g = groups[gi]; if (!g) return;
+    root.querySelectorAll(".list li.focus").forEach((li) => li.classList.remove("focus"));
+    root.querySelector(`.list li[data-g="${gi}"]`)?.classList.add("focus");
     const here = g.items.find(({ p }) => !p.route || p.route === location.pathname);
     if (!here) {
       // on another page: open it; the review is replayed there and the entry is found again by its key
@@ -856,13 +960,13 @@
   });
   head.addEventListener("dblclick", (e) => { if (!e.target.closest("button")) resetPlace(); });
   addEventListener("resize", () => { const s0 = store.get(); if (s0.x != null) placeAt(s0.x, s0.y); });
-  function setCollapsed(c) { panel.classList.toggle("collapsed", c); collapseBtn.textContent = c ? "+" : "–"; collapseBtn.setAttribute("aria-expanded", String(!c)); store.set({ collapsed: c }); }
+  function setCollapsed(c) { panel.classList.toggle("collapsed", c); collapseBtn.setAttribute("aria-expanded", String(!c)); store.set({ collapsed: c }); }
   collapseBtn.onclick = () => setCollapsed(!panel.classList.contains("collapsed"));
   { const s0 = store.get(); if (s0.x != null) requestAnimationFrame(() => placeAt(s0.x, s0.y)); if (s0.collapsed) setCollapsed(true); }
 
   // frames on/off (the reviewer may want the page clean to compare Before/After); off = peek on click
   const framesBtn = $("#frames"), langBtn = $("#lang");
-  function setFrames(on) { layer.classList.toggle("off", !on); framesBtn.setAttribute("aria-pressed", String(on)); framesBtn.title = on ? T.framesOn : T.framesOff; framesBtn.textContent = on ? "▣" : "▢"; prefs.set({ frames: on }); }
+  function setFrames(on) { layer.classList.toggle("off", !on); framesBtn.setAttribute("aria-pressed", String(on)); framesBtn.title = on ? T.framesOn : T.framesOff; prefs.set({ frames: on }); if (current) syncUI(); }
   framesBtn.onclick = () => setFrames(layer.classList.contains("off"));
   setFrames(prefs.get().frames !== false);
   // language of the panel and of the explanations: EN / RU
