@@ -64,6 +64,13 @@ Or install it as a dev dependency: `npm i -D github:souldevsoul/claudes-babysitt
 | `docs/` | The guidelines the rules enforce |
 | `test/`, `fixtures/` | `npm test`: RuleTester, Stylelint fixtures, end-to-end cases |
 
+## What changed in 3.9 (the gate blocks new debt, not old debt that moved or was touched)
+
+- **"New" now means new.** In `--changed` mode each changed file is also linted at the base version, and findings are matched as a multiset of rule + message. A finding is new only if the file has more of it than before. A codemod that rewrites one token on a line no longer owns the rest of that line's debt; adding one more copy of that debt still blocks. An override counts as the same finding when its classes are edited, because the finding is about the component.
+- **Moved code is not new code (3.8.2).** A line removed in one place and added unchanged in another (extracting a shared component) keeps its old findings as information. A copy (the original stays), an edit on the way, and fresh debt next to it still block.
+- Both kinds are listed under "For information only", marked *moved here unchanged* or *already in this file before your change*.
+- 3.8.1: a crashed checker (e.g. missing node_modules) is reported as a tool failure, not as an empty "blocked".
+
 ## What changed in 3.8 (Studio: Visual Prompting)
 
 - **🎯 Inspect** in the panel: point at any element, even one the automation did not flag, click and write what should change. Blue frames are human notes, red ones are findings. The picker snaps to the button around a `<span>` (Shift = exact element), Alt+↑ goes to the parent, and the app never sees the clicks.

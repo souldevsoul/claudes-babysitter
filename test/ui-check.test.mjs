@@ -295,4 +295,38 @@ t("registry: a theme ≥80% like a registered product is a warning, not a block"
   });
 }
 
+// Debt that was already in the file is not new just because its line changed for another reason; more of it is.
+{
+  const PKG = '{"dependencies":{"next":"16","tailwindcss":"4"}}';
+  const P = (cls, extra = "") => `export default function P() {\n  return (\n    <main>\n      <p className="${cls}">hello</p>${extra}\n    </main>\n  );\n}\n`;
+  const ui = (j) => j.problems.filter((p) => p.rule.startsWith("ui/"));
+  t("rewriting one token on a line that already had debt does not block", (mk) => {
+    const d = mk({ "src/app/page.tsx": P("text-white/70 bg-blue-500/10 p-4"), "package.json": PKG });
+    writeFileSync(join(d, "src/app/page.tsx"), P("text-foreground/70 bg-blue-500/10 p-4"));
+    const j = changedJson(d);
+    assert.deepEqual(ui(j), [], JSON.stringify(ui(j)));
+    assert.ok(j.info.some((i) => /already in this file before your change/.test(i.message) && /bg-blue-500\/10/.test(i.message)));
+  });
+  t("one more of the same debt in the file blocks", (mk) => {
+    const d = mk({ "src/app/page.tsx": P("bg-blue-500/10 p-4"), "package.json": PKG });
+    writeFileSync(join(d, "src/app/page.tsx"), P("bg-blue-500/10 p-4", '\n      <p className="bg-blue-500/10">again</p>'));
+    assert.equal(ui(changedJson(d)).filter((p) => /bg-blue-500\/10/.test(p.message)).length, 1);
+  });
+  t("different debt on a touched line blocks", (mk) => {
+    const d = mk({ "src/app/page.tsx": P("bg-blue-500/10 p-4"), "package.json": PKG });
+    writeFileSync(join(d, "src/app/page.tsx"), P("bg-blue-500/10 text-red-400 p-4"));
+    const p = ui(changedJson(d));
+    assert.ok(p.some((x) => /text-red-400/.test(x.message)) && !p.some((x) => /bg-blue-500/.test(x.message)), JSON.stringify(p));
+  });
+  t("an override stays the same finding when its classes are edited; a new override blocks", (mk) => {
+    const kit = 'export function Label({ className, ...p }: any) { return <label className={className} {...p} />; }\n';
+    const page = (a, b = "") => `import { Label } from "@/components/ui/label";\nexport default function P() {\n  return (\n    <main>\n      <Label className="${a}">A</Label>${b}\n    </main>\n  );\n}\n`;
+    const d = mk({ "src/components/ui/label.tsx": kit, "src/app/page.tsx": page("text-sm text-white/80"), "package.json": PKG });
+    writeFileSync(join(d, "src/app/page.tsx"), page("text-sm text-foreground/80"));
+    assert.deepEqual(ui(changedJson(d)).filter((p) => p.rule === "ui/no-visual-classname-override"), []);
+    writeFileSync(join(d, "src/app/page.tsx"), page("text-sm text-foreground/80", '\n      <Label className="text-lg">B</Label>'));
+    assert.equal(ui(changedJson(d)).filter((p) => p.rule === "ui/no-visual-classname-override").length, 1);
+  });
+}
+
 console.log(`ui-check: ${n} end-to-end cases passed`);

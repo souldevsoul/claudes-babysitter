@@ -103,6 +103,14 @@ files = files.filter((f) => !ignore.some((r) => r.test(f)));
 const only = opt("file");
 if (only && only !== true) { const want = relative(repo, resolve(repo, only)); files = files.filter((f) => f === want); }
 const problems = [];
+// --changed: what each changed file already had at the base version, as a multiset of rule + message.
+// A finding is new only when the file has more of it than before — a codemod that rewrites one token on a
+// line does not own the debt that was already on that line.
+const baseCounts = new Map(); // file -> Map(key -> count)
+// the identity of a finding: an override is about the component, not about which of its classes the message quotes
+const findingKey = (p) => `${p.rule}\u0000${String(p.message).replace(/className="… [^"]*? …"/g, 'className="…"')}`;
+const atBase = (f) => { if (!lineFilter || !baseRef) return null; const r = spawnSync("git", ["show", `${baseRef}:${f}`], { cwd: repo, encoding: "utf8", maxBuffer: 64 * 1024 * 1024 }); return r.status === 0 ? r.stdout : null; };
+const countAtBase = (f, p) => { const m = baseCounts.get(f) || baseCounts.set(f, new Map()).get(f); const k = findingKey(p); m.set(k, (m.get(k) || 0) + 1); };
 
 // ESLint (only our rules — the product's own config is not our business here)
 const js = files.filter((f) => /\.(jsx|tsx|ts|js|mjs)$/.test(f));
@@ -124,6 +132,12 @@ if (js.length) {
     // disabling a guardrail is not a fix
     const src = readFileSync(r.filePath, "utf8").split("\n");
     src.forEach((l, i) => { if (/eslint-disable[^\n]*\bui\//.test(l)) problems.push({ file: relative(repo, r.filePath), line: i + 1, rule: "ui/no-disable", message: "A ui/* guardrail is disabled here. Fix the code instead, or add a project-level allowance in babysitter.config.json with a reason." }); });
+  }
+  for (const f of lineFilter ? js : []) {
+    const text = atBase(f);
+    if (text === null) continue;
+    for (const r of await eslint.lintText(text, { filePath: join(repo, f) }))
+      for (const m of r.messages) if (m.ruleId && m.ruleId.startsWith("ui/")) countAtBase(f, { rule: m.ruleId, message: m.message });
   }
 }
 
@@ -153,6 +167,12 @@ if (css.length) {
   };
   const { results } = await stylelint.lint({ files: css.map((f) => join(repo, f)), config, cwd: repo });
   for (const r of results) for (const w of r.warnings) problems.push({ file: relative(repo, r.source), line: w.line, rule: w.rule, message: w.text.replace(/\s*\([^)]*\)$/, "") });
+  for (const f of lineFilter ? css : []) {
+    const text = atBase(f);
+    if (text === null) continue;
+    const { results: base } = await stylelint.lint({ code: text, codeFilename: join(repo, f), config, cwd: repo });
+    for (const r of base) for (const w of r.warnings) countAtBase(f, { rule: w.rule, message: w.text.replace(/\s*\([^)]*\)$/, "") });
+  }
 }
 
 // Repo audits (reuse + theme)
@@ -202,15 +222,30 @@ if (lineFilter) {
     if (lf === "all" || String(p.rule).startsWith("ui-audit/")) return true;
     return !!lf && lf.has(p.line);
   };
+  // already in this file at the base version: old debt, even on a line that changed for another reason
+  const curCounts = new Map();
+  for (const p of problems) { const k = `${p.file}\u0001${findingKey(p)}`; curCounts.set(k, (curCounts.get(k) || 0) + 1); }
+  const excess = new Map(); // how many instances of this finding in this file are really new
+  for (const [k, n] of curCounts) { const [file, key] = k.split("\u0001"); excess.set(k, Math.max(0, n - (baseCounts.get(file)?.get(key) || 0))); }
+  const preexisting = (p) => {
+    if (String(p.rule).startsWith("ui-audit/") || !baseCounts.has(p.file)) return false;
+    const k = `${p.file}\u0001${findingKey(p)}`, left = excess.get(k) || 0;
+    if (left > 0) { excess.set(k, left - 1); return false; }
+    return true;
+  };
   const isMoved = (p) => !String(p.rule).startsWith("ui-audit/") && !!movedLines.get(p.file)?.has(p.line) && !(lineFilter.get(p.file) instanceof Set && lineFilter.get(p.file).has(p.line));
   const moved = problems.filter(isMoved);
   const before = problems.length;
-  problems.splice(0, problems.length, ...problems.filter((p) => keep(p) && !isMoved(p)));
+  const kept = problems.filter((p) => keep(p) && !isMoved(p));
+  const old = kept.filter(preexisting);
+  problems.splice(0, problems.length, ...kept.filter((p) => !old.includes(p)));
   for (const p of moved) info.push({ file: p.file, message: `L${p.line} ${p.rule} (moved here unchanged — existing debt, not new): ${p.message}` });
-  const hidden = before - problems.length - moved.length;
+  for (const p of old) info.push({ file: p.file, message: `L${p.line} ${p.rule} (already in this file before your change — existing debt on a line you touched): ${p.message}` });
+  const hidden = before - problems.length - moved.length - old.length;
   if (format !== "json") {
     if (hidden > 0) console.error(`(${hidden} older problem(s) in untouched lines not shown — use --all-lines)`);
     if (moved.length) console.error(`(${moved.length} problem(s) on moved lines: existing debt that only changed place — listed below, not blocking)`);
+    if (old.length) console.error(`(${old.length} problem(s) on lines you touched were already in the file before — listed below, not blocking)`);
   }
 }
 
