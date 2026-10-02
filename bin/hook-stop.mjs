@@ -7,11 +7,13 @@ import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { existsSync, readFileSync, writeFileSync, mkdirSync } from "node:fs";
 import { projectMode, ADOPTION_NOTE } from "../lib/mode.js";
+import { recover } from "../lib/time-travel.js";
 import { collectProblems, freezeForReview } from "../lib/studio-gate.js";
 
 let input = "";
 for await (const chunk of process.stdin) input += chunk;
 const repo = process.env.CLAUDE_PROJECT_DIR || process.cwd();
+try { recover(repo); } catch {} // a killed Studio review left HEAD versions on disk: put the work back first
 const stateDir = join(repo, ".babysitter");
 const counter = join(stateDir, "stop-attempts");
 const MAX = Number(process.env.BABYSITTER_MAX_STOP_BLOCKS || 3);

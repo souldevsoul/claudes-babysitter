@@ -21,17 +21,27 @@ export function createBus({ log = () => {} } = {}) {
     const role = new URL(req.url, "http://x").searchParams.get("role") === "cli" ? "cli" : "studio";
     if (role === "studio") {
       studios.add(ws);
-      for (const r of reviews.values()) send(ws, r.msg); // a panel opened after the CLI asked still sees it
+      for (const r of reviews.values()) { send(ws, r.msg); if (r.diff) send(ws, r.diff); } // a panel opened later still sees it, on the right side
     }
     ws.on("message", (raw) => {
       let m; try { m = JSON.parse(String(raw)); } catch { return; }
       if (role === "cli" && m.type === "REVIEW_REQUIRED") {
-        reviews.set(m.reviewId, { msg: m, cli: ws });
+        reviews.set(m.reviewId, { msg: m, cli: ws, diff: null });
         toStudios(m);
         log(`review ${m.reviewId}: ${m.problems?.length || 0} problem(s) waiting for a human`);
         return;
       }
+      // Time Travel: the CLI that owns the review swaps the files and reports which side is on disk
+      if (role === "cli" && m.type === "DIFF_STATE" && reviews.get(m.reviewId)?.cli === ws) {
+        reviews.get(m.reviewId).diff = m;
+        toStudios(m);
+        return;
+      }
       if (role !== "studio" || !reviews.has(m.reviewId)) return;
+      if (m.type === "TOGGLE_DIFF" && (m.side === "BEFORE" || m.side === "AFTER")) {
+        send(reviews.get(m.reviewId).cli, { type: "TOGGLE_DIFF", reviewId: m.reviewId, side: m.side }); // only an enum crosses: panels never name files
+        return;
+      }
       // COMMENT ends the review too: the work goes back to its author (Claude) with the comment as the brief
       if (m.type === "COMMENT" && m.text) close(m.reviewId, "comment", m.text);
       if (m.type === "APPROVE") close(m.reviewId, "approve", m.text);

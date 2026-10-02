@@ -36,6 +36,16 @@
   .approve { background: #16a34a; color: #fff; } .reject { background: #dc2626; color: #fff; } .ghost { background: transparent; color: #e4e4e7; border-color: #3f3f46; }
   button:disabled { opacity: .5; cursor: default; }
   .min { padding: 8px 14px; font-size: 12px; display: flex; align-items: center; gap: 8px; }
+  /* Time Travel: After / Before (HEAD) */
+  .tt { display: flex; align-items: center; gap: 10px; padding: 8px 14px; border-bottom: 1px solid #23262d; font-size: 12px; }
+  .seg { display: inline-flex; padding: 2px; border-radius: 8px; background: #0b0c0f; border: 1px solid #3f3f46; }
+  .seg button { padding: 4px 10px; font-size: 12px; font-weight: 600; border-radius: 6px; background: transparent; color: #a1a1aa; }
+  .seg button[aria-pressed="true"] { background: #f4f4f5; color: #111318; }
+  .panel.before { background: #231d0b; border-color: #a16207; }
+  .panel.before .head, .panel.before .tt, .panel.before .foot { border-color: #3d3210; }
+  .panel.before .seg button[aria-pressed="true"] { background: #facc15; color: #1c1503; }
+  .tt .err { color: #fca5a5; }
+  .layer.hidden { display: none; }
 </style>
 <div class="layer" part="layer"></div>
 <div class="panel" role="region" aria-label="Babysitter Studio">
@@ -46,14 +56,35 @@
   const layer = $(".layer"), body = $(".body"), dot = $(".dot"), status = $(".status"), title = $(".title");
   (document.body || document.documentElement).appendChild(host);
 
-  let ws, retry = 500, queue = [], current = null, boxes = [], raf = 0;
+  let ws, retry = 500, queue = [], current = null, boxes = [], raf = 0, side = "AFTER";
+  const panel = $(".panel");
   const plural = (n) => `${n} problem${n === 1 ? "" : "s"}`;
   const esc = (s) => String(s ?? "").replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" })[c]);
   const send = (m) => ws && ws.readyState === 1 && ws.send(JSON.stringify(m));
 
+  /* Time Travel. The panel only asks; the frozen CLI swaps the files on disk (HMR re-renders the page) and
+   * answers with DIFF_STATE. Until it does, the switch shows "switching…". Frames hide on BEFORE: the old DOM
+   * need not contain the flagged nodes. */
+  function setSide(next, note) {
+    side = next;
+    panel.classList.toggle("before", side === "BEFORE");
+    layer.classList.toggle("hidden", side === "BEFORE");
+    root.querySelectorAll(".seg button").forEach((b) => { b.setAttribute("aria-pressed", String(b.dataset.side === side)); b.disabled = false; });
+    const info = $(".tt .info");
+    if (info) info.innerHTML = note ? `<span class="err">${esc(note)}</span>` : side === "BEFORE" ? "Viewing HEAD · frames hidden" : `Your changes · ${current?.diff?.files ?? 0} file(s) differ from HEAD`;
+    if (side === "AFTER") schedule();
+  }
+  function toggle(next) {
+    if (!current?.diff || next === side) return;
+    root.querySelectorAll(".seg button").forEach((b) => (b.disabled = true));
+    $(".tt .info").textContent = "switching…";
+    send({ type: "TOGGLE_DIFF", reviewId: current.reviewId, side: next });
+  }
+
   function renderIdle(note) {
     dot.className = "dot" + (ws && ws.readyState === 1 ? " on" : "");
     title.textContent = "Babysitter Studio";
+    panel.classList.remove("before"); layer.classList.remove("hidden"); side = "AFTER";
     body.innerHTML = `<div class="min muted">${note || "Watching. Reviews from the Babysitter CLI appear here."}</div>`;
     clearBoxes();
   }
@@ -68,6 +99,7 @@
         <span><div>${esc(p.message)}</div><div class="where">${esc([p.route && p.route !== location.pathname ? "on " + p.route : "", p.selector || [p.file, p.line].filter(Boolean).join(":")].filter(Boolean).join(" · "))}</div></span></li>`).join("");
     body.innerHTML = `
       <div class="min"><strong>${esc(r.title || "UI review")}</strong><span class="muted">· the CLI is paused until you decide</span></div>
+      ${r.diff ? `<div class="tt"><span class="seg" role="group" aria-label="Compare with HEAD"><button type="button" data-side="AFTER" aria-pressed="true">After</button><button type="button" data-side="BEFORE" aria-pressed="false">👁 Before (HEAD)</button></span><span class="muted info"></span></div>` : ""}
       <ul class="list">${items}</ul>
       <div class="foot">
         <textarea id="comment-text" placeholder="What should change? Send Comment returns the work to its author with this brief…" aria-label="Comment"></textarea>
@@ -83,7 +115,9 @@
     $("#approve").onclick = () => decide("APPROVE", text());
     $("#reject").onclick = () => decide("REJECT", text());
     root.querySelectorAll(".list li").forEach((li) => (li.onclick = () => focusProblem(Number(li.dataset.i))));
+    root.querySelectorAll(".seg button").forEach((b) => (b.onclick = () => toggle(b.dataset.side)));
     drawBoxes(list);
+    if (r.diff) setSide(r.state?.side || "AFTER");
   }
 
   function decide(type, text) {
@@ -147,6 +181,10 @@
       if (m.type === "REVIEW_REQUIRED") {
         if (current?.reviewId === m.reviewId || queue.some((q) => q.reviewId === m.reviewId)) return;
         if (current) queue.push(m); else { current = m; renderReview(m); }
+      }
+      if (m.type === "DIFF_STATE") {
+        if (current?.reviewId === m.reviewId) { current.state = m; setSide(m.side, m.error || (m.conflicts?.length ? `Edits made while viewing HEAD were kept in ${m.conflicts[0].replace(/\/[^/]*$/, "")}` : "")); }
+        else { const q = queue.find((x) => x.reviewId === m.reviewId); if (q) q.state = m; }
       }
       if (m.type === "REVIEW_CLOSED") {
         queue = queue.filter((q) => q.reviewId !== m.reviewId);

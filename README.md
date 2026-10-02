@@ -64,6 +64,12 @@ Or install it as a dev dependency: `npm i -D github:souldevsoul/claudes-babysitt
 | `docs/` | The guidelines the rules enforce |
 | `test/`, `fixtures/` | `npm test`: RuleTester, Stylelint fixtures, end-to-end cases |
 
+## What changed in 3.7 (Studio: Time Travel)
+
+- **After | 👁 Before (HEAD)** in the review panel. The frozen CLI swaps the changed UI files on disk between the working tree and HEAD, and the dev server's HMR redraws the page in place. Panel amber and frames hidden on Before.
+- **The work cannot be lost:** journal-first, all-or-nothing on the way to Before, conflict copies on the way back, try/finally + signal and exit handlers, `recover()` on every hook start, and `babysitter restore`. See `studio/README.md`.
+- New `test/time-travel.test.mjs` (SIGKILL, SIGTERM, SIGINT, uncaught exception, edits during the review). Studio e2e: 17 cases, including the real Stop hook killed while HEAD is on disk.
+
 ## What changed in 3.6 (Studio: visual review core)
 
 - **Freeze & Resume in the Stop hook too.** With `"studio": { "enabled": true }`, a Claude turn with UI problems pauses with `⏳ Visual Review required. Open http://localhost:3001` until a human decides. Approve ends the turn, **Send Comment** hands the comment to Claude as the brief for the next iteration, Reject sends it back with the fix-list. Shared code: `lib/studio-gate.js`.

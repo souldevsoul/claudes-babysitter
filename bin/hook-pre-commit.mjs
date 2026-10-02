@@ -6,10 +6,12 @@ import { spawnSync, execSync } from "node:child_process";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { projectMode, ADOPTION_NOTE } from "../lib/mode.js";
+import { recover } from "../lib/time-travel.js";
 import { collectProblems, freezeForReview } from "../lib/studio-gate.js";
 
 const here = dirname(fileURLToPath(import.meta.url));
 const repo = execSync("git rev-parse --show-toplevel", { encoding: "utf8" }).trim();
+try { recover(repo); } catch {} // never lint or commit around HEAD versions left by a killed Studio review
 const run = (script, args) => spawnSync(process.execPath, [join(here, script), ...args], { encoding: "utf8", stdio: ["ignore", "pipe", "pipe"] });
 const check = run("ui-check.mjs", ["--repo", repo, "--changed", "HEAD", "--format", "agent"]);
 let failed = check.status === 1, out = check.stdout;

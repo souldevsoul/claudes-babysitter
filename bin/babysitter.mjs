@@ -6,6 +6,7 @@
 //   audit-components → the reuse/theme audit alone (bin/ui-audit.mjs)
 //   enable-hooks     → adoption → strict: hooks start blocking (refuses until the audit is green; --force)
 //   fingerprint [repo…] [--register]  → theme fingerprint + look-alike products from the registry
+//   restore [repo]   → put AFTER back if a Studio Time Travel review was killed mid-way
 //   micro-check      → rendered contrast / row / overflow check on a running dev server
 //   prepare          → playwright/prepare.mjs (login + crawl)
 //   test-ui [...]    → playwright test with the bundled config
@@ -23,6 +24,12 @@ switch (cmd) {
   case "audit-components": node("bin/ui-audit.mjs", rest); break;
   case "enable-hooks": node("bin/enable-hooks.mjs", rest); break;
   case "fingerprint": node("bin/fingerprint.mjs", rest); break;
+  case "restore": {
+    const { recover } = await import("../lib/time-travel.js");
+    const r = recover(rest.find((x) => !x.startsWith("-")) || process.cwd());
+    console.log(!r ? "Nothing to restore." : r.busy ? `A Studio review (pid ${r.busy}) is still running — decide in the panel or stop it.` : `AFTER is back on disk${r.conflicts.length ? `; edits made during the review kept in ${r.conflicts.join(", ")}` : ""}.`);
+    break;
+  }
   case "micro-check": node("bin/micro-check.mjs", rest); break;
   case "prepare": node("playwright/prepare.mjs", rest); break;
   case "test-ui": process.exit(spawnSync("npx", ["playwright", "test", "-c", join(root, "playwright/playwright.config.ts"), ...rest], { stdio: "inherit", cwd: process.cwd() }).status ?? 1);

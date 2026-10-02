@@ -14,7 +14,28 @@ A visual review sandbox that works with Claude's Babysitter. When the Claude Cod
 | Local proxy | `lib/server.js` | `http-proxy` in front of the dev server (`:3001 → :3000`). Requests `identity` encoding, injects `<script src="/__babysitter/injector.js">` before the **last** `</body>` of HTML responses, and passes everything else through, including the dev server's HMR WebSocket |
 | WebSocket bus | `lib/bus.js`, `lib/protocol.js` | `ws` on `/__babysitter/ws`. The CLI (`?role=cli`) sends `REVIEW_REQUIRED`. Panels (`?role=studio`) send `APPROVE` / `REJECT` / `COMMENT`. Each of the three ends the review; the bus answers the CLI with `DECISION` (`approve` / `reject` / `comment` + text). Only the proxy's own origin may open a panel socket and only an origin-less (non-browser) client may act as the CLI; the server listens on 127.0.0.1. A panel that opens later is replayed pending reviews; when the CLI disconnects, the review is withdrawn |
 | CLI client | `lib/review-client.js`, `bin/studio.mjs review` | Sends the review and waits. Prints `⏳ Visual Review required. Open http://localhost:3001` and waits. Exit **0** approve, **1** reject, comment (printed to stdout as `Reviewer comment: …`) or timeout (fail closed), **2** no studio running. The hooks use `lib/studio-gate.js` (`collectProblems` + `freezeForReview`) |
+| Time Travel | `../lib/time-travel.js`, `../lib/studio-gate.js` | Journaled HEAD/working-tree swap for the After / Before switch (see below) |
 | Injector | `client/injector.js` | Vanilla JS in a Shadow DOM, so the site's Tailwind cannot reach it. A floating panel ("Babysitter: N problems", a clickable list that scrolls to the element, a comment box, Send Comment / Reject / Approve) and numbered red frames over `document.querySelector(selector)`. Frames are repositioned on scroll (capture, any scroller), resize, element resize and DOM mutations (HMR re-renders re-resolve the selector), at most once per animation frame. Only problems of the current route are framed; clicking another route's problem navigates there |
+
+## Time Travel: After / Before (HEAD)
+
+While a review is frozen, the panel shows **After | 👁 Before (HEAD)**. No iframe and no second server: the frozen CLI swaps the changed UI files on disk between the working tree and `git show HEAD:<file>`, and the dev server's own HMR re-renders the page (checked with Next 16: the page updates in place, no reload). On Before the panel turns amber and the frames hide, since the old DOM may not have those nodes. On After they come back.
+
+```
+panel ── TOGGLE_DIFF {side} ──► bus ──► the CLI that owns the review ── writes files ──► HMR
+panel ◄── DIFF_STATE {side, error?} ◄── bus ◄──┘
+```
+
+The developer's work cannot be lost (`lib/time-travel.js`, 6 tests with real kills):
+
+- **Journal first.** Both versions of every file are copied to `.babysitter/time-travel/` before anything changes. The journal says `BEFORE` before the first file is swapped, and `AFTER` only after the last one is back.
+- **Only what we wrote gets overwritten.** Switching to Before checks that every file still holds the journaled AFTER content. If an editor or formatter touched one, nothing is swapped and the panel says which file.
+- **Going back never refuses and never destroys.** Anything unknown found while restoring is copied to `.babysitter/time-travel-conflicts/<time>/` first.
+- **Guaranteed restore.** `freezeForReview` uses try/finally, plus SIGINT/SIGTERM/SIGHUP and `exit` handlers. After a SIGKILL, every hook starts with `recover()`. By hand: `babysitter restore`.
+- **Scope.** Untracked new files disappear for Before; deleted files come back. Modes are kept, writes are atomic (temp file + rename), Buffers make it binary-safe. Never swapped: `package.json`, lockfiles, `tsconfig`, `*.config.*`, `.env*`, files over 2 MB and non-UI files.
+- **Narrow channel.** Panels send only the side enum. File paths come from git inside the CLI.
+
+Off: `"studio": { "timeTravel": false }`.
 
 ## Use
 

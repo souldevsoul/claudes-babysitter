@@ -5,6 +5,7 @@ import { spawnSync } from "node:child_process";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { projectMode, ADOPTION_NOTE } from "../lib/mode.js";
+import { recover } from "../lib/time-travel.js";
 
 let input = "";
 for await (const chunk of process.stdin) input += chunk;
@@ -13,6 +14,7 @@ try { const j = JSON.parse(input); file = j.tool_input?.file_path || j.tool_inpu
 if (!file || !/\.(jsx|tsx|ts|js|mjs|s?css)$/.test(file) || /\.d\.ts$/.test(file)) process.exit(0);
 
 const repo = process.env.CLAUDE_PROJECT_DIR || process.cwd();
+try { recover(repo); } catch {} // a killed Studio review left HEAD versions on disk: put the work back first
 const r = spawnSync(process.execPath, [join(dirname(fileURLToPath(import.meta.url)), "ui-check.mjs"), "--repo", repo, "--changed", "HEAD", "--file", file, "--format", "agent"], { encoding: "utf8" });
 if (r.status === 1) {
   if (projectMode(repo) === "adoption") {

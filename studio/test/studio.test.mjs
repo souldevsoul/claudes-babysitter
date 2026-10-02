@@ -6,7 +6,7 @@ import { fileURLToPath } from "node:url";
 import assert from "node:assert/strict";
 import { chromium } from "@playwright/test";
 import { startStudio, injectHtml } from "../lib/server.js";
-import { mkdtempSync, mkdirSync, writeFileSync, readFileSync, rmSync } from "node:fs";
+import { mkdtempSync, mkdirSync, writeFileSync, readFileSync, rmSync, existsSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { execSync } from "node:child_process";
 import { INJECT_TAG, PATH } from "../lib/protocol.js";
@@ -16,7 +16,9 @@ const BIN = join(dirname(fileURLToPath(import.meta.url)), "..", "bin", "studio.m
 const PAGE = `<!doctype html><html><head><title>t</title></head><body class="bg-white">
 <main><h1>Settings</h1><select id="country"><option>DE</option></select><p class="faint" style="color:#ccc">fine print</p>
 <script>window.snippet = "</body>";</script></main></body></html>`;
+let LIVE = null; // a file of the test repo, served raw — stands in for the dev server re-rendering after HMR
 const target = http.createServer((req, res) => {
+  if (req.url === "/live" && LIVE) { res.writeHead(200, { "content-type": "text/html; charset=utf-8" }); return res.end(`<!doctype html><body><pre id="src">${readFileSync(LIVE, "utf8").replace(/</g, "&lt;")}</pre></body>`); }
   if (req.url === "/api") { res.writeHead(200, { "content-type": "application/json" }); return res.end('{"ok":true}'); }
   res.writeHead(200, { "content-type": "text/html; charset=utf-8" }); res.end(PAGE);
 });
@@ -115,6 +117,27 @@ try {
   assert.equal(await page.locator("#__babysitter-studio .box").count(), 0);
   ok("APPROVE ends the CLI with exit 0 and clears the frames");
 
+  // Time Travel in the panel: frames hide while HEAD is shown, come back for AFTER; only an enum reaches the CLI
+  const { requestReview } = await import("../lib/review-client.js");
+  const sides = [];
+  const rv = requestReview({ url: base, problems: PROBLEMS, diff: { files: 2 }, onToggle: (side) => { sides.push(side); return { side, files: 2 }; } });
+  await page.locator("#__babysitter-studio .seg").waitFor({ timeout: 10000 });
+  assert.ok(await page.locator("#__babysitter-studio .box").first().isVisible());
+  assert.equal(await page.locator("#__babysitter-studio .seg button[data-side=AFTER]").getAttribute("aria-pressed"), "true", "After by default");
+  await page.locator("#__babysitter-studio .seg button[data-side=BEFORE]").click();
+  await page.locator("#__babysitter-studio .panel.before").waitFor({ timeout: 5000 });
+  assert.equal(await page.locator("#__babysitter-studio .box").first().isVisible(), false, "frames hidden on BEFORE");
+  assert.match(await page.locator("#__babysitter-studio .tt .info").textContent(), /Viewing HEAD/);
+  await page.locator("#__babysitter-studio .seg button[data-side=AFTER]").click();
+  await page.locator("#__babysitter-studio .panel:not(.before)").waitFor({ timeout: 5000 });
+  assert.ok(await page.locator("#__babysitter-studio .box").first().isVisible(), "frames back on AFTER");
+  await page.evaluate(() => { const w = new WebSocket(`ws://${location.host}/__babysitter/ws?role=studio`); w.onopen = () => w.send(JSON.stringify({ type: "TOGGLE_DIFF", reviewId: "x", side: "../../etc/passwd" })); });
+  await page.locator("#__babysitter-studio #approve").click();
+  assert.equal((await rv).decision, "approve");
+  assert.deepEqual(sides, ["BEFORE", "AFTER"], "the CLI saw exactly the two valid toggles");
+  await page.locator("#__babysitter-studio .min").filter({ hasText: "Approved" }).waitFor({ timeout: 5000 });
+  ok("Before/After switch: After by default, panel turns amber and frames hide on BEFORE, reappear on AFTER");
+
   // 3. reject
   const r2 = review(PROBLEMS);
   await page.locator("#__babysitter-studio #reject").waitFor({ timeout: 10000 });
@@ -197,6 +220,51 @@ try {
     const s2 = await h2;
     assert.equal(s2.code, 0); assert.match(s2.out, /approved in Studio/);
     ok("Stop hook: frozen until the browser decides — comment → exit 2 with the brief for Claude, approve → the turn ends");
+
+    // 7. Time Travel through the real Stop hook: Before (HEAD) swaps the file on disk, Approve puts AFTER back
+    LIVE = join(repo, "src/app/page.tsx");
+    const AFTER_SRC = readFileSync(LIVE, "utf8"), HEAD_SRC = "export default function P(){ return <select />; }\n";
+    assert.notEqual(AFTER_SRC, HEAD_SRC);
+    const h3 = stopHook();
+    await page.locator("#__babysitter-studio .seg").waitFor({ timeout: 30000 });
+    assert.match(await page.locator("#__babysitter-studio .tt .info").textContent(), /1 file\(s\) differ from HEAD/);
+    await page.locator("#__babysitter-studio .seg button[data-side=BEFORE]").click();
+    await page.locator("#__babysitter-studio .panel.before").waitFor({ timeout: 10000 });
+    assert.equal(readFileSync(LIVE, "utf8"), HEAD_SRC, "HEAD version on disk");
+    assert.ok(existsSync(join(repo, ".babysitter/time-travel/journal.json")), "journaled while BEFORE is on disk");
+    const live = await browser.newPage(); await live.goto(base + "/live");
+    assert.equal(await live.locator("#src").textContent(), HEAD_SRC, "the dev server renders the HEAD version");
+    await page.locator("#__babysitter-studio .seg button[data-side=AFTER]").click();
+    await page.locator("#__babysitter-studio .panel:not(.before)").waitFor({ timeout: 10000 });
+    assert.equal(readFileSync(LIVE, "utf8"), AFTER_SRC);
+    await page.locator("#__babysitter-studio .seg button[data-side=BEFORE]").click();
+    await page.locator("#__babysitter-studio .panel.before").waitFor({ timeout: 10000 });
+    await page.locator("#__babysitter-studio #approve").click(); // approve while viewing HEAD
+    const s3 = await h3;
+    assert.equal(s3.code, 0, s3.err);
+    assert.equal(readFileSync(LIVE, "utf8"), AFTER_SRC, "AFTER back on disk when the review ends");
+    assert.ok(!existsSync(join(repo, ".babysitter/time-travel")), "journal removed");
+    assert.match(s3.err, /your changes \(AFTER\) are back on disk/);
+    await live.reload(); assert.equal(await live.locator("#src").textContent(), AFTER_SRC);
+    ok("Time Travel: Before (HEAD) swaps the files and the page shows HEAD; After and Approve put the work back");
+
+    // the hook is killed while HEAD is on disk: SIGTERM → its guard restores; SIGKILL → the next hook recovers
+    const h4 = spawn(process.execPath, [join(ROOT, "bin/hook-stop.mjs")], { cwd: repo, env: { ...process.env, CLAUDE_PROJECT_DIR: repo } });
+    h4.stdin.end("{}");
+    await page.locator("#__babysitter-studio .seg button[data-side=BEFORE]").click({ timeout: 30000 });
+    await page.locator("#__babysitter-studio .panel.before").waitFor({ timeout: 10000 });
+    h4.kill("SIGTERM"); await new Promise((r) => h4.on("exit", r));
+    assert.equal(readFileSync(LIVE, "utf8"), AFTER_SRC, "SIGTERM → restored");
+    const h5 = spawn(process.execPath, [join(ROOT, "bin/hook-stop.mjs")], { cwd: repo, env: { ...process.env, CLAUDE_PROJECT_DIR: repo } });
+    h5.stdin.end("{}");
+    await page.locator("#__babysitter-studio .min").filter({ hasText: "stopped waiting" }).waitFor({ timeout: 10000 }).catch(() => {});
+    await page.locator("#__babysitter-studio .seg button[data-side=BEFORE]").click({ timeout: 30000 });
+    await page.locator("#__babysitter-studio .panel.before").waitFor({ timeout: 10000 });
+    h5.kill("SIGKILL"); await new Promise((r) => h5.on("exit", r));
+    assert.equal(readFileSync(LIVE, "utf8"), HEAD_SRC, "SIGKILL leaves HEAD on disk…");
+    execSync(`node ${join(ROOT, "bin/babysitter.mjs")} restore`, { cwd: repo });
+    assert.equal(readFileSync(LIVE, "utf8"), AFTER_SRC, "…and `babysitter restore` (or any hook) puts AFTER back");
+    ok("hook killed while viewing HEAD: SIGTERM restores at once, SIGKILL is recovered from the journal");
   } finally { rmSync(repo, { recursive: true, force: true }); }
 
   await browser.close();

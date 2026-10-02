@@ -2,13 +2,14 @@
 //   approve  → resolves { decision: "approve" }   (the caller lets the commit through)
 //   reject   → resolves { decision: "reject" }    (the caller aborts the commit)
 //   comment  → resolves { decision: "comment", text } (send the work back to its author with this brief)
+//   diff: { files } advertises Time Travel; onToggle(side) must switch the disk and return { side, files } or throw
 //   no studio running → resolves { decision: "unavailable" } so the caller can fall back to plain blocking
 //   no answer within timeoutMs → { decision: "timeout" } (callers should treat it as a reject: fail closed)
 import WebSocket from "ws";
 import { randomUUID } from "node:crypto";
 import { PATH } from "./protocol.js";
 
-export function requestReview({ url = "http://localhost:3001", title = "UI review", problems = [], timeoutMs = 15 * 60_000, onWaiting = () => {} } = {}) {
+export function requestReview({ url = "http://localhost:3001", title = "UI review", problems = [], timeoutMs = 15 * 60_000, onWaiting = () => {}, diff = null, onToggle = null } = {}) {
   return new Promise((resolve) => {
     const reviewId = randomUUID().slice(0, 8);
     const ws = new WebSocket(url.replace(/^http/, "ws") + PATH + "?role=cli");
@@ -17,12 +18,17 @@ export function requestReview({ url = "http://localhost:3001", title = "UI revie
     const timer = setTimeout(() => finish({ decision: "timeout" }), timeoutMs);
     ws.on("error", () => finish({ decision: "unavailable" }));
     ws.on("open", () => {
-      ws.send(JSON.stringify({ type: "REVIEW_REQUIRED", reviewId, title, problems }));
+      ws.send(JSON.stringify({ type: "REVIEW_REQUIRED", reviewId, title, problems, diff: onToggle ? diff : null }));
       onWaiting({ reviewId, url });
     });
     ws.on("message", (raw) => {
       let m; try { m = JSON.parse(String(raw)); } catch { return; }
       if (m.reviewId !== reviewId) return;
+      if (m.type === "TOGGLE_DIFF" && onToggle) {
+        let state;
+        try { state = { ...onToggle(m.side), error: undefined }; } catch (e) { state = { side: m.side === "BEFORE" ? "AFTER" : "BEFORE", error: e.message }; }
+        if (ws.readyState === 1) ws.send(JSON.stringify({ type: "DIFF_STATE", reviewId, ...state }));
+      }
       if (m.type === "DECISION") finish({ decision: m.decision, text: m.text });
     });
     ws.on("close", () => finish({ decision: "unavailable" }));
