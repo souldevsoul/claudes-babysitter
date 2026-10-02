@@ -243,7 +243,7 @@ if (!cfg.devServer) console.log("  • Set devServer (or pass --dev-url http://l
 const { checkContrast, fingerprint } = await import(join(TOOL, "lib/theme.js"));
 const { lookalikes, register, DEFAULT_REGISTRY, projectName } = await import(join(TOOL, "lib/registry.js"));
 const low = checkContrast(repo, { aliases: cfg.contrastTokens || {} }).filter((r) => !r.ok);
-for (const r of low) console.log(`  • ${r.required ? "CONTRAST (blocks UI edits)" : "contrast (warning)"}: ${r.label}, ${r.scheme} theme = ${r.ratio}:1 (needs 4.5).`);
+for (const r of low) console.log(`  • ${r.required ? "CONTRAST (blocks UI edits)" : "contrast (warning)"}: ${r.label}, ${r.scheme} theme = ${r.ratio}:1 (needs ${r.min}).`);
 const fp = fingerprint(repo);
 const projName = projectName(repo, cfg);
 const twins = await lookalikes(projName, fp, { where: cfg.registry || DEFAULT_REGISTRY });
