@@ -149,7 +149,8 @@ const ensure = (event, matcher, command, timeout) => {
   settings.hooks[event] = list.filter((g) => g.hooks.length);
 };
 ensure("PostToolUse", "Edit|Write|MultiEdit", hookCmd("hook-post-edit.mjs"), 90);
-ensure("Stop", null, hookCmd("hook-stop.mjs"), 180);
+// long enough to freeze for a Babysitter Studio review (default 15 min); without Studio the hook ends in seconds
+ensure("Stop", null, hookCmd("hook-stop.mjs"), 1800);
 write(setPath, JSON.stringify(settings, null, 2) + "\n");
 say("Claude Code hooks: check after every edit, block finishing with UI problems", setPath);
 

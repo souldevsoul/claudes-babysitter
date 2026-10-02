@@ -43,42 +43,47 @@
   <div class="body"></div>
 </div>`;
   const $ = (s) => root.querySelector(s);
-  const layer = $(".layer"), body = $(".body"), dot = $(".dot"), status = $(".status");
+  const layer = $(".layer"), body = $(".body"), dot = $(".dot"), status = $(".status"), title = $(".title");
   (document.body || document.documentElement).appendChild(host);
 
   let ws, retry = 500, queue = [], current = null, boxes = [], raf = 0;
+  const plural = (n) => `${n} problem${n === 1 ? "" : "s"}`;
   const esc = (s) => String(s ?? "").replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" })[c]);
   const send = (m) => ws && ws.readyState === 1 && ws.send(JSON.stringify(m));
 
   function renderIdle(note) {
     dot.className = "dot" + (ws && ws.readyState === 1 ? " on" : "");
+    title.textContent = "Babysitter Studio";
     body.innerHTML = `<div class="min muted">${note || "Watching. Reviews from the Babysitter CLI appear here."}</div>`;
     clearBoxes();
   }
 
   function renderReview(r) {
+    const list = r.problems || [];
     dot.className = "dot alert";
+    title.textContent = `Babysitter: ${plural(list.length)}`;
     status.textContent = `review ${r.reviewId}`;
-    const items = (r.problems || []).map((p, i) => `
+    const items = list.map((p, i) => `
       <li data-i="${i}"><span class="n${p.selector ? "" : " static"}">${i + 1}</span>
         <span><div>${esc(p.message)}</div><div class="where">${esc([p.route && p.route !== location.pathname ? "on " + p.route : "", p.selector || [p.file, p.line].filter(Boolean).join(":")].filter(Boolean).join(" · "))}</div></span></li>`).join("");
     body.innerHTML = `
-      <div class="min"><strong>${esc(r.title || "UI review")}</strong><span class="muted">· ${/problem/.test(r.title || "") ? "" : (r.problems || []).length + " problem(s) · "}the commit is waiting for you</span></div>
+      <div class="min"><strong>${esc(r.title || "UI review")}</strong><span class="muted">· the CLI is paused until you decide</span></div>
       <ul class="list">${items}</ul>
       <div class="foot">
-        <textarea id="comment-text" placeholder="Comment for the author (optional)…" aria-label="Comment"></textarea>
+        <textarea id="comment-text" placeholder="What should change? Send Comment returns the work to its author with this brief…" aria-label="Comment"></textarea>
         <div class="row">
-          <button class="ghost" id="comment-send" type="button">Comment</button>
+          <button class="ghost" id="comment-send" type="button" disabled>Send Comment</button>
           <button class="reject" id="reject" type="button">Reject</button>
           <button class="approve" id="approve" type="button">Approve</button>
         </div>
       </div>`;
     const text = () => $("#comment-text").value.trim();
-    $("#comment-send").onclick = () => { if (!text()) return; send({ type: "COMMENT", reviewId: r.reviewId, text: text() }); $("#comment-text").value = ""; };
+    $("#comment-text").oninput = () => ($("#comment-send").disabled = !text());
+    $("#comment-send").onclick = () => text() && decide("COMMENT", text());
     $("#approve").onclick = () => decide("APPROVE", text());
     $("#reject").onclick = () => decide("REJECT", text());
     root.querySelectorAll(".list li").forEach((li) => (li.onclick = () => focusProblem(Number(li.dataset.i))));
-    drawBoxes(r.problems || []);
+    drawBoxes(list);
   }
 
   function decide(type, text) {
@@ -87,7 +92,23 @@
     send({ type, reviewId: current.reviewId, text: text || undefined });
   }
 
-  /* red frames over the flagged elements, kept in place while the page scrolls or resizes */
+  /* red frames over the flagged elements. Repositioned on scroll (any scroller: capture), resize, element
+   * resize and DOM changes (HMR re-renders swap nodes) — coalesced to one layout read per animation frame. */
+  function place() {
+    raf = 0;
+    for (const b of boxes) {
+      if (!b.el.isConnected) { try { b.el = document.querySelector(b.selector) || b.el; ro.observe(b.el); } catch {} }
+      const r = b.el.getBoundingClientRect();
+      const shown = b.el.isConnected && (r.width || r.height);
+      b.box.style.cssText = shown ? `left:${r.left - 3}px;top:${r.top - 3}px;width:${r.width + 6}px;height:${r.height + 6}px` : "display:none";
+    }
+  }
+  const schedule = () => { if (boxes.length && !raf) raf = requestAnimationFrame(place); };
+  const ro = new ResizeObserver(schedule);
+  addEventListener("scroll", schedule, { capture: true, passive: true });
+  addEventListener("resize", schedule, { passive: true });
+  new MutationObserver(schedule).observe(document.documentElement, { subtree: true, childList: true, attributes: true, characterData: true });
+
   function drawBoxes(problems) {
     clearBoxes();
     problems.forEach((p, i) => {
@@ -98,18 +119,12 @@
       box.className = "box"; box.dataset.i = i;
       box.innerHTML = `<span class="tag">${i + 1}</span>`;
       layer.appendChild(box);
-      boxes.push({ el, box });
+      boxes.push({ el, box, selector: p.selector });
+      ro.observe(el);
     });
-    const place = () => {
-      for (const { el, box } of boxes) {
-        const r = el.getBoundingClientRect();
-        box.style.cssText = `left:${r.left - 3}px;top:${r.top - 3}px;width:${r.width + 6}px;height:${r.height + 6}px;display:${r.width || r.height ? "block" : "none"}`;
-      }
-      raf = requestAnimationFrame(place);
-    };
     place();
   }
-  function clearBoxes() { cancelAnimationFrame(raf); layer.innerHTML = ""; boxes = []; }
+  function clearBoxes() { cancelAnimationFrame(raf); raf = 0; ro.disconnect(); layer.innerHTML = ""; boxes = []; }
   function focusProblem(i) {
     const p = current && current.problems[i];
     if (p && p.route && p.route !== location.pathname) { location.href = p.route; return; } // the review is replayed there
@@ -136,7 +151,7 @@
       if (m.type === "REVIEW_CLOSED") {
         queue = queue.filter((q) => q.reviewId !== m.reviewId);
         if (current?.reviewId === m.reviewId) {
-          const word = { approve: "Approved ✓", reject: "Rejected ✗", abandoned: "The CLI stopped waiting" }[m.decision] || m.decision;
+          const word = { approve: "Approved ✓", reject: "Rejected ✗", comment: "Sent back with your comment ↩", abandoned: "The CLI stopped waiting" }[m.decision] || m.decision;
           current = null; renderIdle(`${word} — review ${m.reviewId}.`);
           setTimeout(() => { if (!current) next(); }, 1500);
         }

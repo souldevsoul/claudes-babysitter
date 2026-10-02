@@ -64,6 +64,14 @@ Or install it as a dev dependency: `npm i -D github:souldevsoul/claudes-babysitt
 | `docs/` | The guidelines the rules enforce |
 | `test/`, `fixtures/` | `npm test`: RuleTester, Stylelint fixtures, end-to-end cases |
 
+## What changed in 3.6 (Studio: visual review core)
+
+- **Freeze & Resume in the Stop hook too.** With `"studio": { "enabled": true }`, a Claude turn with UI problems pauses with `⏳ Visual Review required. Open http://localhost:3001` until a human decides. Approve ends the turn, **Send Comment** hands the comment to Claude as the brief for the next iteration, Reject sends it back with the fix-list. Shared code: `lib/studio-gate.js`.
+- **Send Comment is a decision now**, not a side note: it ends the review (`DECISION: comment`). The CLI prints `Reviewer comment: …` to stdout and exits 1.
+- **Frames track the page**: scroll in any scroller, resize, element resize and DOM changes (HMR re-renders re-resolve the selector), at most once per animation frame. The old always-on rAF loop is gone. The panel header shows the count; clicking a problem scrolls to it.
+- **3.5.1 security fix**: panel sockets only from the proxy's own origin, CLI sockets only without an Origin, server bound to 127.0.0.1 (cross-site WebSocket hijacking could approve a commit).
+- Stop hook timeout raised to 1800 s by `init` so a frozen review is not killed.
+
 ## What changed in 3.5 (Babysitter Studio MVP)
 
 - **`studio/` — `@babysitter/studio`**, an npm workspace. A local proxy injects a Shadow-DOM review panel into the dev site, and a WebSocket bus connects it to the CLI. See [`studio/README.md`](studio/README.md).

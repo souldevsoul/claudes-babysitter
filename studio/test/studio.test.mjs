@@ -29,9 +29,9 @@ const ok = (name) => { n++; console.log("  ✓", name); };
 // review client in its own process (the bus and the browser keep running in this one)
 const review = (problems, extra = []) => {
   const p = spawn(process.execPath, [BIN, "review", "--url", base, "--title", "Test review", "--timeout", "30", ...extra], { stdio: ["pipe", "pipe", "pipe"] });
-  let err = ""; p.stderr.on("data", (d) => (err += d));
+  let err = "", out = ""; p.stderr.on("data", (d) => (err += d)); p.stdout.on("data", (d) => (out += d));
   p.stdin.end(JSON.stringify(problems));
-  return { proc: p, done: new Promise((r) => p.on("exit", (code) => r({ code, err }))), get err() { return err; } };
+  return { proc: p, done: new Promise((r) => p.on("exit", (code) => r({ code, err, out }))), get err() { return err; } };
 };
 const PROBLEMS = [
   { selector: "#country", message: "Native <select> — use the kit Select [1.1]" },
@@ -78,15 +78,38 @@ try {
   const sel = await page.locator("#country").boundingBox();
   assert.ok(Math.abs(frame.x - (sel.x - 3)) <= 1 && Math.abs(frame.width - (sel.width + 6)) <= 1, "frame sits on the element");
   assert.equal(await page.locator("#__babysitter-studio .list li").count(), 3);
-  ok("REVIEW_REQUIRED draws red frames over the flagged elements and lists all problems");
+  assert.equal(await page.locator("#__babysitter-studio .title").textContent(), "Babysitter: 3 problems");
+  assert.match(r1.err, /⏳ Visual Review required\. Open http:\/\/localhost:\d+/);
+  ok("REVIEW_REQUIRED draws red frames over the flagged elements, lists all problems, the CLI is frozen with the banner");
+
+  // frames follow the element: DOM change (HMR-like) pushes it below the fold, then the page scrolls
+  const frameOn = async (sel) => {
+    await page.evaluate(() => new Promise((r) => requestAnimationFrame(() => requestAnimationFrame(r))));
+    const [f, e] = [await page.locator("#__babysitter-studio .box").first().boundingBox(), await page.locator(sel).boundingBox()];
+    return Math.abs(f.y - (e.y - 3)) <= 1 && Math.abs(f.x - (e.x - 3)) <= 1;
+  };
+  await page.evaluate(() => { const d = document.createElement("div"); d.id = "spacer"; d.style.height = "2400px"; document.querySelector("main").prepend(d); });
+  assert.ok(await frameOn("#country"), "frame moved with the DOM change");
+  await page.mouse.wheel(0, 900);
+  assert.ok(await frameOn("#country"), "frame follows the scroll");
+  await page.locator("#__babysitter-studio .list li").first().click();
+  await page.waitForFunction(() => { const r = document.querySelector("#country").getBoundingClientRect(); return r.top > 0 && r.bottom < innerHeight; }, null, { timeout: 5000 });
+  assert.ok(await frameOn("#country"), "frame still on it after scrollIntoView");
+  await page.evaluate(() => { document.getElementById("spacer").remove(); scrollTo(0, 0); });
+  ok("frames track scroll, resize and DOM changes; clicking a problem scrolls its element into view");
+
+  assert.ok(await page.locator("#__babysitter-studio #comment-send").isDisabled(), "Send Comment needs text");
   await page.locator("#__babysitter-studio #comment-text").fill("Use the kit Select here, please");
   await page.locator("#__babysitter-studio #comment-send").click();
-  await page.waitForFunction(() => true, null, { timeout: 500 }).catch(() => {});
-  await new Promise((r) => setTimeout(r, 300));
-  assert.match(r1.err, /💬 Use the kit Select here, please/);
-  ok("COMMENT reaches the waiting CLI without ending the review");
+  const c1 = await r1.done;
+  assert.equal(c1.code, 1); assert.match(c1.out, /Reviewer comment: Use the kit Select here, please/);
+  await page.locator("#__babysitter-studio .min").filter({ hasText: "Sent back" }).waitFor({ timeout: 5000 });
+  ok("Send Comment unfreezes the CLI with exit 1 and the comment on stdout (the next iteration's brief)");
+
+  const r1b = review(PROBLEMS);
+  await page.locator("#__babysitter-studio #approve").waitFor({ timeout: 10000 });
   await page.locator("#__babysitter-studio #approve").click();
-  const d1 = await r1.done;
+  const d1 = await r1b.done;
   assert.equal(d1.code, 0, d1.err); assert.match(d1.err, /Approved/);
   await page.locator("#__babysitter-studio .min").filter({ hasText: "Approved" }).waitFor({ timeout: 5000 });
   assert.equal(await page.locator("#__babysitter-studio .box").count(), 0);
@@ -150,9 +173,30 @@ try {
     await page.locator("#__babysitter-studio #reject").waitFor({ timeout: 30000 });
     await page.locator("#__babysitter-studio #reject").click();
     const r2 = await c2;
-    assert.notEqual(r2.code, 0); assert.match(r2.err, /Rejected in Studio\. The commit is aborted/);
+    assert.notEqual(r2.code, 0); assert.match(r2.err, /Review rejected by user\. The commit is aborted/);
     assert.equal(execSync("git rev-parse HEAD", { cwd: repo, encoding: "utf8" }), before, "HEAD did not move");
     ok("Reject in the browser → the commit is aborted, HEAD unchanged");
+
+    // the Claude Code Stop hook freezes the turn the same way (the rejected change is still uncommitted)
+    const stopHook = () => {
+      const p = spawn(process.execPath, [join(ROOT, "bin/hook-stop.mjs")], { cwd: repo, env: { ...process.env, CLAUDE_PROJECT_DIR: repo } });
+      let err = "", out = ""; p.stderr.on("data", (d) => (err += d)); p.stdout.on("data", (d) => (out += d));
+      p.stdin.end("{}");
+      return new Promise((r) => p.on("exit", (code) => r({ code, err, out })));
+    };
+    const h1 = stopHook();
+    await page.locator("#__babysitter-studio #comment-text").waitFor({ timeout: 30000 });
+    await page.locator("#__babysitter-studio #comment-text").fill("Swap both selects for the kit Select");
+    await page.locator("#__babysitter-studio #comment-send").click();
+    const s1 = await h1;
+    assert.equal(s1.code, 2, "exit 2 = Claude Code feeds stderr back and keeps working");
+    assert.match(s1.err, /Visual Review required/); assert.match(s1.err, /Reviewer comment[^\n]*\nSwap both selects for the kit Select/);
+    const h2 = stopHook();
+    await page.locator("#__babysitter-studio #approve").waitFor({ timeout: 30000 });
+    await page.locator("#__babysitter-studio #approve").click();
+    const s2 = await h2;
+    assert.equal(s2.code, 0); assert.match(s2.out, /approved in Studio/);
+    ok("Stop hook: frozen until the browser decides — comment → exit 2 with the brief for Claude, approve → the turn ends");
   } finally { rmSync(repo, { recursive: true, force: true }); }
 
   await browser.close();

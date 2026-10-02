@@ -7,6 +7,7 @@ import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { existsSync, readFileSync, writeFileSync, mkdirSync } from "node:fs";
 import { projectMode, ADOPTION_NOTE } from "../lib/mode.js";
+import { collectProblems, freezeForReview } from "../lib/studio-gate.js";
 
 let input = "";
 for await (const chunk of process.stdin) input += chunk;
@@ -29,6 +30,24 @@ if (projectMode(repo) === "adoption") {
   const n = (report.match(/(\d+) problem\(s\)/) || [])[1] || "some";
   process.stdout.write(JSON.stringify({ systemMessage: `Claude's Babysitter: ${n} UI problem(s) in the changed code (${ADOPTION_NOTE}).` }));
   process.exit(0);
+}
+
+// Studio on and running: freeze the turn until a human decides in the browser. A human verdict replaces the
+// attempt counter. Claude Code reads a Stop hook's stderr only on exit 2, so "send back" means exit 2 here.
+const problems = collectProblems(repo);
+const verdict = await freezeForReview({ repo, problems, title: `Babysitter: ${problems.length} problem(s)` });
+if (verdict?.decision === "approve") {
+  writeFileSync(counter, "0");
+  process.stdout.write(JSON.stringify({ systemMessage: `Claude's Babysitter: approved in Studio${verdict.text ? ` — ${verdict.text}` : ""}.` }));
+  process.exit(0);
+}
+if (verdict?.decision === "comment") {
+  process.stderr.write(`Reviewer comment from Babysitter Studio — do this before finishing:\n${verdict.text}\n\nThe flagged problems, for reference:\n${report}`);
+  process.exit(2);
+}
+if (verdict) {
+  process.stderr.write(`${verdict.decision === "timeout" ? "No decision in Babysitter Studio in time" : "Review rejected by user"}${verdict.text ? `: ${verdict.text}` : ""}. Fix these before finishing:\n\n${report}`);
+  process.exit(2);
 }
 
 const n = (existsSync(counter) ? Number(readFileSync(counter, "utf8")) || 0 : 0) + 1;
