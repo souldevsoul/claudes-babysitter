@@ -4,9 +4,12 @@
  * generated right now or an existing one.
  *
  *   babysitter init [repo] [options]
- *     --vendor       copy the tool into <repo>/tools/claudes-babysitter (default; works in CI and for teammates)
+ *     --package      use the copy in the project's node_modules (a devDependency — the team setup; chosen
+ *                    automatically when claudes-babysitter is installed or listed in package.json). Every
+ *                    command init writes then goes through node_modules: the version pinned in package.json
+ *     --vendor       copy the tool into <repo>/tools/claudes-babysitter (works without npm, for any teammate)
  *     --link         reference this checkout by absolute path instead (local machine only, nothing copied)
- *     --ci           also add .github/workflows/claudes-babysitter.yml
+ *     --ci           also add the GitHub Actions workflow
  *     --no-git-hook  do not install the git pre-commit gate
  *     --new          a brand-new project: strict mode from the start (hooks block)
  *     --existing     an existing project: adoption mode (hooks warn only, BABYSITTER-ADOPTION.md checklist)
@@ -33,7 +36,12 @@ const has = (f) => args.includes(`--${f}`);
 const opt = (f) => { const i = args.indexOf(`--${f}`); return i >= 0 && args[i + 1] && !args[i + 1].startsWith("--") ? args[i + 1] : null; };
 const repo = resolve(args.find((a, i) => !a.startsWith("--") && !(i > 0 && ["--url", "--dev-url", "--registry"].includes(args[i - 1]))) || ".");
 const DRY = has("dry-run");
-const mode = has("link") ? "link" : "vendor";
+// install mode: explicit flag > installed as the project's dependency > vendored copy
+const PKG = "claudes-babysitter";
+const pkgJsonOf = (d) => { try { return JSON.parse(readFileSync(join(d, "package.json"), "utf8")); } catch { return {}; } };
+const listed = (d) => { const p = pkgJsonOf(d); return !!({ ...p.dependencies, ...p.devDependencies }[PKG]); };
+const installedHere = (d) => existsSync(join(d, "node_modules", PKG, "bin", "babysitter.mjs"));
+const mode = has("link") ? "link" : has("vendor") ? "vendor" : has("package") || installedHere(repo) || listed(repo) || TOOL.startsWith(join(repo, "node_modules") + "/") ? "package" : "vendor";
 
 if (!existsSync(join(repo, "package.json"))) { console.error(`babysitter init: ${repo} has no package.json`); process.exit(2); }
 const plan = [];
@@ -81,10 +89,25 @@ if (!["strict", "adoption"].includes(installMode)) { console.error(`babysitter i
 detected.installMode = installMode + (!askedOrFlagged && !interactive ? ` (auto: ${pageCount} page${pageCount === 1 ? "" : "s"})` : "");
 
 /* ───────── 2. tool location ───────── */
-const toolRel = mode === "vendor" ? "tools/claudes-babysitter" : null;
-const toolPath = mode === "vendor" ? join(repo, toolRel) : TOOL;
-const hookCmd = (script) => (mode === "vendor" ? `node "$CLAUDE_PROJECT_DIR/${toolRel}/bin/${script}"` : `node "${TOOL}/bin/${script}"`);
-if (mode === "vendor") {
+const toolRel = mode === "vendor" ? "tools/claudes-babysitter" : mode === "package" ? `node_modules/${PKG}` : null;
+const toolPath = mode === "link" ? TOOL : join(repo, toolRel);
+// package mode: the hook runs the copy package.json pins. Before `npm install` the file is not there yet —
+// then the hook does nothing (exit 0) instead of failing every edit; once present, its exit code (2 = block)
+// passes through unchanged. Plain node, not npx: PostToolUse runs after every edit, npx would add ~0.5 s.
+const hookCmd = (script) => {
+  if (mode === "package") { const f = `"$CLAUDE_PROJECT_DIR/${toolRel}/bin/${script}"`; return `if [ -f ${f} ]; then node ${f}; fi`; }
+  return mode === "vendor" ? `node "$CLAUDE_PROJECT_DIR/${toolRel}/bin/${script}"` : `node "${TOOL}/bin/${script}"`;
+};
+if (mode === "package") {
+  const version = readJson(join(TOOL, "package.json")).version;
+  if (!listed(repo)) {
+    // pin the version that is running this init, from the public repo (the npm name "babysitter" is someone else's package)
+    const pj = readJson(join(repo, "package.json"));
+    pj.devDependencies = { ...(pj.devDependencies || {}), [PKG]: `github:souldevsoul/claudes-babysitter#v${version}` };
+    write(join(repo, "package.json"), JSON.stringify(pj, null, 2) + "\n");
+    say(`added the devDependency ${PKG}@v${version} — run npm install to fetch it`, join(repo, "package.json"));
+  } else say(`uses ${PKG} from node_modules (the version pinned in package.json${installedHere(repo) ? `: v${readJson(join(repo, "node_modules", PKG, "package.json")).version}` : ", not installed yet — run npm install"})`);
+} else if (mode === "vendor") {
   const exists = existsSync(join(toolPath, "bin/ui-check.mjs"));
   if (!exists || has("force") || TOOL === toolPath) {
     if (TOOL !== toolPath) {
@@ -158,8 +181,15 @@ say("Claude Code hooks: check after every edit, block finishing with UI problems
 
 /* ───────── 5. agent instructions (between markers) ───────── */
 const agentFile = ["CLAUDE.md", "AGENTS.md", ".claude/CLAUDE.md"].map((f) => join(repo, f)).find(existsSync) || join(repo, "CLAUDE.md");
-const checkCmd = mode === "vendor" ? `node ${toolRel}/bin/ui-check.mjs` : `node ${TOOL}/bin/ui-check.mjs`;
-let block = readFileSync(join(TOOL, "templates/AGENTS.babysitter.md"), "utf8").replace(/node tools\/claudes-babysitter\/bin\/ui-check\.mjs/g, checkCmd).replace(/tools\/claudes-babysitter/g, mode === "vendor" ? toolRel : TOOL);
+// how the agent runs the tool. package mode: `npx --no babysitter` — the local bin only. Never a bare `npx babysitter`:
+// "babysitter" on the npm registry is an unrelated package, and npx without a TTY installs and runs it unasked.
+const checkCmd = mode === "package" ? "npx --no babysitter check" : mode === "vendor" ? `node ${toolRel}/bin/ui-check.mjs` : `node ${TOOL}/bin/ui-check.mjs`;
+const uiTestCmd = mode === "package" ? "npx --no babysitter prepare && npx --no babysitter test-ui" : null;
+let block = readFileSync(join(TOOL, "templates/AGENTS.babysitter.md"), "utf8").replace(/node tools\/claudes-babysitter\/bin\/ui-check\.mjs/g, checkCmd);
+if (uiTestCmd) block = block.replace(/node tools\/claudes-babysitter\/playwright\/prepare\.mjs && npx playwright test -c tools\/claudes-babysitter\/playwright\/playwright\.config\.ts/g, uiTestCmd);
+// {{RUN}}: how a person or the agent runs any babysitter command in this project
+const RUN = mode === "package" ? "npx --no babysitter" : mode === "vendor" ? `node ${toolRel}/bin/babysitter.mjs` : `node ${TOOL}/bin/babysitter.mjs`;
+block = block.replace(/\{\{RUN\}\}/g, RUN).replace(/tools\/claudes-babysitter/g, mode === "link" ? TOOL : toolRel);
 const START = "<!-- claudes-babysitter:start (managed by `babysitter init`, edit the config instead) -->", END = "<!-- claudes-babysitter:end -->";
 const cur = existsSync(agentFile) ? readFileSync(agentFile, "utf8") : "";
 // also matches the markers older versions wrote (ui-guardrails:…, and a control character left by a rename)
@@ -175,7 +205,11 @@ const need = [".babysitter/", ...(mode === "vendor" ? [`${toolRel}/node_modules/
 if (need.length) { write(giPath, `${gi.trimEnd()}\n\n# claudes-babysitter\n${need.join("\n")}\n`); say(`ignored ${need.join(", ")}`, giPath); }
 
 /* ───────── 6b. git pre-commit gate (every commit, whoever makes it) ───────── */
-if (!has("no-git-hook")) {
+if (!has("no-git-hook") && mode === "package") {
+  // the same gate `prepare` installs on every npm install: runs node_modules/claudes-babysitter, keeps a foreign hook
+  const r = DRY ? { status: 0 } : spawnSync(process.execPath, [join(TOOL, "bin/install-hooks.mjs"), repo, "--force"], { encoding: "utf8" });
+  if (r.status === 0) say("git pre-commit gate (runs the node_modules copy; reinstalled on every npm install by \"prepare\")", join(repo, ".git/hooks/pre-commit"));
+} else if (!has("no-git-hook")) {
   const gitDir = (() => { try { return execSync("git rev-parse --git-dir", { cwd: repo, encoding: "utf8" }).trim(); } catch { return null; } })();
   if (gitDir) {
     const hooksPath = (() => { try { return execSync("git config core.hooksPath", { cwd: repo, encoding: "utf8" }).trim(); } catch { return ""; } })();
@@ -193,13 +227,15 @@ if (!has("no-git-hook")) {
 }
 
 /* ───────── 6c. `npm run babysitter -- <cmd>` in the project ───────── */
-// Not `npx babysitter`: the tool is vendored, not an npm dependency, and npx would download an unrelated
-// package called "babysitter" from the registry and run it.
-const runCmd = mode === "vendor" ? `node ${toolRel}/bin/babysitter.mjs` : `node ${TOOL}/bin/babysitter.mjs`;
+// Never a bare `npx babysitter`: an unrelated package called "babysitter" is on the npm registry. In package mode
+// the script name resolves to the local bin (npm puts node_modules/.bin first), which only ever runs our copy.
+const runCmd = mode === "package" ? "babysitter" : mode === "vendor" ? `node ${toolRel}/bin/babysitter.mjs` : `node ${TOOL}/bin/babysitter.mjs`;
 {
   const pj = readJson(join(repo, "package.json"));
   pj.scripts ||= {};
-  if (!pj.scripts.babysitter || /claudes-babysitter|bin\/babysitter\.mjs/.test(pj.scripts.babysitter)) {
+  if (mode === "package" && !pj.scripts.prepare) { pj.scripts.prepare = "babysitter install-hooks"; write(join(repo, "package.json"), JSON.stringify(pj, null, 2) + "\n"); say('added "prepare": "babysitter install-hooks" (every clone gets the git gate on npm install)', join(repo, "package.json")); }
+  else if (mode === "package" && !/babysitter install-hooks/.test(pj.scripts.prepare)) say(`"prepare" is taken ("${pj.scripts.prepare}") — append: && babysitter install-hooks`);
+  if (!pj.scripts.babysitter || /claudes-babysitter|bin\/babysitter\.mjs|^babysitter$/.test(pj.scripts.babysitter)) {
     if (pj.scripts.babysitter !== runCmd) {
       pj.scripts.babysitter = runCmd;
       write(join(repo, "package.json"), JSON.stringify(pj, null, 2) + "\n");
@@ -209,7 +245,11 @@ const runCmd = mode === "vendor" ? `node ${toolRel}/bin/babysitter.mjs` : `node 
 }
 
 /* ───────── 7. CI (opt-in) ───────── */
-if (has("ci")) {
+if (has("ci") && mode === "package") {
+  const wf = join(repo, ".github/workflows/babysitter.yml");
+  write(wf, readFileSync(join(TOOL, "templates/github-babysitter.yml"), "utf8"));
+  say("CI workflow: pull requests fail only on UI problems they add (audit --diff, annotations on the PR)", wf);
+} else if (has("ci")) {
   const wf = join(repo, ".github/workflows/claudes-babysitter.yml");
   let yml = readFileSync(join(TOOL, "templates/.github/workflows/claudes-babysitter.yml"), "utf8");
   if (mode === "link") console.warn("  ! --ci needs the vendored tool; the workflow assumes tools/claudes-babysitter");
@@ -234,7 +274,8 @@ for (const p of problems) byRule[p.rule] = (byRule[p.rule] || 0) + 1;
 console.log("\nnext steps:");
 if (!kitDir) console.log("  1. There is no UI-kit yet. Create components/ui (e.g. `npx shadcn@latest init`) and re-run init so the kit is recorded.");
 const stock = theme.filter((t) => !/warning/.test(t.rule));
-if (stock.length && !cfg.themeFirst) console.log("  • Theme First is off in adoption mode. It switches on with `npm run babysitter -- enable-hooks`.");
+const RUN_HINT = mode === "package" ? "npx --no babysitter" : "npm run babysitter --";
+if (stock.length && !cfg.themeFirst) console.log(`  • Theme First is off in adoption mode. It switches on with \`${RUN_HINT} enable-hooks\`.`);
 if (stock.length) console.log(`  • THEME FIRST: ${stock[0].msg}\n    Do this before building pages — every page inherits it.`);
 else if (shadcn) console.log("  • Theme: product-specific (not the stock shadcn look).");
 if (!cfg.baseURL) console.log("  • Set baseURL in babysitter.config.json (or pass --url) to enable the runtime checks.");
@@ -260,6 +301,16 @@ const summary = Object.entries(byRule).sort((a, b) => b[1] - a[1]);
 const group = (re) => summary.filter(([r]) => re.test(r)).reduce((n, [, c]) => n + c, 0);
 if (installMode === "adoption") {
   const file = join(repo, "BABYSITTER-ADOPTION.md");
+  const WHY = mode === "package"
+  ? "> Почему \`npx --no babysitter\`, а не просто \`npx babysitter\`: `--no` запускает только версию из `node_modules` (закреплённую в `package.json`). Без него, если `npm install` ещё не сделан, npx скачал бы из npm постороннюю программу с именем `babysitter` — и без терминала (в сессии ИИ) сделал бы это молча."
+  : "> Почему \`npm run babysitter\`, а не \`npx babysitter\`: инструмент лежит в проекте (\`" + (toolRel || TOOL) + "\`) и не является npm-пакетом — \`npx babysitter\` скачал бы из npm постороннюю программу с таким именем.";
+  if (existsSync(file) && !has("force")) {
+    // the checklist holds the team's ticks — keep them; refresh only the commands and the note, which depend on
+    // how the tool is installed (a link-mode note named this machine's path)
+    const cur = readFileSync(file, "utf8");
+    const next = cur.replace(/`(?:npm run babysitter --|npx --no babysitter|node [^`]*babysitter\.mjs) (audit|enable-hooks)`/g, (m, c) => `\`${RUN_HINT} ${c}\``).replace(/^> Почему[^\n]*$/m, WHY);
+    if (next !== cur) { write(file, next); console.log(`  ✓ adoption checklist: commands refreshed for this install → ${relative(repo, file)}`); }
+  }
   if (!existsSync(file) || has("force")) {
     const today = new Date().toISOString().slice(0, 10);
     const tick = String.fromCharCode(96);
@@ -273,9 +324,9 @@ Babysitter установлен в **мягком режиме аудита** (\
 Пройдите шаги по порядку и отмечайте их здесь.
 
 - [x] **1. Инициализация** — выполнено ${today}: установлен мягкий режим.
-- [ ] **2. Глобальный аудит** — запустите \`npm run babysitter -- audit\`, чтобы оценить масштаб: AST-нарушения, контраст, мёртвый код.
+- [ ] **2. Глобальный аудит** — запустите \`${RUN_HINT} audit\`, чтобы оценить масштаб: AST-нарушения, контраст, мёртвый код.
 - [ ] **3. Изолированная зачистка** — создайте ветку \`chore/tech-debt\` и поручите AI или команде исправить найденное. Хуки в этом режиме подсказывают по ходу правок.
-- [ ] **4. Активация файрвола** — когда аудит станет зелёным, выполните \`npm run babysitter -- enable-hooks\`: режим в \`babysitter.config.json\` станет строгим (\`"mode": "strict"\`), хуки начнут блокировать. С этого момента грязный код не пройдёт.
+- [ ] **4. Активация файрвола** — когда аудит станет зелёным, выполните \`${RUN_HINT} enable-hooks\`: режим в \`babysitter.config.json\` станет строгим (\`"mode": "strict"\`), хуки начнут блокировать. С этого момента грязный код не пройдёт.
 
 ## Снимок на момент установки (${today})
 
@@ -289,7 +340,7 @@ Babysitter установлен в **мягком режиме аудита** (\
 
 ${topLine}
 
-> Почему \`npm run babysitter\`, а не \`npx babysitter\`: инструмент лежит в проекте (\`tools/claudes-babysitter\`) и не является npm-пакетом — \`npx babysitter\` скачал бы из npm постороннюю программу с таким именем.
+${WHY}
 `;
     write(file, md);
     console.log(`  ✓ adoption checklist → ${relative(repo, file)}`);

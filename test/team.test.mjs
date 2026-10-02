@@ -2,7 +2,7 @@
 import assert from "node:assert/strict";
 import { spawnSync, execFileSync } from "node:child_process";
 import { mkdtempSync, mkdirSync, writeFileSync, readFileSync, existsSync, rmSync, symlinkSync, chmodSync } from "node:fs";
-import { tmpdir } from "node:os";
+import { tmpdir, homedir } from "node:os";
 import { join, dirname } from "node:path";
 import { fileURLToPath } from "node:url";
 
@@ -108,6 +108,85 @@ try {
   r = bs(d, ["audit", "--diff", "origin/nope"]);
   assert.equal(r.status, 2); assert.match(r.stderr, /fetch-depth: 0/);
   ok("audit --diff compares with the merge-base; an unknown base exits 2 with the fetch-depth hint");
+
+  // ── init in package mode: nothing machine-specific, every command through node_modules ──
+  const asDependency = (d) => {
+    const pj = JSON.parse(readFileSync(join(d, "package.json"), "utf8"));
+    pj.devDependencies = { "claudes-babysitter": "github:souldevsoul/claudes-babysitter#v3.11.0" };
+    writeFileSync(join(d, "package.json"), JSON.stringify(pj, null, 2));
+    mkdirSync(join(d, "node_modules"), { recursive: true }); symlinkSync(TOOL, join(d, "node_modules/claudes-babysitter"));
+    writeFileSync(join(d, ".gitignore"), "node_modules\n");
+  };
+  const init = (d, ...a) => spawnSync(process.execPath, [join(d, "node_modules/claudes-babysitter/bin/babysitter.mjs"), "init", ".", "--yes", ...a], { cwd: d, encoding: "utf8", env: { ...process.env, CI: "" } });
+  const noMachinePaths = (d) => {
+    for (const f of [".claude/settings.json", "CLAUDE.md", "package.json", ".git/hooks/pre-commit", "BABYSITTER-ADOPTION.md"]) {
+      if (!existsSync(join(d, f))) continue;
+      const t = readFileSync(join(d, f), "utf8");
+      assert.ok(!t.includes(TOOL) && !t.includes(homedir()), `${f} has a machine path:\n${t}`);
+      const commands = t.split("\n").filter((l) => !/^> Почему|^> Why/.test(l)).join("\n"); // the line that explains why NOT to
+      assert.ok(!/(^|[^-])npx babysitter/.test(commands), `${f} has a bare npx babysitter`);
+    }
+  };
+  d = project();
+  asDependency(d);
+  r = init(d, "--existing");
+  assert.equal(r.status, 0, r.stdout + r.stderr);
+  noMachinePaths(d);
+  const settings = JSON.parse(readFileSync(join(d, ".claude/settings.json"), "utf8"));
+  const cmds = Object.values(settings.hooks).flat().flatMap((g) => g.hooks.map((h) => h.command));
+  assert.equal(cmds.length, 3);
+  for (const c of cmds) assert.match(c, /^if \[ -f "\$CLAUDE_PROJECT_DIR\/node_modules\/claudes-babysitter\/bin\/hook-[a-z-]+\.mjs" \]; then node "\$CLAUDE_PROJECT_DIR\/node_modules\/claudes-babysitter\/bin\/hook-[a-z-]+\.mjs"; fi$/);
+  const md = readFileSync(join(d, "CLAUDE.md"), "utf8");
+  assert.match(md, /`npx --no babysitter check --changed --format agent`/);
+  assert.match(md, /`npx --no babysitter prepare && npx --no babysitter test-ui`/);
+  assert.match(md, /`npx --no babysitter studio start --target http:\/\/localhost:3000`/);
+  assert.ok(!/tools\/claudes-babysitter/.test(md));
+  const pj = JSON.parse(readFileSync(join(d, "package.json"), "utf8"));
+  assert.equal(pj.scripts.babysitter, "babysitter"); assert.equal(pj.scripts.prepare, "babysitter install-hooks");
+  assert.match(readFileSync(hookOf(d), "utf8"), /node_modules\/claudes-babysitter\/bin\/hook-pre-commit\.mjs/);
+  assert.match(readFileSync(join(d, "BABYSITTER-ADOPTION.md"), "utf8"), /`npx --no babysitter audit`/);
+  ok("init in package mode (auto-detected): hooks, CLAUDE.md, scripts, git gate — no machine paths, npx --no only");
+
+  // the Claude Code hook command really runs the pinned copy: as the shell runs it, with the hook payload on stdin
+  const cfgPath = join(d, "babysitter.config.json");
+  writeFileSync(cfgPath, JSON.stringify({ ...JSON.parse(readFileSync(cfgPath, "utf8")), mode: "strict", themeFirst: false, contrast: false }));
+  const stopCmd = cmds.find((c) => /hook-stop/.test(c));
+  writeFileSync(join(d, "src/app/page.tsx"), 'export default function P() {\n  return <main className="p-4 bg-red-500">ok</main>;\n}\n');
+  const runHook = (cmd) => spawnSync("sh", ["-c", cmd], { cwd: tmpdir(), input: "{}", encoding: "utf8", env: { ...process.env, CI: "", CLAUDE_PROJECT_DIR: d } });
+  r = runHook(stopCmd);
+  assert.equal(r.status, 2, r.stdout + r.stderr); assert.match(r.stderr, /bg-red-500/);
+  rmSync(join(d, "node_modules"), { recursive: true });
+  r = runHook(stopCmd);
+  assert.equal(r.status, 0, "before npm install the hook does nothing instead of failing every edit");
+  ok("the generated Claude Code hook runs node_modules' copy (Stop → exit 2 on new debt), and is a no-op before npm install");
+
+  // migration: a project set up in link mode, then given the dependency → re-init replaces every machine path
+  d = project();
+  r = spawnSync(process.execPath, [join(TOOL, "bin/babysitter.mjs"), "init", ".", "--yes", "--existing", "--link"], { cwd: d, encoding: "utf8", env: { ...process.env, CI: "" } });
+  assert.equal(r.status, 0, r.stderr);
+  assert.ok(readFileSync(join(d, ".claude/settings.json"), "utf8").includes(TOOL), "link mode writes the machine path (that is its point)");
+  asDependency(d);
+  assert.equal(init(d).status, 0);
+  noMachinePaths(d);
+  const after = JSON.parse(readFileSync(join(d, ".claude/settings.json"), "utf8"));
+  assert.equal(Object.values(after.hooks).flat().flatMap((g) => g.hooks).length, 3, "replaced, not duplicated");
+  ok("re-running init after adding the dependency moves a link-mode project to node_modules (no duplicates)");
+
+  // --package without the dependency: init pins the version that is running
+  d = project();
+  r = spawnSync(process.execPath, [BIN, "init", ".", "--yes", "--existing", "--package"], { cwd: d, encoding: "utf8", env: { ...process.env, CI: "" } });
+  assert.equal(r.status, 0, r.stderr);
+  const version = JSON.parse(readFileSync(join(TOOL, "package.json"), "utf8")).version;
+  assert.equal(JSON.parse(readFileSync(join(d, "package.json"), "utf8")).devDependencies["claudes-babysitter"], `github:souldevsoul/claudes-babysitter#v${version}`);
+  assert.match(r.stdout, /run npm install/);
+  ok("init --package without the dependency pins the running version from the public repo");
+
+  // the reason for --no: without the local copy, npx must fail — not fetch the unrelated npm package "babysitter"
+  const bare = mkdtempSync(join(tmpdir(), "bs-npx-")); dirs.push(bare);
+  writeFileSync(join(bare, "package.json"), '{"name":"bare"}');
+  r = spawnSync("npx", ["--no", "babysitter", "check"], { cwd: bare, encoding: "utf8", env: { ...process.env, npm_config_yes: "" }, timeout: 60000 });
+  assert.notEqual(r.status, 0); assert.ok(!existsSync(join(bare, "node_modules")));
+  ok("npx --no babysitter never downloads: without the local copy it fails");
 } finally {
   for (const d of dirs) rmSync(d, { recursive: true, force: true });
 }

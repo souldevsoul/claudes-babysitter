@@ -8,6 +8,7 @@ Before you say a UI task is done:
 2. Fix every item it lists, then run it again. Repeat until it prints `Claude's Babysitter: clean.`
 3. If the change is deployed to a preview, run the runtime check:
    `node tools/claudes-babysitter/playwright/prepare.mjs && npx playwright test -c tools/claudes-babysitter/playwright/playwright.config.ts`
+4. For a human visual review, the user runs Babysitter Studio over the dev server: `{{RUN}} studio start --target http://localhost:3000`, then opens http://localhost:3001. Notes they pin on the page reach you as "Manual QA Feedback" — apply them.
 
 Order of work on a new product:
 1. **Theme first.** Until the theme has its own primary colour, radius, fonts and button variants, every UI edit is blocked with "Сначала обнови тему (Theme First)".

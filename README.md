@@ -64,11 +64,20 @@ Or install it as a dev dependency: `npm i -D github:souldevsoul/claudes-babysitt
 | `docs/` | The guidelines the rules enforce |
 | `test/`, `fixtures/` | `npm test`: RuleTester, Stylelint fixtures, end-to-end cases |
 
+## What changed in 3.11 (Claude Code integration without machine paths)
+
+- **`init` package mode** — the team setup. It is chosen automatically when `claudes-babysitter` is installed or listed in `package.json`; `--package` forces it, and adds the devDependency pinned to the running version if it is missing. Everything `init` writes goes through `node_modules`, so every teammate's agent runs the version `package.json` pins:
+  - `.claude/settings.json`: `if [ -f "$CLAUDE_PROJECT_DIR/node_modules/claudes-babysitter/bin/hook-stop.mjs" ]; then node …; fi`. Plain `node` rather than `npx`, because PostToolUse runs after every edit. The hook's exit code (2 = block) passes through. Before `npm install` it does nothing instead of failing every edit.
+  - `CLAUDE.md`: `npx --no babysitter check --changed --format agent`, `npx --no babysitter prepare && npx --no babysitter test-ui`, `npx --no babysitter studio start --target …`.
+  - git pre-commit via `install-hooks`; `"prepare": "babysitter install-hooks"`; `"babysitter": "babysitter"`; with `--ci`, `.github/workflows/babysitter.yml`.
+- **Never a bare `npx babysitter`.** `babysitter` on the npm registry is an unrelated package, and without a TTY (an AI session, CI) npx installs and runs a missing package without asking. `--no` runs only the local copy, and fails otherwise. The 3.10 workflow template is fixed the same way.
+- Re-running `init` moves a link-mode or vendored project to package mode in place: hooks are replaced, not duplicated. `BABYSITTER-ADOPTION.md` keeps its ticks and only its commands are refreshed. `enable-hooks` keeps the install type it finds.
+
 ## What changed in 3.10 (team rollout: install on npm install, gate in CI)
 
 ```jsonc
 // package.json of the product
-"devDependencies": { "claudes-babysitter": "github:souldevsoul/claudes-babysitter#v3.10.0" },
+"devDependencies": { "claudes-babysitter": "github:souldevsoul/claudes-babysitter#v3.11.0" },
 "scripts": { "prepare": "babysitter install-hooks", "babysitter": "babysitter" }
 ```
 

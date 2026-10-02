@@ -24,8 +24,10 @@ if (problems.length && !args.includes("--force")) {
 }
 
 // re-run init in strict mode: same install type (vendored or linked), hooks and pre-commit gate refreshed
+// keep the install type the project already has: a dependency (team setup), a vendored copy, or a link
 const vendored = existsSync(join(repo, "tools/claudes-babysitter/bin/ui-check.mjs"));
-const initArgs = [join(dirname(fileURLToPath(import.meta.url)), "ui-init.mjs"), repo, "--new", "--yes", "--no-install", ...(vendored ? [] : ["--link"])];
+const pkg = (() => { try { const p = JSON.parse(readFileSync(join(repo, "package.json"), "utf8")); return !!({ ...p.dependencies, ...p.devDependencies })["claudes-babysitter"]; } catch { return false; } })() || existsSync(join(repo, "node_modules/claudes-babysitter/bin/babysitter.mjs"));
+const initArgs = [join(dirname(fileURLToPath(import.meta.url)), "ui-init.mjs"), repo, "--new", "--yes", "--no-install", ...(pkg ? ["--package"] : vendored ? ["--vendor"] : ["--link"])];
 const r = spawnSync(process.execPath, initArgs, { encoding: "utf8" });
 if (r.status !== 0) { process.stderr.write(r.stdout + r.stderr); process.exit(1); }
 const cfg = JSON.parse(readFileSync(cfgPath, "utf8"));

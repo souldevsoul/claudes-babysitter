@@ -35,4 +35,4 @@ jobs:
       - name: Babysitter — fail on new UI problems
         env:
           BASE: ${{ github.base_ref }} # via env, never interpolated into the script
-        run: npx babysitter audit --diff "origin/$BASE"
+        run: npx --no babysitter audit --diff "origin/$BASE" # --no: only the pinned local copy, never a download
