@@ -46,17 +46,48 @@
   .panel.before .seg button[aria-pressed="true"] { background: #facc15; color: #1c1503; }
   .tt .err { color: #fca5a5; }
   .layer.hidden { display: none; }
+  /* Visual Prompting: blue = a human's note, red = the automation's finding */
+  .box.note { border-color: #3b82f6; background: rgb(59 130 246 / 0.08); }
+  .box.note .tag { background: #2563eb; }
+  .pick { position: fixed; inset: 0; pointer-events: none; }
+  .hover { position: fixed; display: none; border: 2px solid #3b82f6; border-radius: 3px; background: rgb(59 130 246 / 0.12);
+    transition: left 60ms ease-out, top 60ms ease-out, width 60ms ease-out, height 60ms ease-out; }
+  .hover.locked { box-shadow: 0 0 0 4px rgb(59 130 246 / 0.28); transition: none; }
+  .hover .label { position: absolute; left: -2px; bottom: 100%; margin-bottom: 4px; padding: 0 6px; border-radius: 4px; background: #1d4ed8; color: #fff;
+    font: 600 11px/18px ui-monospace, SFMono-Regular, Menlo, monospace; white-space: nowrap; max-width: 60vw; overflow: hidden; text-overflow: ellipsis; }
+  .hover.flip .label { bottom: auto; top: 100%; margin: 4px 0 0; }
+  .pop { position: fixed; display: none; width: 320px; pointer-events: auto; padding: 10px; border-radius: 12px; background: #111318; color: #f4f4f5;
+    border: 1px solid #1d4ed8; box-shadow: 0 12px 32px rgb(0 0 0 / .45); }
+  .pop .sel { margin: 0 0 6px; color: #93c5fd; font: 11px/1.4 ui-monospace, SFMono-Regular, Menlo, monospace; word-break: break-all; }
+  .pop textarea { min-height: 64px; }
+  .pop .row { margin-top: 8px; justify-content: space-between; }
+  .pop .row span { display: flex; gap: 6px; }
+  .save { background: #2563eb; color: #fff; }
+  .small { padding: 6px 10px; font-size: 12px; }
+  .chip { padding: 4px 10px; font-size: 12px; background: transparent; color: #e4e4e7; border-color: #3f3f46; }
+  .chip[aria-pressed="true"] { background: #2563eb; border-color: #2563eb; color: #fff; }
+  .sec { padding: 6px 14px 0; color: #93c5fd; font-size: 11px; font-weight: 600; letter-spacing: .04em; text-transform: uppercase; }
+  .n.note { background: #2563eb; width: auto; min-width: 24px; padding: 0 5px; }
+  .x { margin-left: auto; padding: 0 6px; background: transparent; color: #a1a1aa; font-size: 15px; line-height: 20px; }
+  .x:hover { color: #f4f4f5; }
 </style>
 <div class="layer" part="layer"></div>
+<div class="pick"><div class="hover"><span class="label"></span></div>
+  <div class="pop" role="dialog" aria-label="Note for Claude">
+    <p class="sel"></p>
+    <textarea id="note-text" placeholder="What should change here?" aria-label="What should change here?"></textarea>
+    <div class="row"><button class="ghost small" id="note-parent" type="button" title="Alt+↑">⬆ Parent</button>
+      <span><button class="ghost small" id="note-cancel" type="button">Cancel</button><button class="save small" id="note-save" type="button" disabled>Save</button></span></div>
+  </div></div>
 <div class="panel" role="region" aria-label="Babysitter Studio">
-  <div class="head"><span class="dot"></span><span class="title">Babysitter Studio</span><span class="muted status">connecting…</span></div>
+  <div class="head"><span class="dot"></span><span class="title">Babysitter Studio</span><span class="muted status">connecting…</span><button class="chip" id="inspect" type="button" aria-pressed="false" title="Point at any element and leave a note for Claude (Esc to stop)">🎯 Inspect</button></div>
   <div class="body"></div>
 </div>`;
   const $ = (s) => root.querySelector(s);
   const layer = $(".layer"), body = $(".body"), dot = $(".dot"), status = $(".status"), title = $(".title");
   (document.body || document.documentElement).appendChild(host);
 
-  let ws, retry = 500, queue = [], current = null, boxes = [], raf = 0, side = "AFTER";
+  let ws, retry = 500, queue = [], current = null, boxes = [], raf = 0, side = "AFTER", notes = [];
   const panel = $(".panel");
   const plural = (n) => `${n} problem${n === 1 ? "" : "s"}`;
   const esc = (s) => String(s ?? "").replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" })[c]);
@@ -68,6 +99,8 @@
   function setSide(next, note) {
     side = next;
     panel.classList.toggle("before", side === "BEFORE");
+    if (side === "BEFORE") stopPicking();
+    inspectBtn.disabled = side === "BEFORE";
     layer.classList.toggle("hidden", side === "BEFORE");
     root.querySelectorAll(".seg button").forEach((b) => { b.setAttribute("aria-pressed", String(b.dataset.side === side)); b.disabled = false; });
     const info = $(".tt .info");
@@ -84,9 +117,9 @@
   function renderIdle(note) {
     dot.className = "dot" + (ws && ws.readyState === 1 ? " on" : "");
     title.textContent = "Babysitter Studio";
-    panel.classList.remove("before"); layer.classList.remove("hidden"); side = "AFTER";
-    body.innerHTML = `<div class="min muted">${note || "Watching. Reviews from the Babysitter CLI appear here."}</div>`;
-    clearBoxes();
+    panel.classList.remove("before"); layer.classList.remove("hidden"); side = "AFTER"; inspectBtn.disabled = false;
+    body.innerHTML = `<div class="min muted">${note || "Watching. Reviews from the Babysitter CLI appear here. 🎯 Inspect leaves a note on any element."}</div><div class="notes"></div>`;
+    syncFrames(); renderNotes();
   }
 
   function renderReview(r) {
@@ -101,6 +134,7 @@
       <div class="min"><strong>${esc(r.title || "UI review")}</strong><span class="muted">· the CLI is paused until you decide</span></div>
       ${r.diff ? `<div class="tt"><span class="seg" role="group" aria-label="Compare with HEAD"><button type="button" data-side="AFTER" aria-pressed="true">After</button><button type="button" data-side="BEFORE" aria-pressed="false">👁 Before (HEAD)</button></span><span class="muted info"></span></div>` : ""}
       <ul class="list">${items}</ul>
+      <div class="notes"></div>
       <div class="foot">
         <textarea id="comment-text" placeholder="What should change? Send Comment returns the work to its author with this brief…" aria-label="Comment"></textarea>
         <div class="row">
@@ -110,19 +144,35 @@
         </div>
       </div>`;
     const text = () => $("#comment-text").value.trim();
-    $("#comment-text").oninput = () => ($("#comment-send").disabled = !text());
-    $("#comment-send").onclick = () => text() && decide("COMMENT", text());
+    $("#comment-text").oninput = canSend;
+    $("#comment-send").onclick = () => (text() || notes.length) && decide("COMMENT", text());
     $("#approve").onclick = () => decide("APPROVE", text());
     $("#reject").onclick = () => decide("REJECT", text());
     root.querySelectorAll(".list li").forEach((li) => (li.onclick = () => focusProblem(Number(li.dataset.i))));
     root.querySelectorAll(".seg button").forEach((b) => (b.onclick = () => toggle(b.dataset.side)));
-    drawBoxes(list);
+    syncFrames(); renderNotes();
     if (r.diff) setSide(r.state?.side || "AFTER");
+  }
+
+  // Send Comment needs either text or at least one note; the bus attaches the notes to REJECT / COMMENT
+  function canSend() { const b = $("#comment-send"); if (b) b.disabled = !($("#comment-text").value.trim() || notes.length); }
+
+  function renderNotes() {
+    const here = (n) => !n.route || n.route === location.pathname;
+    const html = notes.length ? `<div class="sec">Manual Feedback · ${notes.length}</div><ul class="list">${notes.map((n, i) => `
+      <li data-note="${n.id}"><span class="n note">M${i + 1}</span>
+        <span><div>${esc(n.comment)}</div><div class="where">${esc((here(n) ? "" : "on " + n.route + " · ") + n.selector)}</div></span>
+        <button class="x" type="button" data-remove="${n.id}" aria-label="Remove note M${i + 1}">×</button></li>`).join("")}</ul>
+      ${current ? "" : `<div class="min muted">These go to Claude with your next prompt, or when its current turn ends.</div>`}` : "";
+    root.querySelectorAll(".notes").forEach((c) => (c.innerHTML = html));
+    root.querySelectorAll("[data-remove]").forEach((b) => (b.onclick = (e) => { e.stopPropagation(); send({ type: "NOTE_REMOVE", id: Number(b.dataset.remove) }); }));
+    root.querySelectorAll("li[data-note]").forEach((li) => (li.onclick = () => focusNote(Number(li.dataset.note))));
+    canSend();
   }
 
   function decide(type, text) {
     if (!current) return;
-    root.querySelectorAll("button").forEach((b) => (b.disabled = true));
+    root.querySelectorAll(".foot button, .seg button").forEach((b) => (b.disabled = true));
     send({ type, reviewId: current.reviewId, text: text || undefined });
   }
 
@@ -130,6 +180,7 @@
    * resize and DOM changes (HMR re-renders swap nodes) — coalesced to one layout read per animation frame. */
   function place() {
     raf = 0;
+    placePick();
     for (const b of boxes) {
       if (!b.el.isConnected) { try { b.el = document.querySelector(b.selector) || b.el; ro.observe(b.el); } catch {} }
       const r = b.el.getBoundingClientRect();
@@ -137,36 +188,196 @@
       b.box.style.cssText = shown ? `left:${r.left - 3}px;top:${r.top - 3}px;width:${r.width + 6}px;height:${r.height + 6}px` : "display:none";
     }
   }
-  const schedule = () => { if (boxes.length && !raf) raf = requestAnimationFrame(place); };
+  const schedule = () => { if ((boxes.length || picking) && !raf) raf = requestAnimationFrame(place); };
   const ro = new ResizeObserver(schedule);
   addEventListener("scroll", schedule, { capture: true, passive: true });
   addEventListener("resize", schedule, { passive: true });
   new MutationObserver(schedule).observe(document.documentElement, { subtree: true, childList: true, attributes: true, characterData: true });
 
-  function drawBoxes(problems) {
+  function syncFrames() {
     clearBoxes();
-    problems.forEach((p, i) => {
-      if (!p.selector || (p.route && p.route !== location.pathname)) return; // only problems of THIS page
-      let el = null; try { el = document.querySelector(p.selector); } catch {}
+    const add = (sel, route, cls, tag, key) => {
+      if (!sel || (route && route !== location.pathname)) return; // only frames of THIS page
+      let el = null; try { el = document.querySelector(sel); } catch {}
       if (!el) return;
       const box = document.createElement("div");
-      box.className = "box"; box.dataset.i = i;
-      box.innerHTML = `<span class="tag">${i + 1}</span>`;
+      box.className = cls; Object.assign(box.dataset, key);
+      box.innerHTML = `<span class="tag">${tag}</span>`;
       layer.appendChild(box);
-      boxes.push({ el, box, selector: p.selector });
+      boxes.push({ el, box, selector: sel });
       ro.observe(el);
-    });
+    };
+    (current?.problems || []).forEach((p, i) => add(p.selector, p.route, "box", i + 1, { i }));
+    notes.forEach((n, i) => add(n.selector, n.route, "box note", `M${i + 1}`, { note: n.id }));
     place();
   }
   function clearBoxes() { cancelAnimationFrame(raf); raf = 0; ro.disconnect(); layer.innerHTML = ""; boxes = []; }
-  function focusProblem(i) {
-    const p = current && current.problems[i];
-    if (p && p.route && p.route !== location.pathname) { location.href = p.route; return; } // the review is replayed there
-    const b = boxes.find((x) => Number(x.box.dataset.i) === i);
+  function focusNote(id) {
+    const n = notes.find((x) => x.id === id);
+    if (n && n.route && n.route !== location.pathname) { location.href = n.route; return; }
+    const b = boxes.find((x) => Number(x.box.dataset.note) === id);
     if (!b) return;
     b.el.scrollIntoView({ block: "center", behavior: "smooth" });
     b.box.classList.add("pulse"); setTimeout(() => b.box.classList.remove("pulse"), 900);
   }
+  function focusProblem(i) {
+    const p = current && current.problems[i];
+    if (p && p.route && p.route !== location.pathname) { location.href = p.route; return; } // the review is replayed there
+    const b = boxes.find((x) => x.box.dataset.i !== undefined && Number(x.box.dataset.i) === i);
+    if (!b) return;
+    b.el.scrollIntoView({ block: "center", behavior: "smooth" });
+    b.box.classList.add("pulse"); setTimeout(() => b.box.classList.remove("pulse"), 900);
+  }
+
+  /* ───────── Visual Prompting: point at ANY element, leave a note for Claude ─────────
+   * Hover: one elementFromPoint per animation frame (pointermove only stores the coordinates), a blue frame that
+   * glides between targets. Click: the frame locks and a popup opens next to the element. Page clicks, presses and
+   * key handlers never reach the app while picking; everything inside the panel keeps working. */
+  const pick = $(".pick"), hover = $(".hover"), label = $(".hover .label"), pop = $(".pop");
+  const noteText = $("#note-text"), saveBtn = $("#note-save"), inspectBtn = $("#inspect");
+  let picking = false, hoverEl = null, locked = null, px = -1, py = -1, pickRaf = 0;
+  const cursor = document.createElement("style");
+  cursor.textContent = "html, html * { cursor: crosshair !important; }";
+  const fromPanel = (e) => e.composedPath().includes(host);
+
+  function describe(el) {
+    const r = el.getBoundingClientRect();
+    const cls = [...el.classList].filter(stableClass).slice(0, 2).map((c) => "." + c).join("");
+    return `${el.localName}${el.id && !unstableId(el.id) ? "#" + el.id : cls}  ${Math.round(r.width)}×${Math.round(r.height)}`;
+  }
+  function placePick() {
+    const el = locked || hoverEl;
+    if (!picking || !el || !el.isConnected) { hover.style.display = "none"; pop.style.display = "none"; return; }
+    const r = el.getBoundingClientRect();
+    hover.style.cssText = `display:block;left:${r.left - 2}px;top:${r.top - 2}px;width:${r.width + 4}px;height:${r.height + 4}px`;
+    hover.classList.toggle("flip", r.top < 26);
+    if (!locked) { pop.style.display = "none"; return; }
+    pop.style.display = "block";
+    const w = pop.offsetWidth, h = pop.offsetHeight, gap = 10;
+    const below = r.bottom + gap + h <= innerHeight || r.top - gap - h < 0;
+    pop.style.top = `${Math.max(8, Math.min(innerHeight - h - 8, below ? r.bottom + gap : r.top - gap - h))}px`;
+    pop.style.left = `${Math.max(8, Math.min(innerWidth - w - 8, r.left))}px`;
+  }
+  // you point at a button, not at the <span> or <svg> inside it: snap to the nearest interactive ancestor
+  // (≤ 4 levels up). Hold Shift for the exact element under the cursor.
+  const INTERACTIVE = "button, a[href], input, select, textarea, label, summary, [role=button], [role=link], [role=tab], [role=menuitem], [role=checkbox], [role=switch], [role=combobox]";
+  function snap(el) {
+    if (el.matches(INTERACTIVE)) return el;
+    for (let n = el.parentElement, i = 0; n && i < 4 && n !== document.body; n = n.parentElement, i++) if (n.matches(INTERACTIVE)) return n;
+    return el;
+  }
+  let shift = false;
+  function onMove(e) {
+    px = e.clientX; py = e.clientY;
+    if (e.shiftKey !== shift) { shift = e.shiftKey; hoverEl = null; } // re-target when Shift changes
+    if (!pickRaf) pickRaf = requestAnimationFrame(() => {
+      pickRaf = 0;
+      if (locked) return;
+      const el = document.elementFromPoint(px, py);
+      const raw = !el || el === host || host.contains(el) || el === document.documentElement ? null : el;
+      const next = raw && !shift ? snap(raw) : raw;
+      if (next !== hoverEl) { hoverEl = next; if (next) label.textContent = describe(next); placePick(); }
+    });
+  }
+  function swallow(e) {
+    if (fromPanel(e)) return;               // the panel and the popup work normally
+    e.preventDefault(); e.stopImmediatePropagation();
+    if (e.type === "click" && hoverEl && !locked) lock(hoverEl);
+    else if (e.type === "click" && locked) { unlock(); onMove(e); } // click elsewhere = pick something else
+  }
+  function onKey(e) {
+    const t = e.composedPath()[0];
+    if (fromPanel(e) && t && (t.localName === "textarea" || t.localName === "input")) return; // typing in the panel / popup
+    if (e.key === "Escape") { e.preventDefault(); e.stopImmediatePropagation(); locked ? unlock() : stopPicking(); }
+    if (e.key === "ArrowUp" && e.altKey && hoverEl?.parentElement && hoverEl.parentElement !== document.documentElement) {
+      e.preventDefault(); hoverEl = hoverEl.parentElement; label.textContent = describe(hoverEl); placePick();
+    }
+  }
+  const EVENTS = ["click", "mousedown", "mouseup", "pointerdown", "pointerup", "dblclick", "contextmenu", "auxclick", "submit"];
+  function startPicking() {
+    if (picking || side === "BEFORE") return;
+    picking = true; inspectBtn.setAttribute("aria-pressed", "true");
+    inspectBtn.title = "Click an element · Shift = exact element · Alt+↑ = parent · Esc = stop";
+    document.head.appendChild(cursor);
+    addEventListener("pointermove", onMove, { capture: true, passive: true });
+    for (const t of EVENTS) addEventListener(t, swallow, true);
+    addEventListener("keydown", onKey, true);
+  }
+  function stopPicking() {
+    if (!picking) return;
+    picking = false; locked = null; hoverEl = null; inspectBtn.setAttribute("aria-pressed", "false"); releaseFocus();
+    cursor.remove();
+    removeEventListener("pointermove", onMove, { capture: true });
+    for (const t of EVENTS) removeEventListener(t, swallow, true);
+    removeEventListener("keydown", onKey, true);
+    placePick();
+  }
+  function lock(el) {
+    locked = el;
+    hover.classList.add("locked");
+    $(".pop .sel").textContent = uniqueSelector(el);
+    noteText.value = ""; saveBtn.disabled = true;
+    placePick();
+    noteText.focus({ preventScroll: true });
+  }
+  // a hidden popup must not keep the focus, or Esc / Alt+↑ would go to its textarea instead of the picker
+  const releaseFocus = () => { if (root.activeElement && pop.contains(root.activeElement)) root.activeElement.blur(); };
+  function unlock() { locked = null; hover.classList.remove("locked"); releaseFocus(); placePick(); }
+  function saveNote() {
+    const comment = noteText.value.trim();
+    if (!locked || !comment) return;
+    const el = locked, r = el.getBoundingClientRect();
+    send({ type: "NOTE_ADD", note: {
+      selector: uniqueSelector(el), comment, route: location.pathname, tag: el.localName,
+      text: (el.innerText || el.getAttribute("aria-label") || el.getAttribute("placeholder") || "").trim().replace(/\s+/g, " ").slice(0, 120),
+      classes: (typeof el.className === "string" ? el.className : el.getAttribute("class") || "").slice(0, 200),
+      size: `${Math.round(r.width)}×${Math.round(r.height)}`,
+    } });
+    hover.classList.remove("locked");
+    stopPicking();
+  }
+  inspectBtn.onclick = () => (picking ? stopPicking() : startPicking());
+  noteText.oninput = () => (saveBtn.disabled = !noteText.value.trim());
+  noteText.onkeydown = (e) => {
+    if (e.key === "Enter" && !e.shiftKey && !e.isComposing) { e.preventDefault(); saveNote(); }
+    if (e.key === "Escape") { e.preventDefault(); unlock(); }
+  };
+  saveBtn.onclick = saveNote;
+  $("#note-cancel").onclick = unlock;
+  $("#note-parent").onclick = () => { if (locked?.parentElement && locked.parentElement !== document.documentElement) lock(locked.parentElement); };
+
+  /* A selector Claude can grep for and the panel can find again after HMR: stable id → test/aria attributes →
+   * up to two stable classes → :nth-child, one step at a time from the element up, stopping as soon as the
+   * whole chain is unique. Generated ids (React useId, Radix, hashes) and utility/hashed classes are skipped. */
+  // generated ids: React useId in every format (:r1:, «r1», _R_4j9bn5rlb_), UI-kit prefixes, hashes, or any segment
+  // that mixes letters with 2+ digits (4j9bn5rlb) — they change between renders and reloads
+  function unstableId(id) {
+    return /(:r|«|»|_r_)|^(base-ui-|radix-|headlessui-|react-aria|mui-|rc[-_]|\d)/i.test(id) || /[0-9a-f]{6,}|\d{4,}/i.test(id)
+      || id.split(/[-_:]/).some((seg) => seg.length >= 5 && /[a-z]/i.test(seg) && (seg.match(/\d/g) || []).length >= 2);
+  }
+  function stableClass(c) { return c.length < 32 && !/[:\[\]\/!%@.()]/.test(c) && !/^(css|sc|jsx|emotion|svelte|astro)-|^_|__[a-z0-9]{5}$|[0-9a-f]{6,}/i.test(c); }
+  const unique = (sel) => { try { return document.querySelectorAll(sel).length === 1; } catch { return false; } };
+  const ATTRS = ["data-testid", "data-test", "data-cy", "data-qa", "name", "aria-label", "placeholder", "type", "href", "role"];
+  function uniqueSelector(el) {
+    if (el.id && !unstableId(el.id) && unique("#" + CSS.escape(el.id))) return "#" + CSS.escape(el.id);
+    const chain = [];
+    for (let n = el; n && n.nodeType === 1; n = n.parentElement) {
+      if (n === document.body || n === document.documentElement) { chain.unshift(n.localName); break; }
+      if (n.id && !unstableId(n.id) && unique("#" + CSS.escape(n.id))) { chain.unshift("#" + CSS.escape(n.id)); break; }
+      const tag = n.localName, sibs = n.parentElement ? [...n.parentElement.children].filter((x) => x !== n) : [];
+      const soleAmongSiblings = (part) => !sibs.some((x) => { try { return x.matches(part); } catch { return true; } });
+      const cands = [];
+      for (const a of ATTRS) { const v = n.getAttribute(a); if (v && v.length < 60 && !/[\n\r]/.test(v)) cands.push(`${tag}[${a}="${v.replace(/["\\]/g, "\\$&")}"]`); } // readable: grep-able as written in the source
+      const cls = [...n.classList].filter(stableClass).slice(0, 2).map((c) => "." + CSS.escape(c)).join("");
+      if (cls) cands.push(tag + cls);
+      cands.push(tag);
+      const part = cands.find(soleAmongSiblings) || `${tag + cls}:nth-child(${[...n.parentElement.children].indexOf(n) + 1})`;
+      chain.unshift(part);
+      if (unique(chain.join(" > "))) return chain.join(" > ");
+    }
+    return chain.join(" > ");
+  }
+  window.__babysitterSelector = uniqueSelector; // for tests and the console
 
   function next() {
     current = queue.shift() || null;
@@ -182,6 +393,7 @@
         if (current?.reviewId === m.reviewId || queue.some((q) => q.reviewId === m.reviewId)) return;
         if (current) queue.push(m); else { current = m; renderReview(m); }
       }
+      if (m.type === "NOTES") { notes = m.notes || []; syncFrames(); renderNotes(); }
       if (m.type === "DIFF_STATE") {
         if (current?.reviewId === m.reviewId) { current.state = m; setSide(m.side, m.error || (m.conflicts?.length ? `Edits made while viewing HEAD were kept in ${m.conflicts[0].replace(/\/[^/]*$/, "")}` : "")); }
         else { const q = queue.find((x) => x.reviewId === m.reviewId); if (q) q.state = m; }

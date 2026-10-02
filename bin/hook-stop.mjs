@@ -8,7 +8,7 @@ import { fileURLToPath } from "node:url";
 import { existsSync, readFileSync, writeFileSync, mkdirSync } from "node:fs";
 import { projectMode, ADOPTION_NOTE } from "../lib/mode.js";
 import { recover } from "../lib/time-travel.js";
-import { collectProblems, freezeForReview } from "../lib/studio-gate.js";
+import { collectProblems, freezeForReview, pendingNotes, formatManual } from "../lib/studio-gate.js";
 
 let input = "";
 for await (const chunk of process.stdin) input += chunk;
@@ -27,7 +27,13 @@ if (!failed) {
   const m = spawnSync(process.execPath, [join(dirname(fileURLToPath(import.meta.url)), "micro-check.mjs"), "--repo", repo], { encoding: "utf8", timeout: 150000 });
   if (m.status === 1) { failed = true; report = m.stdout; }
 }
-if (!failed) { writeFileSync(counter, "0"); process.exit(0); }
+if (!failed) {
+  writeFileSync(counter, "0");
+  // the checks are clean, but a human pinned notes in Babysitter Studio during this turn: they come first
+  const manual = await pendingNotes(repo);
+  if (manual.length) { process.stderr.write(`Before finishing, apply the notes the user pinned on the page in Babysitter Studio:\n\n${formatManual(manual)}`); process.exit(2); }
+  process.exit(0);
+}
 if (projectMode(repo) === "adoption") {
   const n = (report.match(/(\d+) problem\(s\)/) || [])[1] || "some";
   process.stdout.write(JSON.stringify({ systemMessage: `Claude's Babysitter: ${n} UI problem(s) in the changed code (${ADOPTION_NOTE}).` }));
@@ -44,11 +50,11 @@ if (verdict?.decision === "approve") {
   process.exit(0);
 }
 if (verdict?.decision === "comment") {
-  process.stderr.write(`Reviewer comment from Babysitter Studio — do this before finishing:\n${verdict.text}\n\nThe flagged problems, for reference:\n${report}`);
+  process.stderr.write(`${verdict.text ? `Reviewer comment from Babysitter Studio — do this before finishing:\n${verdict.text}\n\n` : "The reviewer sent this back from Babysitter Studio.\n\n"}${formatManual(verdict.manual)}${verdict.manual?.length ? "\n" : ""}The flagged problems, for reference:\n${report}`);
   process.exit(2);
 }
 if (verdict) {
-  process.stderr.write(`${verdict.decision === "timeout" ? "No decision in Babysitter Studio in time" : "Review rejected by user"}${verdict.text ? `: ${verdict.text}` : ""}. Fix these before finishing:\n\n${report}`);
+  process.stderr.write(`${verdict.decision === "timeout" ? "No decision in Babysitter Studio in time" : "Review rejected by user"}${verdict.text ? `: ${verdict.text}` : ""}. Fix these before finishing:\n\n${formatManual(verdict.manual)}${verdict.manual?.length ? "\n" : ""}${report}`);
   process.exit(2);
 }
 

@@ -64,6 +64,13 @@ Or install it as a dev dependency: `npm i -D github:souldevsoul/claudes-babysitt
 | `docs/` | The guidelines the rules enforce |
 | `test/`, `fixtures/` | `npm test`: RuleTester, Stylelint fixtures, end-to-end cases |
 
+## What changed in 3.8 (Studio: Visual Prompting)
+
+- **🎯 Inspect** in the panel: point at any element, even one the automation did not flag, click and write what should change. Blue frames are human notes, red ones are findings. The picker snaps to the button around a `<span>` (Shift = exact element), Alt+↑ goes to the parent, and the app never sees the clicks.
+- **Unique, stable selectors**: generated React / UI-kit ids and variant classes are skipped, and attribute values stay grep-able. Notes also carry the element's text and classes.
+- **Notes reach Claude** as `Manual QA Feedback: - Element … - Instruction …`: with Reject or Send Comment, through the Stop hook when the checks are clean, or with the next prompt via the new `UserPromptSubmit` hook (`init` registers it).
+- Studio e2e: 21 cases (selector checked on every element of the page, the picker flow, all three delivery routes).
+
 ## What changed in 3.7 (Studio: Time Travel)
 
 - **After | 👁 Before (HEAD)** in the review panel. The frozen CLI swaps the changed UI files on disk between the working tree and HEAD, and the dev server's HMR redraws the page in place. Panel amber and frames hidden on Before.

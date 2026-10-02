@@ -7,7 +7,7 @@ import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { projectMode, ADOPTION_NOTE } from "../lib/mode.js";
 import { recover } from "../lib/time-travel.js";
-import { collectProblems, freezeForReview } from "../lib/studio-gate.js";
+import { collectProblems, freezeForReview, formatManual } from "../lib/studio-gate.js";
 
 const here = dirname(fileURLToPath(import.meta.url));
 const repo = execSync("git rev-parse --show-toplevel", { encoding: "utf8" }).trim();
@@ -27,8 +27,8 @@ if (failed) {
   const problems = collectProblems(repo, ["HEAD"]);
   const r = await freezeForReview({ repo, problems, title: `Commit review · ${problems.length} problem(s)` });
   if (r?.decision === "approve") { process.stderr.write(`✅ Approved in Studio${r.text ? `: ${r.text}` : ""} — committing despite the findings.\n`); process.exit(0); }
-  if (r?.decision === "comment") { process.stdout.write(`Reviewer comment: ${r.text}\n`); process.stderr.write("💬 Sent back with a comment. The commit is aborted.\n"); process.exit(1); }
-  if (r) { process.stderr.write(`❌ ${r.decision === "timeout" ? "No decision in time" : "Review rejected by user"}${r.text ? `: ${r.text}` : ""}. The commit is aborted.\n`); process.exit(1); }
+  if (r?.decision === "comment") { process.stdout.write(`${r.text ? `Reviewer comment: ${r.text}\n` : ""}${formatManual(r.manual)}`); process.stderr.write("💬 Sent back with a comment. The commit is aborted.\n"); process.exit(1); }
+  if (r) { process.stderr.write(`❌ ${r.decision === "timeout" ? "No decision in time" : "Review rejected by user"}${r.text ? `: ${r.text}` : ""}. The commit is aborted.\n${formatManual(r.manual)}`); process.exit(1); }
   // null: Studio off or not running → the plain gate below
 }
 if (failed) {

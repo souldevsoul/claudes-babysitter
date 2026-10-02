@@ -15,6 +15,8 @@ import WebSocket from "ws";
 const BIN = join(dirname(fileURLToPath(import.meta.url)), "..", "bin", "studio.mjs");
 const PAGE = `<!doctype html><html><head><title>t</title></head><body class="bg-white">
 <main><h1>Settings</h1><select id="country"><option>DE</option></select><p class="faint" style="color:#ccc">fine print</p>
+<section class="cards"><div class="card flex gap-2"><button class="btn px-4 hover:bg-red-500" onclick="window.appClicks=(window.appClicks||0)+1">Save</button></div><div class="card flex gap-2"><button class="btn px-4 hover:bg-red-500" onclick="window.appClicks=(window.appClicks||0)+1">Save</button></div></section>
+<div id=":r1:"><span>generated id</span></div><div id="base-ui-_R_4j9bn5rlb_"><button class="pick-me"><span class="flex flex-1">Неделя</span></button></div><button aria-label='Период: "Выручка"'>x</button><ul><li>a</li><li>b</li><li><a href="/x">c</a></li></ul>
 <script>window.snippet = "</body>";</script></main></body></html>`;
 let LIVE = null; // a file of the test repo, served raw — stands in for the dev server re-rendering after HMR
 const target = http.createServer((req, res) => {
@@ -137,6 +139,85 @@ try {
   assert.deepEqual(sides, ["BEFORE", "AFTER"], "the CLI saw exactly the two valid toggles");
   await page.locator("#__babysitter-studio .min").filter({ hasText: "Approved" }).waitFor({ timeout: 5000 });
   ok("Before/After switch: After by default, panel turns amber and frames hide on BEFORE, reappear on AFTER");
+
+  // ───── Visual Prompting ─────
+  // the selector generator: every element on the page gets a selector that matches exactly that element
+  const pk = await page.evaluate(() => {
+    const els = [...document.body.querySelectorAll("*")].filter((e) => e.id !== "__babysitter-studio" && e.localName !== "script");
+    const bad = els.filter((e) => { const s = window.__babysitterSelector(e); const m = document.querySelectorAll(s); return m.length !== 1 || m[0] !== e; }).map((e) => e.outerHTML.slice(0, 60));
+    const btn = document.querySelectorAll(".cards button")[1];
+    return { bad, n: els.length, btn: window.__babysitterSelector(btn), gen: window.__babysitterSelector(document.querySelector("[id=':r1:'] span")) + " " + window.__babysitterSelector(document.querySelector(".pick-me")), aria: window.__babysitterSelector(document.querySelector("[aria-label^='Период']")) };
+  });
+  assert.deepEqual(pk.bad, [], "every selector is unique and points back to its element");
+  assert.match(pk.btn, /nth-child\(2\)/); assert.doesNotMatch(pk.btn, /hover:/, "utility classes with variants are skipped");
+  assert.equal(pk.aria, 'button[aria-label="Период: \\"Выручка\\""]', "attribute values stay readable (grep-able)");
+  assert.doesNotMatch(pk.gen, /:r1:|_R_|base-ui/, "generated React / UI-kit ids are skipped (:r1:, _R_4j9bn5rlb_)");
+  ok(`unique selector for all ${pk.n} elements (ids, attributes, stable classes, nth-child; no generated ids / variant classes)`);
+
+  // point, click, write, Enter
+  const ps = "#__babysitter-studio";
+  await page.locator(`${ps} #inspect`).click();
+  assert.equal(await page.locator(`${ps} #inspect`).getAttribute("aria-pressed"), "true");
+  const target2 = page.locator(".cards button").nth(1);
+  const tb = await target2.boundingBox();
+  await page.mouse.move(tb.x + 5, tb.y + 5); await page.mouse.move(tb.x + tb.width / 2, tb.y + tb.height / 2, { steps: 4 });
+  await page.waitForFunction(() => { const h = document.getElementById("__babysitter-studio").shadowRoot.querySelector(".hover"); return h.style.display === "block"; });
+  await page.waitForTimeout(120); // the 60 ms glide
+  const hb = await page.locator(`${ps} .hover`).boundingBox();
+  assert.ok(Math.abs(hb.x - (tb.x - 2)) <= 1 && Math.abs(hb.width - (tb.width + 4)) <= 1, "blue frame on the hovered element");
+  assert.match(await page.locator(`${ps} .hover .label`).textContent(), /^button\.btn\.px-4\s+\d+×\d+$/);
+  await page.mouse.click(tb.x + tb.width / 2, tb.y + tb.height / 2);
+  assert.equal(await page.evaluate(() => window.appClicks), undefined, "the app never sees the picking click");
+  await page.locator(`${ps} .pop`).waitFor({ state: "visible" });
+  const pb = await page.locator(`${ps} .pop`).boundingBox();
+  assert.ok(pb.y >= tb.y + tb.height || pb.y + pb.height <= tb.y, "popup sits next to the element, not over it");
+  assert.equal(await page.locator(`${ps} .pop .sel`).textContent(), pk.btn);
+  await page.keyboard.type("Make it secondary");
+  await page.keyboard.press("Enter");
+  await page.locator(`${ps} .sec`).filter({ hasText: "Manual Feedback · 1" }).waitFor({ timeout: 5000 });
+  assert.equal(await page.locator(`${ps} #inspect`).getAttribute("aria-pressed"), "false", "picking ends after Save");
+  const nb = await page.locator(`${ps} .box.note`).boundingBox();
+  assert.ok(Math.abs(nb.x - (tb.x - 3)) <= 1, "the note keeps a blue frame on its element");
+  await target2.click(); assert.equal(await page.evaluate(() => window.appClicks), 1, "the page is clickable again");
+
+  // Esc: unlock, then leave; Alt+↑ goes to the parent
+  await page.locator(`${ps} #inspect`).click();
+  await page.mouse.move(tb.x + 4, tb.y + 4); await page.mouse.move(tb.x + 6, tb.y + 6);
+  await page.waitForFunction(() => /^button/.test(document.getElementById("__babysitter-studio").shadowRoot.querySelector(".hover .label").textContent));
+  await page.keyboard.press("Alt+ArrowUp");
+  assert.match(await page.locator(`${ps} .hover .label`).textContent(), /^div\.card\.flex/);
+  await page.mouse.click(tb.x + 6, tb.y + 6);
+  await page.locator(`${ps} .pop`).waitFor({ state: "visible" });
+  await page.keyboard.press("Escape");
+  await page.locator(`${ps} .pop`).waitFor({ state: "hidden" });
+  await page.mouse.click(5, 5); // click on empty page while picking → nothing locked under a stale target
+  await page.keyboard.press("Escape").catch(() => {});
+  await page.locator(`${ps} .pop`).waitFor({ state: "hidden" });
+  if ((await page.locator(`${ps} #inspect`).getAttribute("aria-pressed")) === "true") await page.locator(`${ps} #inspect`).click();
+  // pointing at the <span> inside a button picks the button; Shift picks the span itself
+  await page.locator(`${ps} #inspect`).click();
+  const inner = await page.locator(".pick-me span").boundingBox();
+  await page.mouse.move(inner.x + 2, inner.y + 2); await page.mouse.move(inner.x + 4, inner.y + 4);
+  await page.waitForFunction(() => /^button\.pick-me/.test(document.getElementById("__babysitter-studio").shadowRoot.querySelector(".hover .label").textContent));
+  await page.keyboard.down("Shift"); await page.mouse.move(inner.x + 5, inner.y + 5);
+  await page.waitForFunction(() => /^span\.flex\.flex-1/.test(document.getElementById("__babysitter-studio").shadowRoot.querySelector(".hover .label").textContent));
+  await page.keyboard.up("Shift");
+  await page.keyboard.press("Escape");
+  assert.equal(await page.locator(`${ps} #inspect`).getAttribute("aria-pressed"), "false", "Esc leaves picking");
+  ok("🎯 Inspect: smooth blue hover frame with a label, click locks it and opens the popup next to it, Enter saves; the app never gets the clicks; snaps to the button around a <span> (Shift = exact); Esc and Alt+↑ work");
+
+  // the note leaves with Reject, formatted for Claude
+  const r6 = review(PROBLEMS.slice(0, 1));
+  await page.locator(`${ps} #reject`).waitFor({ timeout: 10000 });
+  assert.equal(await page.locator(`${ps} .box.note`).count(), 1, "blue and red frames together");
+  await page.locator(`${ps} #reject`).click();
+  const d6 = await r6.done;
+  assert.equal(d6.code, 1);
+  assert.ok(d6.out.includes(`Manual QA Feedback:\n- Element: \`${pk.btn}\`\n- Instruction: "Make it secondary"`), d6.out);
+  await page.locator(`${ps} .min`).filter({ hasText: "Rejected" }).waitFor({ timeout: 5000 });
+  assert.equal(await page.locator(`${ps} .box.note`).count(), 0, "delivered notes leave the page");
+  ok("Reject carries the manual notes to the CLI as \"Manual QA Feedback\" (Element + Instruction), then clears them");
+  await page.locator(`${ps} .min`).filter({ hasText: "Watching" }).waitFor({ timeout: 5000 });
 
   // 3. reject
   const r2 = review(PROBLEMS);
@@ -265,6 +346,26 @@ try {
     execSync(`node ${join(ROOT, "bin/babysitter.mjs")} restore`, { cwd: repo });
     assert.equal(readFileSync(LIVE, "utf8"), AFTER_SRC, "…and `babysitter restore` (or any hook) puts AFTER back");
     ok("hook killed while viewing HEAD: SIGTERM restores at once, SIGKILL is recovered from the journal");
+
+    // notes pinned while nothing waits: UserPromptSubmit hands them over with the next prompt…
+    const pin = (comment) => page.evaluate(([c, s]) => new Promise((r) => { const w = new WebSocket(`ws://${location.host}/__babysitter/ws?role=studio`); w.onopen = () => { w.send(JSON.stringify({ type: "NOTE_ADD", note: { selector: s, comment: c, route: "/", text: "Save", classes: "btn px-4" } })); setTimeout(() => { w.close(); r(); }, 150); }; }), [comment, pk.btn]);
+    await pin("Make it secondary");
+    await page.locator("#__babysitter-studio .sec").waitFor({ timeout: 5000 });
+    const hp = spawn(process.execPath, [join(ROOT, "bin/hook-prompt.mjs")], { cwd: repo, env: { ...process.env, CLAUDE_PROJECT_DIR: repo } });
+    let hpo = ""; hp.stdout.on("data", (d) => (hpo += d)); hp.stdin.end('{"prompt":"go"}');
+    assert.equal(await new Promise((r) => hp.on("exit", r)), 0);
+    const ctx = JSON.parse(hpo).hookSpecificOutput;
+    assert.equal(ctx.hookEventName, "UserPromptSubmit");
+    assert.match(ctx.additionalContext, /Manual QA Feedback:\n- Element: `[^`]+`  \(page \/; text "Save"; class "btn px-4"\)\n- Instruction: "Make it secondary"/);
+    await page.locator("#__babysitter-studio .sec").waitFor({ state: "detached", timeout: 5000 });
+    // …and the Stop hook, when the checks are clean, won't let the turn end over them
+    writeFileSync(join(repo, "src/app/page.tsx"), "export default function P(){ return <p>clean</p>; }\n");
+    await pin("Use the brand colour here");
+    const s6 = await stopHook();
+    assert.equal(s6.code, 2); assert.match(s6.err, /pinned on the page[\s\S]*Instruction: "Use the brand colour here"/);
+    const s7 = await stopHook();
+    assert.equal(s7.code, 0, "delivered once, not again");
+    ok("notes pinned with no review waiting reach Claude: UserPromptSubmit additionalContext, or the Stop hook when the checks are clean");
   } finally { rmSync(repo, { recursive: true, force: true }); }
 
   await browser.close();

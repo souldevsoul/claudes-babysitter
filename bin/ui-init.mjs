@@ -143,7 +143,7 @@ settings.hooks ||= {};
 const ensure = (event, matcher, command, timeout) => {
   const list = (settings.hooks[event] ||= []);
   // drop any older claudes-babysitter entry (path may have changed between link/vendor)
-  for (const g of list) g.hooks = (g.hooks || []).filter((h) => !/claudes-babysitter\/bin\/hook-|bin\/hook-(post-edit|stop)\.mjs/.test(h.command || ""));
+  for (const g of list) g.hooks = (g.hooks || []).filter((h) => !/claudes-babysitter\/bin\/hook-|bin\/hook-(post-edit|stop|prompt)\.mjs/.test(h.command || ""));
   const group = list.find((g) => (g.matcher || "") === (matcher || "")) || (list.push(matcher ? { matcher, hooks: [] } : { hooks: [] }), list[list.length - 1]);
   group.hooks.push({ type: "command", command, timeout });
   settings.hooks[event] = list.filter((g) => g.hooks.length);
@@ -151,6 +151,8 @@ const ensure = (event, matcher, command, timeout) => {
 ensure("PostToolUse", "Edit|Write|MultiEdit", hookCmd("hook-post-edit.mjs"), 90);
 // long enough to freeze for a Babysitter Studio review (default 15 min); without Studio the hook ends in seconds
 ensure("Stop", null, hookCmd("hook-stop.mjs"), 1800);
+// notes pinned in Babysitter Studio (🎯 Inspect) ride along with the next prompt; silent without Studio
+ensure("UserPromptSubmit", null, hookCmd("hook-prompt.mjs"), 10);
 write(setPath, JSON.stringify(settings, null, 2) + "\n");
 say("Claude Code hooks: check after every edit, block finishing with UI problems", setPath);
 

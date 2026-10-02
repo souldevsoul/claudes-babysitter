@@ -11,6 +11,11 @@
       {
         "hooks": [{ "type": "command", "command": "node \"$CLAUDE_PROJECT_DIR/tools/claudes-babysitter/bin/hook-stop.mjs\"", "timeout": 1800 }]
       }
+    ],
+    "UserPromptSubmit": [
+      {
+        "hooks": [{ "type": "command", "command": "node \"$CLAUDE_PROJECT_DIR/tools/claudes-babysitter/bin/hook-prompt.mjs\"", "timeout": 10 }]
+      }
     ]
   }
 }

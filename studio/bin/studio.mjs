@@ -26,7 +26,9 @@ if (cmd === "start") {
     onWaiting: () => console.error(`⏳ Visual Review required. Open ${url} — ${problems.length} problem(s)`),
   });
   if (r.decision === "approve") { console.error(`✅ Approved in Studio${r.text ? `: ${r.text}` : ""}.`); process.exit(0); }
-  if (r.decision === "comment") { console.log(`Reviewer comment: ${r.text}`); process.exit(1); }
+  const manual = (r.manual || []).map((n) => `- Element: \`${n.selector}\`\n- Instruction: ${JSON.stringify(n.comment)}`).join("\n\n");
+  if (manual) console.log(`Manual QA Feedback:\n${manual}`);
+  if (r.decision === "comment") { if (r.text) console.log(`Reviewer comment: ${r.text}`); process.exit(1); }
   if (r.decision === "reject") { console.error(`❌ Rejected in Studio${r.text ? `: ${r.text}` : ""}.`); process.exit(1); }
   if (r.decision === "timeout") { console.error("⌛ No decision in time — treated as rejected."); process.exit(1); }
   console.error(`Babysitter Studio is not running at ${url}.`); process.exit(2);
