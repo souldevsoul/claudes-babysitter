@@ -17,7 +17,7 @@ export function injectHtml(html) {
   return i < 0 ? html + INJECT_TAG : html.slice(0, i) + INJECT_TAG + html.slice(i);
 }
 
-export function startStudio({ port = 3001, target = "http://localhost:3000", log = console.log } = {}) {
+export function startStudio({ port = 3001, target = "http://localhost:3000", host = "127.0.0.1", log = console.log } = {}) {
   const proxy = httpProxy.createProxyServer({ target, ws: true, changeOrigin: true, selfHandleResponse: true });
   const bus = createBus({ log });
 
@@ -58,12 +58,23 @@ export function startStudio({ port = 3001, target = "http://localhost:3000", log
   });
 
   server.on("upgrade", (req, socket, head) => {
-    if (new URL(req.url, "http://x").pathname === PATH) bus.handleUpgrade(req, socket, head);
+    if (new URL(req.url, "http://x").pathname === PATH) {
+      // Cross-site WebSocket hijacking guard: any page in the developer's browser may open a socket to
+      // localhost. A panel must come from this proxy's own origin; the CLI is not a browser and sends none.
+      const role = new URL(req.url, "http://x").searchParams.get("role") === "cli" ? "cli" : "studio";
+      const origin = req.headers.origin;
+      const port = server.address().port;
+      const own = [`http://localhost:${port}`, `http://127.0.0.1:${port}`, `http://[::1]:${port}`];
+      const ok = role === "cli" ? !origin : !!origin && own.includes(origin);
+      if (!ok) { log(`refused a ${role} socket from ${origin || "no origin"}`); socket.write("HTTP/1.1 403 Forbidden\r\n\r\n"); return socket.destroy(); }
+      return bus.handleUpgrade(req, socket, head);
+    }
     else proxy.ws(req, socket, head); // the dev server's own sockets (Next/Vite HMR) keep working
   });
 
   return new Promise((resolve) => {
-    server.listen(port, () => {
+    // loopback only: the panel can approve commits, so it must not be reachable from the LAN
+    server.listen(port, host, () => {
       const actual = server.address().port;
       log(`Babysitter Studio on http://localhost:${actual} → ${target}`);
       resolve({ port: actual, bus, close: () => new Promise((r) => { bus.close(); proxy.close(); server.close(() => r()); }) });

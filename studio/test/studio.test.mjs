@@ -9,7 +9,8 @@ import { startStudio, injectHtml } from "../lib/server.js";
 import { mkdtempSync, mkdirSync, writeFileSync, readFileSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { execSync } from "node:child_process";
-import { INJECT_TAG } from "../lib/protocol.js";
+import { INJECT_TAG, PATH } from "../lib/protocol.js";
+import WebSocket from "ws";
 
 const BIN = join(dirname(fileURLToPath(import.meta.url)), "..", "bin", "studio.mjs");
 const PAGE = `<!doctype html><html><head><title>t</title></head><body class="bg-white">
@@ -47,6 +48,21 @@ try {
   assert.match(await (await fetch(base + "/__babysitter/injector.js")).text(), /attachShadow/);
   assert.equal(injectHtml(injectHtml("<body></body>")).split(INJECT_TAG).length - 1, 1);
   ok("proxy passes everything through and injects the panel into HTML only, once, before the last </body>");
+
+  // security: a foreign page cannot join as a panel, a browser cannot pose as the CLI, and the server is loopback-only
+  const wsTry = (role, origin) => new Promise((r) => {
+    const w = new WebSocket(base.replace("http", "ws") + PATH + "?role=" + role, origin ? { origin } : {});
+    w.on("open", () => { w.close(); r("open"); }); w.on("error", () => r("refused")); w.on("unexpected-response", () => r("refused"));
+  });
+  assert.equal(await wsTry("studio", "https://evil.example"), "refused", "foreign origin cannot open a panel socket");
+  assert.equal(await wsTry("studio", undefined), "refused", "a panel socket needs the proxy's origin");
+  assert.equal(await wsTry("cli", "https://evil.example"), "refused", "a browser page cannot pose as the CLI");
+  assert.equal(await wsTry("studio", base), "open");
+  assert.equal(await wsTry("cli", undefined), "open");
+  const { networkInterfaces } = await import("node:os");
+  const lan = Object.values(networkInterfaces()).flat().find((i) => i && i.family === "IPv4" && !i.internal);
+  if (lan) assert.equal(await fetch(`http://${lan.address}:${studio.port}/`).then(() => "reachable", () => "unreachable"), "unreachable", "not reachable from the LAN");
+  ok("cross-site WebSocket hijacking refused (foreign origin, origin-less panel, browser posing as CLI); loopback-only");
 
   const browser = await chromium.launch({ channel: process.env.PW_CHANNEL || "chrome" });
   const page = await browser.newPage();
