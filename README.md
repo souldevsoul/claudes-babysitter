@@ -64,6 +64,12 @@ Or install it as a dev dependency: `npm i -D github:souldevsoul/claudes-babysitt
 | `docs/` | The guidelines the rules enforce |
 | `test/`, `fixtures/` | `npm test`: RuleTester, Stylelint fixtures, end-to-end cases |
 
+## What changed in 3.5 (Babysitter Studio MVP)
+
+- **`studio/` — `@babysitter/studio`**, an npm workspace. A local proxy injects a Shadow-DOM review panel into the dev site, and a WebSocket bus connects it to the CLI. See [`studio/README.md`](studio/README.md).
+- **The git pre-commit gate can ask a human.** With `"studio": { "enabled": true }`, a commit with problems sends `REVIEW_REQUIRED`, red frames appear on the page, and the gate waits for the decision. Approve commits, reject or a timeout aborts, and if no studio is running the plain gate decides.
+- **DOM findings now carry a unique `selector`** (`playwright/checks.ts → __uiSelector`), so they can be outlined on the page.
+
 ## What changed in 3.4 (adoption wizard)
 
 - **`init` is an interactive wizard** (`@clack/prompts`): "Куда мы устанавливаем Babysitter?" → a new project (strict) or an existing project (adoption).

@@ -1,7 +1,7 @@
 // In-page probes. Each returns a list of offenders; an empty list means the guideline holds.
 import type { Page } from "@playwright/test";
 
-export type Offender = { what: string; where: string };
+export type Offender = { what: string; where: string; selector?: string | null };
 
 /** Short CSS-ish path for messages. */
 const describeFn = `
@@ -51,6 +51,32 @@ window.__uiContrast = (el) => {
   const L1 = __lum(text), L2 = __lum(base);
   return { ratio: (Math.max(L1, L2) + 0.05) / (Math.min(L1, L2) + 0.05), overImage, opacity };
 };
+// A CSS selector that matches exactly this element (for Babysitter Studio overlays).
+window.__uiSelector = (el) => {
+  if (!el || el.nodeType !== 1) return null;
+  const esc = (s) => (window.CSS && CSS.escape ? CSS.escape(s) : s);
+  if (el.id && document.querySelectorAll('#' + esc(el.id)).length === 1) return '#' + esc(el.id);
+  const parts = [];
+  for (let e = el; e && e.nodeType === 1 && e !== document.documentElement; e = e.parentElement) {
+    if (e.id && document.querySelectorAll('#' + esc(e.id)).length === 1) { parts.unshift('#' + esc(e.id)); break; }
+    let part = e.tagName.toLowerCase();
+    const sib = e.parentElement ? Array.from(e.parentElement.children).filter((c) => c.tagName === e.tagName) : [];
+    if (sib.length > 1) part += ':nth-of-type(' + (sib.indexOf(e) + 1) + ')';
+    parts.unshift(part);
+    const sel = parts.join(' > ');
+    if (document.querySelectorAll(sel).length === 1 && e.parentElement) {
+      // anchor at body for a stable selector
+      let full = sel; let up = e.parentElement; const chain = [];
+      for (; up && up !== document.body && up !== document.documentElement; up = up.parentElement) {
+        let pp = up.tagName.toLowerCase(); const ss = up.parentElement ? Array.from(up.parentElement.children).filter((c) => c.tagName === up.tagName) : [];
+        if (ss.length > 1) pp += ':nth-of-type(' + (ss.indexOf(up) + 1) + ')'; chain.unshift(pp);
+      }
+      full = ['body', ...chain, ...parts].join(' > ');
+      return document.querySelectorAll(full).length === 1 ? full : sel;
+    }
+  }
+  return parts.join(' > ');
+};
 window.__uiVisible = (el) => {
   const r = el.getBoundingClientRect();
   if (r.width < 1 || r.height < 1) return false;
@@ -89,7 +115,7 @@ export const applyColorScheme = (page: Page) =>
 /** 2.1 — no horizontal page scroll; 2.10 — nothing sticks out of the viewport. */
 export const horizontalOverflow = (page: Page) =>
   page.evaluate(() => {
-    const out: { what: string; where: string }[] = [];
+    const out: { what: string; where: string; selector?: string | null }[] = [];
     const doc = document.documentElement;
     if (doc.scrollWidth > doc.clientWidth + 1) out.push({ what: `page scrollWidth ${doc.scrollWidth} > viewport ${doc.clientWidth}`, where: "html" });
     const vw = doc.clientWidth;
@@ -107,7 +133,7 @@ export const horizontalOverflow = (page: Page) =>
           const pr = p.getBoundingClientRect();
           if (pr.right <= vw + 1 && pr.left >= -1) { clipped = true; break; }
         }
-        if (!clipped) out.push({ what: `extends to x=${Math.round(r.left)}..${Math.round(r.right)} (viewport ${vw})`, where: (window as any).__uiDescribe(el) });
+        if (!clipped) out.push({ what: `extends to x=${Math.round(r.left)}..${Math.round(r.right)} (viewport ${vw})`, where: (window as any).__uiDescribe(el), selector: (window as any).__uiSelector(el) });
       }
       if (out.length > 15) break;
     }
@@ -119,14 +145,14 @@ export const nativeControls = (page: Page) =>
   page.evaluate(() =>
     Array.from(document.querySelectorAll('select, input[type=date], input[type=datetime-local], input[type=month], input[type=time], input[type=file], input[type=checkbox], input[type=radio]'))
       .filter((el) => (window as any).__uiVisible(el))
-      .map((el) => ({ what: `native <${el.tagName.toLowerCase()}${(el as HTMLInputElement).type ? ` type=${(el as HTMLInputElement).type}` : ""}>`, where: (window as any).__uiDescribe(el) })),
+      .map((el) => ({ what: `native <${el.tagName.toLowerCase()}${(el as HTMLInputElement).type ? ` type=${(el as HTMLInputElement).type}` : ""}>`, where: (window as any).__uiDescribe(el), selector: (window as any).__uiSelector(el) })),
   );
 
 /** 6.4 — text ≥12px, weight ≥400, not translucent. */
 export const illegibleText = (page: Page, allowLightWeights = false) =>
   page.evaluate((allowLightWeights) => {
-    const out: { what: string; where: string }[] = [];
-    const eye: { what: string; where: string }[] = [];
+    const out: { what: string; where: string; selector?: string | null }[] = [];
+    const eye: { what: string; where: string; selector?: string | null }[] = [];
     const walker = document.createTreeWalker(document.body, NodeFilter.SHOW_TEXT);
     const seen = new Set<Element>();
     for (let n = walker.nextNode(); n; n = walker.nextNode()) {
@@ -153,10 +179,10 @@ export const illegibleText = (page: Page, allowLightWeights = false) =>
       if (!allowLightWeights && size < 24 && (weight < 300 || (weight < 400 && size < 16))) bad.push(`weight ${weight} at ${size}px`);
       if (opacity < 0.95) bad.push(`opacity ${opacity.toFixed(2)} on text`);
       if (ratio < (large ? 3 : 4.5)) {
-        if (clipText || overImage) eye.push({ what: `contrast ${clipText ? "of gradient-filled text" : "over image/gradient"} cannot be measured (${ratio.toFixed(2)}:1 vs solid) — check by eye`, where: (window as any).__uiDescribe(el) });
+        if (clipText || overImage) eye.push({ what: `contrast ${clipText ? "of gradient-filled text" : "over image/gradient"} cannot be measured (${ratio.toFixed(2)}:1 vs solid) — check by eye`, where: (window as any).__uiDescribe(el), selector: (window as any).__uiSelector(el) });
         else bad.push(`contrast ${ratio.toFixed(2)}:1`);
       }
-      if (bad.length) out.push({ what: bad.join(", "), where: (window as any).__uiDescribe(el) });
+      if (bad.length) out.push({ what: bad.join(", "), where: (window as any).__uiDescribe(el), selector: (window as any).__uiSelector(el) });
       if (out.length > 40) break;
     }
     return { hard: out, eye: eye.slice(0, 20) };
@@ -167,12 +193,12 @@ export const emoji = (page: Page) =>
   page.evaluate(() => {
     const re = /\p{Extended_Pictographic}/u;
     const ok = new Set(["©", "®", "™"]);
-    const out: { what: string; where: string }[] = [];
+    const out: { what: string; where: string; selector?: string | null }[] = [];
     const walker = document.createTreeWalker(document.body, NodeFilter.SHOW_TEXT);
     for (let n = walker.nextNode(); n; n = walker.nextNode()) {
       const t = n.textContent || "";
       const ch = [...t].find((c) => re.test(c) && !ok.has(c));
-      if (ch && n.parentElement && (window as any).__uiVisible(n.parentElement)) out.push({ what: `emoji ${ch}`, where: (window as any).__uiDescribe(n.parentElement) });
+      if (ch && n.parentElement && (window as any).__uiVisible(n.parentElement)) out.push({ what: `emoji ${ch}`, where: (window as any).__uiDescribe(n.parentElement), selector: (window as any).__uiSelector(n.parentElement) });
     }
     return out.slice(0, 20);
   });
@@ -183,7 +209,7 @@ export const lowResImages = (page: Page) =>
     const imgs = Array.from(document.images).filter(
       (img) => img.complete && img.naturalWidth > 0 && (window as any).__uiVisible(img) && !/\.svg(\?|$)/i.test(img.currentSrc || img.src),
     );
-    const out: { what: string; where: string }[] = [];
+    const out: { what: string; where: string; selector?: string | null }[] = [];
     for (const img of imgs) {
       const r = img.getBoundingClientRect();
       if (r.width < 48) continue;
@@ -239,7 +265,7 @@ export const wrappedNavItems = (page: Page) =>
     };
     return Array.from(document.querySelectorAll("header a, header button, nav a"))
       .filter((el) => (window as any).__uiVisible(el) && (el.textContent || "").trim().length > 0 && lines(el) > 1)
-      .map((el) => ({ what: "nav item wraps onto two lines", where: (window as any).__uiDescribe(el) }));
+      .map((el) => ({ what: "nav item wraps onto two lines", where: (window as any).__uiDescribe(el), selector: (window as any).__uiSelector(el) }));
   });
 
 /** 2.12 — text blocks must not overlap each other (sampled). */
@@ -248,7 +274,7 @@ export const overlappingText = (page: Page) =>
     const els = Array.from(document.querySelectorAll("h1,h2,h3,h4,p,li,a,button,label,span"))
       .filter((el) => (window as any).__uiVisible(el) && el.children.length === 0 && (el.textContent || "").trim().length > 1)
       .slice(0, 400);
-    const out: { what: string; where: string }[] = [];
+    const out: { what: string; where: string; selector?: string | null }[] = [];
     for (const el of els) {
       const r = el.getBoundingClientRect();
       const cx = r.left + r.width / 2, cy = r.top + r.height / 2;
@@ -276,7 +302,7 @@ export const cookieCovers = (page: Page) =>
     const targets = Array.from(document.querySelectorAll('header a, header button, nav a, [aria-label*=menu i]')).filter((el) => (window as any).__uiVisible(el) && !banner.contains(el));
     return targets
       .filter((el) => { const r = el.getBoundingClientRect(); const t = document.elementFromPoint(r.left + r.width / 2, r.top + r.height / 2); return !!t && banner.contains(t); })
-      .map((el) => ({ what: "covered by cookie banner", where: (window as any).__uiDescribe(el) }));
+      .map((el) => ({ what: "covered by cookie banner", where: (window as any).__uiDescribe(el), selector: (window as any).__uiSelector(el) }));
   });
 
 /** 6.9 — underline is a link affordance only. */
@@ -286,7 +312,7 @@ export const fakeLinks = (page: Page) =>
       .filter((el) => (window as any).__uiVisible(el) && el.children.length === 0 && (el.textContent || "").trim())
       .filter((el) => getComputedStyle(el).textDecorationLine.includes("underline") && !el.closest("a, button, [role=button], [role=link], abbr, summary, label"))
       .slice(0, 10)
-      .map((el) => ({ what: "underlined text that is not a link", where: (window as any).__uiDescribe(el) })),
+      .map((el) => ({ what: "underlined text that is not a link", where: (window as any).__uiDescribe(el), selector: (window as any).__uiSelector(el) })),
   );
 
 /** 2.13 — cumulative layout shift. */
@@ -319,7 +345,7 @@ export async function focusVisible(page: Page, presses = 8) {
 /** 1.11 — the logo link hugs the logo: its box is no wider than its content (mark + wordmark) plus padding. */
 export const logoLink = (page: Page) =>
   page.evaluate(() => {
-    const out: { what: string; where: string }[] = [];
+    const out: { what: string; where: string; selector?: string | null }[] = [];
     for (const a of Array.from(document.querySelectorAll("header a[href], footer a[href]")) as HTMLAnchorElement[]) {
       if (!a.querySelector("img, svg") || !(window as any).__uiVisible(a)) continue;
       const u = new URL(a.href, location.href);
@@ -328,7 +354,7 @@ export const logoLink = (page: Page) =>
       const content = r.getBoundingClientRect();
       const box = a.getBoundingClientRect();
       if (box.width > content.width + 32 || box.height > content.height + 32)
-        out.push({ what: `logo link box ${Math.round(box.width)}×${Math.round(box.height)} around ${Math.round(content.width)}×${Math.round(content.height)} content`, where: (window as any).__uiDescribe(a) });
+        out.push({ what: `logo link box ${Math.round(box.width)}×${Math.round(box.height)} around ${Math.round(content.width)}×${Math.round(content.height)} content`, where: (window as any).__uiDescribe(a), selector: (window as any).__uiSelector(a) });
     }
     return out;
   });
@@ -342,7 +368,7 @@ export const logoLink = (page: Page) =>
 export const rowAlignment = (page: Page) =>
   page.evaluate(() => {
     const W = window as any;
-    const out: { what: string; where: string }[] = [];
+    const out: { what: string; where: string; selector?: string | null }[] = [];
     const isCardish = (el: Element) => {
       const cs = getComputedStyle(el);
       const border = ["Top", "Right", "Bottom", "Left"].some((s) => parseFloat((cs as any)[`border${s}Width`]) > 0);
@@ -447,7 +473,7 @@ export const rowAlignment = (page: Page) =>
 export const repeatedRowColumns = (page: Page) =>
   page.evaluate(() => {
     const W = window as any;
-    const out: { what: string; where: string }[] = [];
+    const out: { what: string; where: string; selector?: string | null }[] = [];
     for (const list of Array.from(document.querySelectorAll("body *"))) {
       const rows = Array.from(list.children).filter((r) => { const d = getComputedStyle(r).display; return W.__uiVisible(r) && (d.includes("flex") || d.includes("grid")); });
       if (rows.length < 3) continue;
@@ -463,7 +489,7 @@ export const repeatedRowColumns = (page: Page) =>
         const rects = cols.map((c) => c[i].getBoundingClientRect());
         const sp = (xs: number[]) => Math.max(...xs) - Math.min(...xs);
         const ok = [rects.map((r) => r.left), rects.map((r) => r.right), rects.map((r) => r.left + r.width / 2)].some((xs) => sp(xs) <= 3);
-        if (!ok) { out.push({ what: `column ${i + 1} shifts between rows (Δ${Math.round(sp(rects.map((r) => r.left)))}px) [2.12, P48]`, where: W.__uiDescribe(list) }); break; }
+        if (!ok) { out.push({ what: `column ${i + 1} shifts between rows (Δ${Math.round(sp(rects.map((r) => r.left)))}px) [2.12, P48]`, where: W.__uiDescribe(list), selector: W.__uiSelector(list) }); break; }
       }
       if (out.length > 10) break;
     }
@@ -484,7 +510,7 @@ export const scrollbarRadius = (page: Page) =>
         return scrolls && bar && parseFloat(cs.borderTopRightRadius) > 0;
       })
       .slice(0, 10)
-      .map((el) => ({ what: "scroll container has rounded corners — the scrollbar cuts the radius [5.1, P21]", where: W.__uiDescribe(el) }));
+      .map((el) => ({ what: "scroll container has rounded corners — the scrollbar cuts the radius [5.1, P21]", where: W.__uiDescribe(el), selector: W.__uiSelector(el) }));
   });
 
 /** 1.9 — inputs visible at rest: border ≥3:1 against the surface, or a distinct fill (P09). */
@@ -505,10 +531,10 @@ export const inputVisibility = (page: Page) =>
         const border = mix(W.__uiRGBA(cs.borderBottomColor), fill);
         const borderOk = bw > 0 && ratio(border, bg) >= 3;
         const fillOk = ratio(fill, bg) >= 1.25;
-        return borderOk || fillOk ? null : { what: `input barely visible at rest (border ${bw ? ratio(border, bg).toFixed(2) + ":1" : "none"}, fill ${ratio(fill, bg).toFixed(2)}:1) [1.9, P09]`, where: W.__uiDescribe(el) };
+        return borderOk || fillOk ? null : { what: `input barely visible at rest (border ${bw ? ratio(border, bg).toFixed(2) + ":1" : "none"}, fill ${ratio(fill, bg).toFixed(2)}:1) [1.9, P09]`, where: W.__uiDescribe(el), selector: W.__uiSelector(el) };
       })
       .filter(Boolean)
-      .slice(0, 10) as { what: string; where: string }[];
+      .slice(0, 10) as { what: string; where: string; selector?: string | null }[];
   });
 
 /** 1.4 — hovering a button keeps its label readable (P06). */
@@ -530,7 +556,7 @@ export async function hoverContrast(page: Page, max = 12) {
       const w = document.createTreeWalker(el, NodeFilter.SHOW_TEXT);
       for (let n = w.nextNode(); n; n = w.nextNode()) if ((n.textContent || "").trim()) { t = n.parentElement!; break; }
       const c = W.__uiContrast(t);
-      return c.ratio < 3 ? { what: `label contrast on hover ${c.ratio.toFixed(2)}:1 [1.4, P06]`, where: W.__uiDescribe(el) } : null;
+      return c.ratio < 3 ? { what: `label contrast on hover ${c.ratio.toFixed(2)}:1 [1.4, P06]`, where: W.__uiDescribe(el), selector: W.__uiSelector(el) } : null;
     }).catch(() => null);
     if (r) out.push(r);
   }
@@ -551,7 +577,7 @@ const openPopups = (page: Page) =>
         const scrollable = [el, ...Array.from(el.querySelectorAll("*"))].some((n) => /(auto|scroll)/.test(getComputedStyle(n).overflowY) && n.scrollHeight > n.clientHeight + 1);
         const clipped = r.bottom > innerHeight + 1 || r.top < -1 || r.right > innerWidth + 1 || r.left < -1;
         const overflowing = el.scrollHeight > el.clientHeight + 1 && cs.overflowY !== "visible" && !scrollable;
-        return { where: W.__uiDescribe(el), role: el.getAttribute("role") || "popper", clipped, overflowing, rect: [r.top, r.bottom, r.left, r.right].map(Math.round) };
+        return { where: W.__uiDescribe(el), selector: W.__uiSelector(el), role: el.getAttribute("role") || "popper", clipped, overflowing, rect: [r.top, r.bottom, r.left, r.right].map(Math.round) };
       });
   });
 
@@ -565,7 +591,7 @@ export async function interactiveStates(page: Page, max = 8) {
   let n = 0;
   for (const t of triggers) {
     if (n >= max) break;
-    const info = await t.evaluate((el) => ({ vis: (window as any).__uiVisible(el), link: el.matches("a[href]"), where: (window as any).__uiDescribe(el) })).catch(() => null);
+    const info = await t.evaluate((el) => ({ vis: (window as any).__uiVisible(el), link: el.matches("a[href]"), where: (window as any).__uiDescribe(el), selector: (window as any).__uiSelector(el) })).catch(() => null);
     if (!info || !info.vis || info.link) continue;
     n++;
     const url = page.url();
@@ -628,12 +654,12 @@ export const collectSignatures = (page: Page, route: string) =>
       if (!(filled || outlined) || r.height < 28 || r.height > 72 || parseFloat(cs.paddingLeft) < 8) continue;
       if (el.closest("nav") && !filled) continue;
       const variant = filled ? `filled ${W.__uiRGBA(cs.backgroundColor).slice(0, 3).map((x: number) => Math.round(x / 8)).join(",")}` : "outlined";
-      sigs.push({ kind: "button", filled, variant, radius: Math.min(Math.round(parseFloat(cs.borderTopLeftRadius)), 999), height: Math.round(r.height), font: font(cs), size: Math.round(parseFloat(cs.fontSize)), weight: Number(cs.fontWeight), route, where: W.__uiDescribe(el) });
+      sigs.push({ kind: "button", filled, variant, radius: Math.min(Math.round(parseFloat(cs.borderTopLeftRadius)), 999), height: Math.round(r.height), font: font(cs), size: Math.round(parseFloat(cs.fontSize)), weight: Number(cs.fontWeight), route, where: W.__uiDescribe(el), selector: W.__uiSelector(el) });
     }
     for (const el of Array.from(document.querySelectorAll('input:not([type=hidden]):not([type=checkbox]):not([type=radio]), textarea, [role=combobox]'))) {
       if (!W.__uiVisible(el)) continue;
       const cs = getComputedStyle(el); const r = el.getBoundingClientRect();
-      sigs.push({ kind: "input", radius: Math.round(parseFloat(cs.borderTopLeftRadius)), height: el.tagName === "TEXTAREA" ? 0 : Math.round(r.height), font: font(cs), size: Math.round(parseFloat(cs.fontSize)), weight: Number(cs.fontWeight), route, where: W.__uiDescribe(el) });
+      sigs.push({ kind: "input", radius: Math.round(parseFloat(cs.borderTopLeftRadius)), height: el.tagName === "TEXTAREA" ? 0 : Math.round(r.height), font: font(cs), size: Math.round(parseFloat(cs.fontSize)), weight: Number(cs.fontWeight), route, where: W.__uiDescribe(el), selector: W.__uiSelector(el) });
     }
     for (const el of Array.from(document.querySelectorAll("main *, body > div *"))) {
       if (!W.__uiVisible(el)) continue;
@@ -643,7 +669,7 @@ export const collectSignatures = (page: Page, route: string) =>
       const shadow = cs.boxShadow !== "none";
       if (!(border || shadow) || parseFloat(cs.paddingTop) < 12) continue;
       const skin = `r${Math.round(parseFloat(cs.borderTopLeftRadius))} bg(${W.__uiRGBA(cs.backgroundColor).map((x: number) => Math.round(x * 20) / 20).join(",")}) b${cs.borderTopWidth} ${shadow ? "shadow" : "flat"} p${cs.paddingTop}`;
-      sigs.push({ kind: "card", skin, radius: Math.round(parseFloat(cs.borderTopLeftRadius)), height: 0, font: "", size: 0, weight: 0, route, where: W.__uiDescribe(el) });
+      sigs.push({ kind: "card", skin, radius: Math.round(parseFloat(cs.borderTopLeftRadius)), height: 0, font: "", size: 0, weight: 0, route, where: W.__uiDescribe(el), selector: W.__uiSelector(el) });
     }
     return sigs;
   }, route) as Promise<Sig[]>;
@@ -664,7 +690,7 @@ export const tableClipping = (page: Page) =>
     const W = window as any;
     // device width, not innerWidth: an overflowing page makes mobile Chrome widen the layout viewport
     if (Math.min(innerWidth, screen.width) > 640) return [];
-    const out: { what: string; where: string }[] = [];
+    const out: { what: string; where: string; selector?: string | null }[] = [];
     for (const t of Array.from(document.querySelectorAll("table")) as HTMLElement[]) {
       if (!W.__uiVisible(t)) continue;
       const tr = t.getBoundingClientRect();
@@ -680,7 +706,7 @@ export const tableClipping = (page: Page) =>
         const cols = Array.from((t.querySelector("tr") as HTMLElement | null)?.children || []) as HTMLElement[];
         const box = clip ? clip.getBoundingClientRect() : { left: 0, right: vw };
         const hidden = cols.filter((c) => { const r = c.getBoundingClientRect(); return r.right > box.right + 1 || r.left < box.left - 1; }).map((c) => (c.textContent || "").trim()).filter(Boolean);
-        out.push({ what: `table is ${Math.round(tr.width)}px wide in ${Math.round(visible)}px — columns cut or behind a sideways scroll${hidden.length ? ` (${hidden.join(", ")})` : ""}. Below 640px render each row as a stacked card [2.3, P16]`, where: W.__uiDescribe(t) });
+        out.push({ what: `table is ${Math.round(tr.width)}px wide in ${Math.round(visible)}px — columns cut or behind a sideways scroll${hidden.length ? ` (${hidden.join(", ")})` : ""}. Below 640px render each row as a stacked card [2.3, P16]`, where: W.__uiDescribe(t), selector: W.__uiSelector(t) });
       }
     }
     return out;

@@ -1,0 +1,12 @@
+{
+  "name": "@babysitter/studio",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Babysitter Studio — a visual review sandbox: a local proxy that injects a Shadow-DOM review panel into your dev site, and a WebSocket bus that lets a human approve or reject what the Babysitter CLI flagged.",
+  "type": "module",
+  "bin": { "babysitter-studio": "bin/studio.mjs" },
+  "exports": { ".": "./lib/server.js", "./review": "./lib/review-client.js" },
+  "engines": { "node": ">=22.18" },
+  "scripts": { "test": "node test/studio.test.mjs" },
+  "dependencies": { "http-proxy": "^1.18.1", "ws": "^8.18.0" }
+}
