@@ -1,13 +1,17 @@
 #!/usr/bin/env node
 /**
- * babysitter  — wire the guardrails into a product repo in one step, for a project being
+ * babysitter init — wire the guardrails into a product repo in one step, for a project being
  * generated right now or an existing one.
  *
- *   babysitter  [repo] [options]
+ *   babysitter init [repo] [options]
  *     --vendor       copy the tool into <repo>/tools/claudes-babysitter (default; works in CI and for teammates)
  *     --link         reference this checkout by absolute path instead (local machine only, nothing copied)
  *     --ci           also add .github/workflows/claudes-babysitter.yml
  *     --no-git-hook  do not install the git pre-commit gate
+ *     --new          a brand-new project: strict mode from the start (hooks block)
+ *     --existing     an existing project: adoption mode (hooks warn only, BABYSITTER-ADOPTION.md checklist)
+ *     --yes          never prompt (CI / generators)
+ *   Without --new/--existing an interactive terminal is asked; otherwise ≤ 5 pages → new, more → existing.
  *     --url URL      preview/production URL for the runtime checks
  *     --dev-url URL  local dev server (e.g. http://localhost:3000) for the rendered micro-check in the Stop hook
  *     --dry-run      print the plan, write nothing
@@ -21,6 +25,7 @@ import { existsSync, readFileSync, writeFileSync, mkdirSync, readdirSync, statSy
 import { join, relative, resolve, dirname } from "node:path";
 import { fileURLToPath } from "node:url";
 import { spawnSync, execSync } from "node:child_process";
+import * as clack from "@clack/prompts";
 
 const TOOL = resolve(dirname(fileURLToPath(import.meta.url)), "..");
 const args = process.argv.slice(2);
@@ -30,7 +35,7 @@ const repo = resolve(args.find((a, i) => !a.startsWith("--") && !(i > 0 && ["--u
 const DRY = has("dry-run");
 const mode = has("link") ? "link" : "vendor";
 
-if (!existsSync(join(repo, "package.json"))) { console.error(`babysitter : ${repo} has no package.json`); process.exit(2); }
+if (!existsSync(join(repo, "package.json"))) { console.error(`babysitter init: ${repo} has no package.json`); process.exit(2); }
 const plan = [];
 const say = (what, file) => plan.push(`  ${DRY ? "[plan]" : "✓"} ${what}${file ? ` → ${relative(repo, file) || "."}` : ""}`);
 const write = (file, content) => { if (!DRY) { mkdirSync(dirname(file), { recursive: true }); writeFileSync(file, content); } };
@@ -51,6 +56,29 @@ const shadcn = existsSync(join(repo, "components.json"));
 const themeFile = gitFiles.find((f) => /\.css$/.test(f) && !/\.min\./.test(f) && /--primary\s*:|@theme/.test(readFileSync(join(repo, f), "utf8"))) || gitFiles.find((f) => /globals\.s?css$/.test(f));
 const hasEmojiBrand = false;
 const detected = { framework: deps.next ? `next ${deps.next}` : deps.vite ? "vite" : "unknown", tailwind, cssLayers: layered, shadcn, kitDir: kitDir || "(none yet)", kitComponents: exported.length, themeFile: themeFile || "(none)" };
+
+/* ───────── 1b. where are we installing? (strict for a new project, adoption for an existing one) ───────── */
+const pageCount = gitFiles.filter((f) => /(^|\/)page\.(t|j)sx$/.test(f)).length;
+const prevCfg = readJson(join(repo, "babysitter.config.json"), null);
+const interactive = !!(process.stdin.isTTY && process.stdout.isTTY) && !DRY && !has("yes");
+let installMode = has("new") || has("strict") ? "strict" : has("existing") || has("adoption") ? "adoption" : opt("mode");
+const askedOrFlagged = !!installMode;
+if (!installMode && interactive) {
+  clack.intro("Claude's Babysitter");
+  const answer = await clack.select({
+    message: "Куда мы устанавливаем Babysitter?",
+    initialValue: prevCfg?.mode || (pageCount <= 5 ? "strict" : "adoption"),
+    options: [
+      { value: "strict", label: "В абсолютно новый проект", hint: "жёсткий режим со старта — хуки блокируют" },
+      { value: "adoption", label: "В уже существующий проект", hint: "мягкий режим аудита — хуки только предупреждают" },
+    ],
+  });
+  if (clack.isCancel(answer)) { clack.cancel("Установка отменена."); process.exit(1); }
+  installMode = answer;
+}
+if (!installMode) installMode = prevCfg?.mode || (pageCount <= 5 ? "strict" : "adoption");
+if (!["strict", "adoption"].includes(installMode)) { console.error(`babysitter init: unknown mode "${installMode}" (use --new or --existing)`); process.exit(2); }
+detected.installMode = installMode + (!askedOrFlagged && !interactive ? ` (auto: ${pageCount} page${pageCount === 1 ? "" : "s"})` : "");
 
 /* ───────── 2. tool location ───────── */
 const toolRel = mode === "vendor" ? "tools/claudes-babysitter" : null;
@@ -97,7 +125,9 @@ const cfg = {
   devServer: opt("dev-url") || prev?.devServer || "",
   // Theme First blocks every UI edit on a stock theme: right for a product being generated, too blunt for an
   // existing product with dozens of pages (turn it on when that product is re-themed)
-  themeFirst: prev?.themeFirst ?? (gitFiles.filter((f) => /(^|\/)page\.(t|j)sx$/.test(f)).length <= 5),
+  // adoption: hooks warn instead of blocking, Theme First stays off until the team switches to strict (enable-hooks)
+  mode: installMode,
+  themeFirst: installMode === "adoption" ? false : prev?.mode === "adoption" ? true : prev?.themeFirst ?? true,
   contrast: prev?.contrast ?? true,
   registry: opt("registry") || prev?.registry || "",
 };
@@ -127,9 +157,10 @@ say("Claude Code hooks: check after every edit, block finishing with UI problems
 const agentFile = ["CLAUDE.md", "AGENTS.md", ".claude/CLAUDE.md"].map((f) => join(repo, f)).find(existsSync) || join(repo, "CLAUDE.md");
 const checkCmd = mode === "vendor" ? `node ${toolRel}/bin/ui-check.mjs` : `node ${TOOL}/bin/ui-check.mjs`;
 let block = readFileSync(join(TOOL, "templates/AGENTS.babysitter.md"), "utf8").replace(/node tools\/claudes-babysitter\/bin\/ui-check\.mjs/g, checkCmd).replace(/tools\/claudes-babysitter/g, mode === "vendor" ? toolRel : TOOL);
-const START = "<!-- claudes-babysitter: (managed by `babysitter `, edit the config instead) -->", END = "<!-- claudes-babysitter: -->";
+const START = "<!-- claudes-babysitter:start (managed by `babysitter init`, edit the config instead) -->", END = "<!-- claudes-babysitter:end -->";
 const cur = existsSync(agentFile) ? readFileSync(agentFile, "utf8") : "";
-const re = /<!-- claudes-babysitter:[\s\S]*?<!-- claudes-babysitter: -->/;
+// also matches the markers older versions wrote (ui-guardrails:…, and a control character left by a rename)
+const re = /<!-- (?:claudes-babysitter|ui-guardrails):(?:start|\x01)[\s\S]*?<!-- (?:claudes-babysitter|ui-guardrails):(?:end|\x01) -->/;
 const next = re.test(cur) ? cur.replace(re, `${START}\n${block.trim()}\n${END}`) : `${cur.trimEnd()}${cur ? "\n\n" : ""}${START}\n${block.trim()}\n${END}\n`;
 write(agentFile, next);
 say(re.test(cur) ? "refreshed agent instructions" : "added agent instructions", agentFile);
@@ -158,6 +189,22 @@ if (!has("no-git-hook")) {
   }
 }
 
+/* ───────── 6c. `npm run babysitter -- <cmd>` in the project ───────── */
+// Not `npx babysitter`: the tool is vendored, not an npm dependency, and npx would download an unrelated
+// package called "babysitter" from the registry and run it.
+const runCmd = mode === "vendor" ? `node ${toolRel}/bin/babysitter.mjs` : `node ${TOOL}/bin/babysitter.mjs`;
+{
+  const pj = readJson(join(repo, "package.json"));
+  pj.scripts ||= {};
+  if (!pj.scripts.babysitter || /claudes-babysitter|bin\/babysitter\.mjs/.test(pj.scripts.babysitter)) {
+    if (pj.scripts.babysitter !== runCmd) {
+      pj.scripts.babysitter = runCmd;
+      write(join(repo, "package.json"), JSON.stringify(pj, null, 2) + "\n");
+      say("added the `babysitter` script (npm run babysitter -- audit | enable-hooks | check)", join(repo, "package.json"));
+    }
+  }
+}
+
 /* ───────── 7. CI (opt-in) ───────── */
 if (has("ci")) {
   const wf = join(repo, ".github/workflows/claudes-babysitter.yml");
@@ -168,7 +215,7 @@ if (has("ci")) {
 }
 
 /* ───────── 8. report ───────── */
-console.log(`babysitter  ${DRY ? "(dry run) " : ""}— ${relative(process.cwd(), repo) || "."}`);
+console.log(`babysitter init ${DRY ? "(dry run) " : ""}— ${relative(process.cwd(), repo) || "."}`);
 console.log("detected:", Object.entries(detected).map(([k, v]) => `${k}=${v}`).join("  "));
 console.log(plan.join("\n"));
 if (DRY) process.exit(0);
@@ -184,7 +231,7 @@ for (const p of problems) byRule[p.rule] = (byRule[p.rule] || 0) + 1;
 console.log("\nnext steps:");
 if (!kitDir) console.log("  1. There is no UI-kit yet. Create components/ui (e.g. `npx shadcn@latest init`) and re-run init so the kit is recorded.");
 const stock = theme.filter((t) => !/warning/.test(t.rule));
-if (stock.length && !cfg.themeFirst) console.log("  • Theme First is OFF for this existing product (more than 5 pages). Set \"themeFirst\": true once it is being re-themed.");
+if (stock.length && !cfg.themeFirst) console.log("  • Theme First is off in adoption mode. It switches on with `npm run babysitter -- enable-hooks`.");
 if (stock.length) console.log(`  • THEME FIRST: ${stock[0].msg}\n    Do this before building pages — every page inherits it.`);
 else if (shadcn) console.log("  • Theme: product-specific (not the stock shadcn look).");
 if (!cfg.baseURL) console.log("  • Set baseURL in babysitter.config.json (or pass --url) to enable the runtime checks.");
@@ -204,3 +251,48 @@ console.log(problems.length
   ? `  • Existing code: ${problems.length} problem(s) — ${Object.entries(byRule).sort((a, b) => b[1] - a[1]).slice(0, 5).map(([r, n]) => `${r} ${n}`).join(", ")}.\n    The hooks only block NEW problems on changed lines; this debt is listed for information.`
   : "  • Existing code: clean.");
 console.log(`  • Generators: hooks are active in Claude Code sessions opened in this repo. Manual check: ${checkCmd} --changed --format agent`);
+
+/* ───────── 9. adoption checklist + closing message ───────── */
+const summary = Object.entries(byRule).sort((a, b) => b[1] - a[1]);
+const group = (re) => summary.filter(([r]) => re.test(r)).reduce((n, [, c]) => n + c, 0);
+if (installMode === "adoption") {
+  const file = join(repo, "BABYSITTER-ADOPTION.md");
+  if (!existsSync(file) || has("force")) {
+    const today = new Date().toISOString().slice(0, 10);
+    const tick = String.fromCharCode(96);
+    const topLine = summary.length
+      ? "Чаще всего: " + summary.slice(0, 5).map(([r, n]) => tick + r + tick + " " + n).join(", ") + "."
+      : "Нарушений нет — можно сразу переходить к шагу 4.";
+    const md = `# Claude's Babysitter — внедрение в существующий проект
+
+Babysitter установлен в **мягком режиме аудита** (\`"mode": "adoption"\` в \`babysitter.config.json\`):
+хуки Claude Code и git \`pre-commit\` пока **только предупреждают** и ничего не блокируют, Theme First выключен.
+Пройдите шаги по порядку и отмечайте их здесь.
+
+- [x] **1. Инициализация** — выполнено ${today}: установлен мягкий режим.
+- [ ] **2. Глобальный аудит** — запустите \`npm run babysitter -- audit\`, чтобы оценить масштаб: AST-нарушения, контраст, мёртвый код.
+- [ ] **3. Изолированная зачистка** — создайте ветку \`chore/tech-debt\` и поручите AI или команде исправить найденное. Хуки в этом режиме подсказывают по ходу правок.
+- [ ] **4. Активация файрвола** — когда аудит станет зелёным, выполните \`npm run babysitter -- enable-hooks\`: режим в \`babysitter.config.json\` станет строгим (\`"mode": "strict"\`), хуки начнут блокировать. С этого момента грязный код не пройдёт.
+
+## Снимок на момент установки (${today})
+
+| Что | Сколько |
+|---|---|
+| AST-нарушения (стили, классы, контролы) | ${group(/^ui\//)} |
+| CSS (Stylelint) | ${group(/^(scale-unlimited|declaration|color-named|selector|ui\/(require-layer|token-values|apply-values|z-index-scale))/)} |
+| Контраст темы | ${group(/^theme\/contrast/)} |
+| Компоненты: мёртвые, дубли, повторяющаяся разметка | ${group(/^ui-audit\/components/)} |
+| **Всего** | **${problems.length}** |
+
+${topLine}
+
+> Почему \`npm run babysitter\`, а не \`npx babysitter\`: инструмент лежит в проекте (\`tools/claudes-babysitter\`) и не является npm-пакетом — \`npx babysitter\` скачал бы из npm постороннюю программу с таким именем.
+`;
+    write(file, md);
+    console.log(`  ✓ adoption checklist → ${relative(repo, file)}`);
+  }
+}
+const done = installMode === "adoption"
+  ? "✅ Babysitter установлен в режиме аудита! Откройте BABYSITTER-ADOPTION.md для получения дальнейших инструкций."
+  : "✅ Babysitter установлен в строгом режиме: хуки блокируют нарушения с первой правки.";
+if (interactive) clack.outro(done); else console.log("\n" + done);

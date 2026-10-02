@@ -5,6 +5,7 @@
 import { spawnSync, execSync } from "node:child_process";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
+import { projectMode, ADOPTION_NOTE } from "../lib/mode.js";
 
 const here = dirname(fileURLToPath(import.meta.url));
 const repo = execSync("git rev-parse --show-toplevel", { encoding: "utf8" }).trim();
@@ -12,6 +13,10 @@ const run = (script, args) => spawnSync(process.execPath, [join(here, script), .
 const check = run("ui-check.mjs", ["--repo", repo, "--changed", "HEAD", "--format", "agent"]);
 let failed = check.status === 1, out = check.stdout;
 if (!failed) { const m = run("micro-check.mjs", ["--repo", repo]); if (m.status === 1) { failed = true; out = m.stdout; } }
+if (failed && projectMode(repo) === "adoption") {
+  process.stderr.write(`\n⚠️  Claude's Babysitter (${ADOPTION_NOTE}):\n\n${out}\n`);
+  process.exit(0);
+}
 if (failed) {
   process.stderr.write(`\n✋ Claude's Babysitter blocked this commit.\n\n${out}\n(Fix the items above and commit again. To bypass deliberately: git commit --no-verify)\n`);
   process.exit(1);

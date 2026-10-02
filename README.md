@@ -18,20 +18,38 @@ It enforces [`docs/ui-architecture-guidelines.md`](docs/ui-architecture-guidelin
 Requires Node ≥ 22.18 and a git repo.
 
 ```bash
-# in your project
-npx github:souldevsoul/claudes-babysitter init . --dev-url http://localhost:3000 --ci
+# in your project — an interactive wizard asks: new project (strict) or existing project (adoption)?
+npx github:souldevsoul/claudes-babysitter init .
+# no terminal (CI, generators): pass the answer
+npx github:souldevsoul/claudes-babysitter init . --new        # strict from the start
+npx github:souldevsoul/claudes-babysitter init . --existing   # adoption mode
 ```
 
-`init` vendors the tool into `tools/claudes-babysitter`, writes `babysitter.config.json`, adds the Claude Code hooks to `.claude/settings.json`, the agent rules to `CLAUDE.md`/`AGENTS.md`, the git pre-commit gate and (with `--ci`) a GitHub Actions workflow. Then it reports the theme verdict, contrast, look-alikes and existing debt. It is safe to re-run.
+| | New project (`--new`, strict) | Existing project (`--existing`, adoption) |
+|---|---|---|
+| Hooks (Claude Code + git pre-commit) | block new problems | **warn only**: the model gets the report as context, commits go through |
+| Theme First | on | off |
+| Checklist | — | `BABYSITTER-ADOPTION.md`: init → audit → clean up on `chore/tech-debt` → enable the firewall |
+
+`init` also does the following:
+
+1. Vendors the tool into `tools/claudes-babysitter`.
+2. Writes `babysitter.config.json` (with `"mode"`).
+3. Adds the Claude Code hooks, the agent rules in `CLAUDE.md`/`AGENTS.md` and the git pre-commit gate.
+4. Adds a `babysitter` script to your `package.json`.
+
+Then use it through npm:
 
 ```bash
-npx github:souldevsoul/claudes-babysitter check --changed --format agent   # what a generator sees
-npx github:souldevsoul/claudes-babysitter audit .                           # reuse + theme audit
-npx github:souldevsoul/claudes-babysitter fingerprint . --register          # theme fingerprint / look-alikes
-npx github:souldevsoul/claudes-babysitter micro-check --url http://localhost:3000 --routes /,/pricing
+npm run babysitter -- audit           # the whole picture: AST, CSS, contrast, dead/duplicated components
+npm run babysitter -- enable-hooks    # adoption → strict, once the audit is green (--force to switch anyway)
+npm run babysitter -- check --changed --format agent   # what a generator sees
+npm run babysitter -- fingerprint . --register         # theme fingerprint / look-alikes
 ```
 
-Or install it as a dev dependency: `npm i -D github:souldevsoul/claudes-babysitter`. Then use `npx babysitter …`, and `import ui from "claudes-babysitter/eslint"` / `"claudes-babysitter/stylelint"` in your own configs.
+> Use `npm run babysitter`, not a bare `npx babysitter`. The tool is vendored, not an npm dependency, so `npx babysitter` would download an unrelated package with that name from the registry.
+
+Or install it as a dev dependency: `npm i -D github:souldevsoul/claudes-babysitter`. Then use `npx babysitter …`, which resolves to your installed copy, and `import ui from "claudes-babysitter/eslint"` / `"claudes-babysitter/stylelint"` in your own configs.
 
 ## Layout
 
@@ -45,6 +63,18 @@ Or install it as a dev dependency: `npm i -D github:souldevsoul/claudes-babysitt
 | `templates/` | Config, CI workflow, agent instructions, Claude settings |
 | `docs/` | The guidelines the rules enforce |
 | `test/`, `fixtures/` | `npm test`: RuleTester, Stylelint fixtures, end-to-end cases |
+
+## What changed in 3.4 (adoption wizard)
+
+- **`init` is an interactive wizard** (`@clack/prompts`): "Куда мы устанавливаем Babysitter?" → a new project (strict) or an existing project (adoption).
+  - With no terminal, `--new` / `--existing` answer it.
+  - Without a flag, ≤ 5 pages means new and more means existing.
+- **Adoption mode** (`"mode": "adoption"`, `"themeFirst": false`). The PostToolUse hook returns the report as `additionalContext` instead of blocking, the Stop hook only notes it, and the pre-commit gate prints a warning and lets the commit through.
+- **`BABYSITTER-ADOPTION.md`**: a 4-step checklist with a snapshot of the current debt. `audit` ticks step 2 (and 3 when green), and `enable-hooks` ticks step 4.
+- **`babysitter audit`** is now the whole-project summary. The reuse/theme audit alone is `audit-components`.
+- **`babysitter enable-hooks`** re-runs `init` in strict mode (hooks refreshed, Theme First on). It refuses until the audit is green; `--force` switches anyway, since old debt never blocks, only changed lines do.
+- **`npm run babysitter`** script added to the project.
+- **Fixed**: a rename in 2.3 had left a control character in place of "init"/"start"/"end" in messages, the ESLint config names and the `CLAUDE.md` markers. Re-running `init` now finds the old markers and replaces them.
 
 ## What changed in 3.3.1
 

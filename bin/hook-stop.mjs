@@ -6,6 +6,7 @@ import { spawnSync } from "node:child_process";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { existsSync, readFileSync, writeFileSync, mkdirSync } from "node:fs";
+import { projectMode, ADOPTION_NOTE } from "../lib/mode.js";
 
 let input = "";
 for await (const chunk of process.stdin) input += chunk;
@@ -24,6 +25,11 @@ if (!failed) {
   if (m.status === 1) { failed = true; report = m.stdout; }
 }
 if (!failed) { writeFileSync(counter, "0"); process.exit(0); }
+if (projectMode(repo) === "adoption") {
+  const n = (report.match(/(\d+) problem\(s\)/) || [])[1] || "some";
+  process.stdout.write(JSON.stringify({ systemMessage: `Claude's Babysitter: ${n} UI problem(s) in the changed code (${ADOPTION_NOTE}).` }));
+  process.exit(0);
+}
 
 const n = (existsSync(counter) ? Number(readFileSync(counter, "utf8")) || 0 : 0) + 1;
 writeFileSync(counter, String(n));

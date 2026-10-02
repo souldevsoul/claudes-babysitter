@@ -1,5 +1,5 @@
 // End-to-end checks of bin/ui-check.mjs on throwaway git repos (created in the OS temp dir).
-import { mkdtempSync, mkdirSync, writeFileSync, rmSync, readFileSync } from "node:fs";
+import { mkdtempSync, mkdirSync, writeFileSync, rmSync, readFileSync, existsSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join, dirname } from "node:path";
 import { execSync, spawnSync } from "node:child_process";
@@ -136,6 +136,57 @@ t("red-team: a kit component that is only mentioned (void X) is still an orphan"
   }));
   const r = spawnSync(process.execPath, [join(dirname(CHECK), "ui-audit.mjs"), d, "--only", "components", "--json"], { encoding: "utf8" });
   assert.ok(JSON.parse(r.stdout).some((x) => /PaymentBadge is a shared component that nothing imports/.test(x.msg)), r.stdout);
+});
+
+t("adoption mode: init --existing warns instead of blocking, writes the checklist; audit ticks step 2; enable-hooks goes strict", (mk) => {
+  const BIN = dirname(CHECK);
+  const d = mk(shadcn(OWN, {
+    "src/app/layout.tsx": 'import { Fraunces } from "next/font/google";\nexport default function L({ children }) { return <html><body>{children}</body></html>; }\n',
+    "src/app/old/page.tsx": "export default function Old(){ return <select />; }\n", // existing debt
+  }));
+  const init = spawnSync(process.execPath, [join(BIN, "ui-init.mjs"), d, "--existing", "--link", "--no-install"], { encoding: "utf8" });
+  assert.equal(init.status, 0, init.stderr);
+  assert.match(init.stdout, /✅ Babysitter установлен в режиме аудита! Откройте BABYSITTER-ADOPTION\.md/);
+  const cfg = JSON.parse(readFileSync(join(d, "babysitter.config.json"), "utf8"));
+  assert.equal(cfg.mode, "adoption"); assert.equal(cfg.themeFirst, false);
+  const md = readFileSync(join(d, "BABYSITTER-ADOPTION.md"), "utf8");
+  assert.match(md, /- \[x\] \*\*1\. Инициализация/);
+  for (const n of [2, 3, 4]) assert.match(md, new RegExp(`- \\[ \\] \\*\\*${n}\\.`));
+  assert.match(md, /chore\/tech-debt/); assert.match(md, /enable-hooks/);
+  assert.match(JSON.parse(readFileSync(join(d, "package.json"), "utf8")).scripts.babysitter, /bin\/babysitter\.mjs/);
+  execSync("git add -A && git -c user.email=t@t -c user.name=t commit -qm init --no-verify", { cwd: d });
+
+  // the editor hook warns the model but does not block
+  writeFileSync(join(d, "src/app/page.tsx"), "export default function P(){ return <select />; }\n");
+  const hook = spawnSync(process.execPath, [join(BIN, "hook-post-edit.mjs")], { input: JSON.stringify({ tool_input: { file_path: join(d, "src/app/page.tsx") } }), env: { ...process.env, CLAUDE_PROJECT_DIR: d }, encoding: "utf8" });
+  assert.equal(hook.status, 0);
+  assert.match(JSON.parse(hook.stdout).hookSpecificOutput.additionalContext, /adoption mode.*no-native-controls/s);
+  // the commit gate warns but lets it through
+  const soft = spawnSync("sh", ["-c", "git add -A && git -c user.email=t@t -c user.name=t commit -qm soft"], { cwd: d, encoding: "utf8" });
+  assert.equal(soft.status, 0, soft.stderr); assert.match(soft.stderr, /adoption mode/);
+
+  // audit ticks step 2; enable-hooks refuses while not green, --force goes strict and ticks step 4
+  spawnSync(process.execPath, [join(BIN, "audit-summary.mjs"), d], { encoding: "utf8" });
+  assert.match(readFileSync(join(d, "BABYSITTER-ADOPTION.md"), "utf8"), /- \[x\] \*\*2\./);
+  const refuse = spawnSync(process.execPath, [join(BIN, "enable-hooks.mjs"), d], { encoding: "utf8" });
+  assert.equal(refuse.status, 1); assert.match(refuse.stderr, /не зелёный/);
+  const force = spawnSync(process.execPath, [join(BIN, "enable-hooks.mjs"), d, "--force"], { encoding: "utf8" });
+  assert.equal(force.status, 0, force.stderr + force.stdout);
+  assert.equal(JSON.parse(readFileSync(join(d, "babysitter.config.json"), "utf8")).mode, "strict");
+  assert.match(readFileSync(join(d, "BABYSITTER-ADOPTION.md"), "utf8"), /- \[x\] \*\*4\./);
+  // now the same kind of change is blocked
+  writeFileSync(join(d, "src/app/page.tsx"), "export default function P(){ return <div><select /><select /></div>; }\n");
+  const hard = spawnSync("sh", ["-c", "git add -A && git -c user.email=t@t -c user.name=t commit -qm hard"], { cwd: d, encoding: "utf8" });
+  assert.notEqual(hard.status, 0); assert.match(hard.stderr, /blocked this commit/);
+});
+
+t("init without --new/--existing and without a terminal picks by size: a small fresh project is strict", (mk) => {
+  const d = mk(shadcn(OWN));
+  const init = spawnSync(process.execPath, [join(dirname(CHECK), "ui-init.mjs"), d, "--link", "--no-install"], { encoding: "utf8" });
+  assert.equal(init.status, 0, init.stderr);
+  assert.match(init.stdout, /installMode=strict \(auto/);
+  assert.equal(JSON.parse(readFileSync(join(d, "babysitter.config.json"), "utf8")).mode, "strict");
+  assert.ok(!existsSync(join(d, "BABYSITTER-ADOPTION.md")));
 });
 
 t("@apply with arbitrary values is blocked, theme utilities pass", (mk) => {

@@ -45,7 +45,7 @@ plugin.configs.create = (project = {}) => {
   const uiKitPaths = project.uiKitPaths || ["**/components/ui/**"];
   return [
     {
-      name: "babysitter/",
+      name: "babysitter/recommended",
       files: ["**/*.{jsx,tsx,ts,js,mjs}"],
       plugins: { ui: plugin },
       rules: {
@@ -71,7 +71,7 @@ plugin.configs.create = (project = {}) => {
     },
     {
       // The kit itself wraps native elements and defines the visual classes.
-      name: "babysitter/",
+      name: "babysitter/ui-kit",
       files: uiKitPaths.map((p) => `${p.replace(/\/\*\*$/, "")}/**/*.{jsx,tsx,ts,js,mjs}`),
       rules: { "ui/no-native-controls": "off", "ui/no-visual-classname-override": "off", "ui/no-adhoc-button": "off", "ui/no-inline-style": "off" },
     },
