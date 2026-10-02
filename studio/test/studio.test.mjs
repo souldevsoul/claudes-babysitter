@@ -307,6 +307,10 @@ try {
     const ap = await freePort();
     const after = spawn(process.execPath, [join(proj, "server.js"), "--port", String(ap)], { cwd: proj });
     await new Promise((r) => after.stdout.once("data", r));
+    // a Studio killed mid-cleanup leaves a half-deleted worktree of the base behind: it must not be reused
+    const sha = execSync("git rev-parse HEAD", { cwd: proj, encoding: "utf8" }).trim();
+    const leftover = join(tmpdir(), `babysitter-base-${proj.split("/").pop()}-${sha.slice(0, 12)}`);
+    mkdirSync(leftover, { recursive: true }); writeFileSync(join(leftover, ".git"), "gitdir: /nowhere\n");
     const studio2 = await startStudio({ port: 0, target: `http://127.0.0.1:${ap}`, log: () => {} });
     const base2 = `http://localhost:${studio2.port}`;
     try {
@@ -655,6 +659,29 @@ try {
 } finally {
   await studio.close();
   target.close();
+}
+
+// the bus captures only the newest request of a panel: a reviewer who scrolled on does not wait behind old captures
+{
+  const { createBus } = await import("../lib/bus.js");
+  const calls = [];
+  const bus = createBus({ onCompare: async ({ path }) => { calls.push(path); await new Promise((r) => setTimeout(r, 300)); return { before: Buffer.from("b"), after: Buffer.from("a") }; } });
+  const srv = http.createServer(); srv.on("upgrade", (req, socket, head) => bus.handleUpgrade(req, socket, head));
+  await new Promise((r) => srv.listen(0, "127.0.0.1", r));
+  const url = (role) => `ws://127.0.0.1:${srv.address().port}${PATH}?role=${role}`;
+  const open = (ws) => new Promise((r) => ws.once("open", r));
+  const cli = new WebSocket(url("cli")); await open(cli);
+  cli.send(JSON.stringify({ type: "REVIEW_REQUIRED", reviewId: "r1", title: "t", problems: [], diff: { repo: "/x", base: "HEAD" } }));
+  const panel = new WebSocket(url("studio")); await open(panel);
+  const ready = []; panel.on("message", (raw) => { const m = JSON.parse(String(raw)); if (m.type === "COMPARE_READY") ready.push(m.reqId); });
+  await new Promise((r) => setTimeout(r, 100));
+  for (const [reqId, path] of [["1", "/a"], ["2", "/b"], ["3", "/c"], ["4", "/d"]]) panel.send(JSON.stringify({ type: "COMPARE", reviewId: "r1", reqId, path }));
+  await new Promise((r) => setTimeout(r, 1200));
+  assert.equal(calls.at(-1), "/d", "the newest request is captured");
+  assert.ok(calls.length <= 2 && !calls.includes("/b") && !calls.includes("/c"), `superseded requests are skipped: ${calls}`);
+  assert.equal(ready.at(-1), "4");
+  cli.close(); panel.close(); bus.close(); srv.close();
+  ok("Before/After: superseded capture requests are skipped (scrolling on never queues minutes of captures)");
 }
 
 // 6. no studio → exit 2 so the git hook can fall back to plain blocking

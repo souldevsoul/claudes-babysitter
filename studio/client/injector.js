@@ -217,7 +217,10 @@
     cmp.want = true;
     const hit = shots.get(viewKey());
     if (hit) { Object.assign(cmp, hit, { key: viewKey(), on: true }); renderCompare(); return; }
-    cmp.on = false; requestCompare(); renderCompare();
+    cmp.on = false;
+    // already being captured for this very view (Slider / Differences pressed while waiting): wait for it
+    if (!(cmp.pending && cmp.pending.key === viewKey())) requestCompare();
+    renderCompare();
   }
   function exitCompare() { Object.assign(cmp, { on: false, want: false, side: "AFTER", slider: false, diffs: false, pending: null }); renderCompare(); }
   function renderCompare() {

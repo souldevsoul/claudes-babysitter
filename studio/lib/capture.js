@@ -42,7 +42,9 @@ export async function capture(url, { width = 1280, height = 800, dpr = 1, scroll
     await page.waitForLoadState("networkidle", { timeout: 8000 }).catch(() => {});
     await page.evaluate((y) => window.scrollTo(0, y), scrollY);
     await page.waitForTimeout(400);                 // real time for fonts and lazy images
-    await page.clock.runFor(60_000);                // the same virtual minute on both sides: reveals done
+    // the same virtual minute on both sides, jumped over (each due timer fires once) rather than stepped
+    // through frame by frame: a page with endless animation loops (Lenis, GSAP) took 35 s to step through
+    await page.clock.fastForward(60_000);
     await page.evaluate((y) => window.scrollTo(0, y), scrollY); // layout may have shifted while loading
     await page.waitForTimeout(150);
     await page.clock.runFor(1500);                  // reveal animations at this position finish (virtually)

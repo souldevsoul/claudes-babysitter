@@ -67,7 +67,11 @@ export function createBus({ log = () => {}, onCompare = null } = {}) {
         const view = { width: num(m.width, 320, 3840, 1280), height: num(m.height, 240, 2400, 800), dpr: num(m.dpr, 1, 3, 1), scrollY: num(m.scrollY, 0, 1e6, 0),
           storage: Object.fromEntries(Object.entries(m.storage && typeof m.storage === "object" ? m.storage : {}).filter(([k, v]) => typeof k === "string" && typeof v === "string").slice(0, 100).map(([k, v]) => [k.slice(0, 200), v.slice(0, 5000)])),
           cookies: typeof m.cookies === "string" ? m.cookies.slice(0, 4000) : "" };
+        // only the newest request of each panel is worth capturing: a reviewer who scrolled on, or asked again,
+        // must not wait behind captures nobody will look at
+        (r.latest ||= new WeakMap()).set(ws, reqId);
         r.compareQ = (r.compareQ || Promise.resolve()).then(async () => {
+          if (r.latest.get(ws) !== reqId) return;
           try {
             const { before, after } = await onCompare({ repo: r.msg.diff.repo, base: r.msg.diff.base || "HEAD", path, view, progress: (stage) => send(ws, { type: "COMPARE_PROGRESS", reviewId: m.reviewId, reqId, stage }) });
             send(ws, { type: "COMPARE_READY", reviewId: m.reviewId, reqId, before: `data:image/png;base64,${before.toString("base64")}`, after: `data:image/png;base64,${after.toString("base64")}` });

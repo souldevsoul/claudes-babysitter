@@ -2,7 +2,7 @@
 // own server, never touching their working tree or their open page. Studio captures both and the panel
 // flips between them instantly.
 //
-//   worktree   <tmp>/babysitter-base-<repo>-<sha12>, detached at the base commit (reused while the sha matches)
+//   worktree   <tmp>/babysitter-base-<repo>-<sha12>, detached at the base commit, checked out fresh (leftovers of a killed Studio are cleared)
 //   deps       node_modules is linked from the repo (no reinstall); .env* files are copied (they are untracked)
 //   server     Next → `next dev --webpack` (Turbopack refuses a node_modules link that points outside its root),
 //              Vite → `vite --port`, anything else → `npm run dev -- --port` with PORT set
@@ -36,6 +36,13 @@ async function waitUp(url, child, ms) {
   throw new Error("the base dev server did not answer in time");
 }
 
+function clearWorktree(repo, dir) {
+  try { git(repo, "worktree", "unlock", dir); } catch {}
+  try { git(repo, "worktree", "remove", "--force", "--force", dir); } catch {}
+  rmSync(dir, { recursive: true, force: true });
+  try { git(repo, "worktree", "prune"); } catch {}
+}
+
 /** Start (or reuse) the dev server of `ref` for `repo`. Resolves to { url, sha, dir, stop }. */
 export function baseSite({ repo, ref = "HEAD", log = () => {}, timeoutMs = 180000 }) {
   const sha = git(repo, "rev-parse", "--verify", `${ref}^{commit}`);
@@ -43,11 +50,10 @@ export function baseSite({ repo, ref = "HEAD", log = () => {}, timeoutMs = 18000
   if (sites.has(key)) return sites.get(key);
   const started = (async () => {
     const dir = join(tmpdir(), `babysitter-base-${basename(repo).replace(/[^\w.-]/g, "_")}-${sha.slice(0, 12)}`);
-    if (!existsSync(join(dir, ".git"))) {
-      rmSync(dir, { recursive: true, force: true });
-      try { git(repo, "worktree", "prune"); } catch {}
-      git(repo, "worktree", "add", "--detach", "-f", dir, sha);
-    }
+    // always a fresh checkout: a Studio killed mid-cleanup leaves a half-deleted worktree behind (its .git file
+    // but no package.json → the wrong dev command → a server that never starts), or a "locked" one
+    clearWorktree(repo, dir);
+    git(repo, "worktree", "add", "--detach", "-f", "-f", dir, sha);
     if (!existsSync(join(dir, "node_modules")) && existsSync(join(repo, "node_modules"))) symlinkSync(join(repo, "node_modules"), join(dir, "node_modules"), "dir");
     for (const f of readdirSync(repo)) if (/^\.env(\..+)?$/.test(f) && !existsSync(join(dir, f))) copyFileSync(join(repo, f), join(dir, f));
     const port = await freePort();
@@ -57,8 +63,7 @@ export function baseSite({ repo, ref = "HEAD", log = () => {}, timeoutMs = 18000
     const url = `http://127.0.0.1:${port}`;
     const stop = () => {
       try { process.platform !== "win32" ? process.kill(-child.pid, "SIGTERM") : child.kill(); } catch {}
-      rmSync(dir, { recursive: true, force: true });
-      try { git(repo, "worktree", "prune"); } catch {}
+      clearWorktree(repo, dir);
       sites.delete(key);
     };
     cleanups.add(stop);
