@@ -46,6 +46,7 @@
   .tag { position: absolute; top: -12px; left: -12px; min-width: 20px; height: 20px; padding: 0 6px; border-radius: 10px; background: #ef4444; color: #fff; font: 600 11px/20px ui-sans-serif, system-ui; text-align: center; }
   .panel { position: fixed; left: 50%; bottom: 16px; transform: translateX(-50%); width: min(560px, calc(100vw - 32px)); pointer-events: auto;
     background: #111318; color: #f4f4f5; border: 1px solid #2a2d35; border-radius: 14px; box-shadow: 0 12px 40px rgb(0 0 0 / .45); overflow: hidden; }
+  .head button { flex: none; white-space: nowrap; }
   .head { display: flex; align-items: center; gap: 8px; padding: 10px 14px; border-bottom: 1px solid #23262d; font-size: 13px; cursor: grab; user-select: none; touch-action: none; }
   .panel.dragging .head { cursor: grabbing; }
   .panel.dragging { transition: none; box-shadow: 0 18px 50px rgb(0 0 0 / .55); }
@@ -65,7 +66,7 @@
   .seg button:disabled { opacity: .45; }
   .dot { width: 8px; height: 8px; border-radius: 50%; background: #71717a; }
   .dot.on { background: #22c55e; } .dot.alert { background: #ef4444; }
-  .title { font-weight: 600; flex: 1; } .muted { color: #a1a1aa; font-size: 12px; }
+  .title { font-weight: 600; flex: 1 0 auto; white-space: nowrap; } .status { flex: 0 1 auto; min-width: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; } .muted { color: #a1a1aa; font-size: 12px; }
   .list { max-height: min(46vh, 360px); overflow: auto; overscroll-behavior: contain; margin: 0; padding: 6px 0; list-style: none; }
   .list li { display: flex; gap: 8px; padding: 6px 14px; font-size: 12.5px; line-height: 1.4; cursor: pointer; }
   .list li:hover { background: #1b1e25; }
@@ -82,8 +83,8 @@
   .min { padding: 8px 14px; font-size: 12px; display: flex; align-items: center; gap: 8px; }
   /* Time Travel: After / Before (HEAD) */
   .tt { display: flex; align-items: center; gap: 10px; padding: 8px 14px; border-bottom: 1px solid #23262d; font-size: 12px; }
-  .seg { display: inline-flex; padding: 2px; border-radius: 8px; background: #0b0c0f; border: 1px solid #3f3f46; }
-  .seg button { padding: 4px 10px; font-size: 12px; font-weight: 600; border-radius: 6px; background: transparent; color: #a1a1aa; }
+  .seg { flex: none; display: inline-flex; padding: 2px; border-radius: 8px; background: #0b0c0f; border: 1px solid #3f3f46; }
+  .seg button { white-space: nowrap; padding: 4px 10px; font-size: 12px; font-weight: 600; border-radius: 6px; background: transparent; color: #a1a1aa; }
   .seg button[aria-pressed="true"] { background: #f4f4f5; color: #111318; }
   .panel.before { background: #231d0b; border-color: #a16207; }
   .panel.before .head, .panel.before .tt, .panel.before .foot { border-color: #3d3210; }
@@ -91,6 +92,12 @@
   .tt .err { color: #fca5a5; }
   .layer.hidden { display: none; }
   /* Visual Prompting: blue = a human's note, red = the automation's finding */
+  .box.code { border: 2px dashed #eab308; background: none; }
+  .box.code.pulse { box-shadow: 0 0 0 6px rgb(234 179 8 / 0.35); }
+  .box.code .tag, .n.code { background: #facc15; color: #1c1503; }
+  .list li.sep { display: block; cursor: default; padding: 10px 14px 4px; font-size: 11.5px; color: #facc15; border-top: 1px solid #23262d; margin-top: 4px; }
+  .list li.sep:hover { background: none; }
+  .list li.sep span { color: #a1a1aa; }
   .box.note { border-color: #3b82f6; background: rgb(59 130 246 / 0.08); }
   .box.note .tag { background: #2563eb; }
   .pick { position: fixed; inset: 0; pointer-events: none; }
@@ -139,8 +146,8 @@
   const prefs = { get() { try { return JSON.parse(localStorage.getItem(PREF_KEY) || "{}"); } catch { return {}; } }, set(v) { try { localStorage.setItem(PREF_KEY, JSON.stringify({ ...prefs.get(), ...v })); } catch {} } };
   let LANG = prefs.get().lang || (/^ru\b/i.test(navigator.language || "") ? "ru" : "en");
   const DICT = {
-    en: { problems: (n) => `${n} problem${n === 1 ? "" : "s"}`, paused: "the CLI is paused until you decide", after: "After", before: "👁 Before", viewing: (b) => `Viewing ${b} · frames hidden`, differ: (n, b) => `Your changes · ${n} file(s) differ from ${b}`, cmpHint: (n, b) => `Your changes · ${n} file(s) differ from ${b} · Before = a snapshot right here, no reload (B)`, switching: "Swapping the files and waiting for the dev server to rebuild (~5 s)…", startingBase: (b) => `Starting a dev server of ${b} next to yours (first time ~10–30 s)…`, capturing: "Capturing both versions at your scroll position…", cmpBefore: (b) => `Snapshot of ${b} · B flips · scroll re-captures`, cmpAfter: "Snapshot of your changes · B flips", slider: "⇆ Slider", diffs: "◫ Differences", exit: "✕ Live page", live: "↻ Live", liveBack: "↺ Back to your changes", noDiffHere: "No visible differences on this screen", diffCount: (n) => `${n} changed area(s) highlighted`, badgeBefore: (b) => `BEFORE · ${b}`, badgeAfter: "AFTER", framesOn: "Frames on the page: on", framesOff: "Frames on the page: off (click an entry to see its frame)", nothing: "Nothing to compare — no changed UI files", noRepo: "Before/After needs the review's repository (the hooks pass it; studio review --repo)", details: "details", pages: (n) => `on ${n} pages`, places: (n) => `${n} places`, otherPage: (r) => `on ${r}`, placeholder: "What should change? Send Comment returns the work to its author with this brief…", send: "Send Comment", reject: "Reject", approve: "Approve" },
-    ru: { problems: (n) => `${n} ${n % 10 === 1 && n % 100 !== 11 ? "проблема" : n % 10 >= 2 && n % 10 <= 4 && (n % 100 < 12 || n % 100 > 14) ? "проблемы" : "проблем"}`, paused: "проверка ждёт вашего решения", after: "После", before: "👁 До", viewing: (b) => `Показано состояние ${b} · рамки скрыты`, differ: (n, b) => `Ваши изменения · ${n} файл(ов) отличаются от ${b}`, cmpHint: (n, b) => `Ваши изменения · ${n} файл(ов) отличаются от ${b} · «До» — снимок прямо здесь, без перезагрузки (B)`, switching: "Подменяю файлы и жду, пока dev-сервер пересоберёт (~5 с)…", startingBase: (b) => `Запускаю рядом dev-сервер версии ${b} (в первый раз ~10–30 с)…`, capturing: "Снимаю обе версии на вашей прокрутке…", cmpBefore: (b) => `Снимок версии ${b} · B — переключить · при прокрутке пересниму`, cmpAfter: "Снимок ваших изменений · B — переключить", slider: "⇆ Шторка", diffs: "◫ Отличия", exit: "✕ Живая страница", live: "↻ Вживую", liveBack: "↺ Вернуть ваши изменения", noDiffHere: "На этом экране видимых отличий нет", diffCount: (n) => `Подсвечено изменённых мест: ${n}`, badgeBefore: (b) => `ДО · ${b}`, badgeAfter: "ПОСЛЕ", framesOn: "Рамки на странице: включены", framesOff: "Рамки на странице: выключены (клик по пункту покажет его рамку)", nothing: "Сравнивать нечего — изменённых UI-файлов нет", noRepo: "Для «До / После» ревью нужен репозиторий (хуки передают его сами; studio review --repo)", details: "подробности", pages: (n) => `на ${n} страницах`, places: (n) => `${n} мест`, otherPage: (r) => `на странице ${r}`, placeholder: "Что изменить? Send Comment вернёт работу автору с этим заданием…", send: "Send Comment", reject: "Reject", approve: "Approve" },
+    en: { problems: (n) => `${n} problem${n === 1 ? "" : "s"}`, paused: "the CLI is paused until you decide", after: "After", before: "👁 Before", viewing: (b) => `Viewing ${b} · frames hidden`, differ: (n, b) => `Your changes · ${n} file(s) differ from ${b}`, cmpHint: (n, b) => `Your changes · ${n} file(s) differ from ${b} · Before = a snapshot right here, no reload (B)`, switching: "Swapping the files and waiting for the dev server to rebuild (~5 s)…", startingBase: (b) => `Starting a dev server of ${b} next to yours (first time ~10–30 s)…`, capturing: "Capturing both versions at your scroll position…", cmpBefore: (b) => `Snapshot of ${b} · B flips · scroll re-captures`, cmpAfter: "Snapshot of your changes · B flips", slider: "⇆ Slider", diffs: "◫ Differences", exit: "✕ Live page", live: "↻ Live", liveBack: "↺ Back to your changes", noDiffHere: "No visible differences on this screen", diffCount: (n) => `${n} changed area(s) highlighted`, badgeBefore: (b) => `BEFORE · ${b}`, badgeAfter: "AFTER", framesOn: "Frames on the page: on", framesOff: "Frames on the page: off (click an entry to see its frame)", nothing: "Nothing to compare — no changed UI files", noRepo: "Before/After needs the review's repository (the hooks pass it; studio review --repo)", details: "details", split: (v, c) => `${v} visible · ${c} in code`, codeOnly: (n) => `Not visible on the page — only in the code (${n}) <span>· yellow frames: fixing them changes nothing you can see</span>`, pages: (n) => `on ${n} pages`, places: (n) => `${n} places`, otherPage: (r) => `on ${r}`, placeholder: "What should change? Send Comment returns the work to its author with this brief…", send: "Send Comment", reject: "Reject", approve: "Approve" },
+    ru: { problems: (n) => `${n} ${n % 10 === 1 && n % 100 !== 11 ? "проблема" : n % 10 >= 2 && n % 10 <= 4 && (n % 100 < 12 || n % 100 > 14) ? "проблемы" : "проблем"}`, paused: "проверка ждёт вашего решения", after: "После", before: "👁 До", viewing: (b) => `Показано состояние ${b} · рамки скрыты`, differ: (n, b) => `Ваши изменения · ${n} файл(ов) отличаются от ${b}`, cmpHint: (n, b) => `Ваши изменения · ${n} файл(ов) отличаются от ${b} · «До» — снимок прямо здесь, без перезагрузки (B)`, switching: "Подменяю файлы и жду, пока dev-сервер пересоберёт (~5 с)…", startingBase: (b) => `Запускаю рядом dev-сервер версии ${b} (в первый раз ~10–30 с)…`, capturing: "Снимаю обе версии на вашей прокрутке…", cmpBefore: (b) => `Снимок версии ${b} · B — переключить · при прокрутке пересниму`, cmpAfter: "Снимок ваших изменений · B — переключить", slider: "⇆ Шторка", diffs: "◫ Отличия", exit: "✕ Живая страница", live: "↻ Вживую", liveBack: "↺ Вернуть ваши изменения", noDiffHere: "На этом экране видимых отличий нет", diffCount: (n) => `Подсвечено изменённых мест: ${n}`, badgeBefore: (b) => `ДО · ${b}`, badgeAfter: "ПОСЛЕ", framesOn: "Рамки на странице: включены", framesOff: "Рамки на странице: выключены (клик по пункту покажет его рамку)", nothing: "Сравнивать нечего — изменённых UI-файлов нет", noRepo: "Для «До / После» ревью нужен репозиторий (хуки передают его сами; studio review --repo)", details: "подробности", split: (v, c) => `${v} видно · ${c} в коде`, codeOnly: (n) => `Глазами не видно — только в коде (${n}) <span>· жёлтые рамки: их исправление ничего на странице не меняет</span>`, pages: (n) => `на ${n} страницах`, places: (n) => `${n} мест`, otherPage: (r) => `на странице ${r}`, placeholder: "Что изменить? Send Comment вернёт работу автору с этим заданием…", send: "Send Comment", reject: "Reject", approve: "Approve" },
   };
   let T = DICT[LANG];
   const plural = (n) => T.problems(n);
@@ -304,8 +311,11 @@
       if (!map.has(key)) map.set(key, { key, items: [], p });
       map.get(key).items.push({ p, i });
     });
-    return [...map.values()];
+    // what a person can see on the page first (red), what lives only in the code after it (yellow)
+    const gs = [...map.values()].map((g) => ({ ...g, code: g.items.every(({ p }) => codeOnly(p)) }));
+    return [...gs.filter((g) => !g.code), ...gs.filter((g) => g.code)];
   }
+  const codeOnly = (p) => p.visual === false || (p.visual === undefined && !!p.selector && /inline style/.test(p.check || ""));
   function exOf(p) {
     const e = p.explain && (p.explain[LANG] || p.explain.en);
     return e || { title: p.message, why: "", fix: "", element: p.selector || [p.file, p.line].filter(Boolean).join(":") };
@@ -316,7 +326,8 @@
     const list = r.problems || [];
     groups = groupsOf(list);
     dot.className = "dot alert";
-    title.textContent = `Babysitter: ${plural(groups.length)}`;
+    const nCode = groups.filter((g) => g.code).length;
+    title.textContent = nCode ? `Babysitter: ${T.split(groups.length - nCode, nCode)}` : `Babysitter: ${plural(groups.length)}`;
     status.textContent = `review ${r.reviewId}`;
     const items = groups.map((g, gi) => {
       const ex = { ...exOf(g.p) };
@@ -327,8 +338,9 @@
       const here = routes.includes(location.pathname);
       const count = [routes.length > 1 ? T.pages(routes.length) : routes.length === 1 && !here ? T.otherPage(routes[0]) : "", g.items.length > routes.length && g.items.length > 1 ? T.places(g.items.length) : ""].filter(Boolean).join(" · ");
       const tech = [...new Set(g.items.map(({ p }) => [p.route, p.selector || [p.file, p.line].filter(Boolean).join(":"), p.check || p.rule].filter(Boolean).join("  ")))].slice(0, 12).join("\n");
-      return `
-      <li data-g="${gi}"><span class="n${g.items.some((x) => x.p.selector) ? "" : " static"}">${gi + 1}</span>
+      const sep = g.code && (gi === 0 || !groups[gi - 1].code) ? `<li class="sep">${T.codeOnly(groups.length - gi)}</li>` : "";
+      return `${sep}
+      <li data-g="${gi}"><span class="n${g.code ? " code" : g.items.some((x) => x.p.selector) ? "" : " static"}">${gi + 1}</span>
         <span class="ex">
           <span class="t">${esc(ex.title)}</span>
           ${ex.element ? `<span class="el">${esc(ex.element)}${count ? ` <span class="cnt">· ${esc(count)}</span>` : ""}</span>` : ""}
@@ -430,7 +442,7 @@
       ro.observe(el);
     };
     const gOf = new Map(); groups.forEach((g, gi) => g.items.forEach(({ i }) => gOf.set(i, gi)));
-    (current?.problems || []).forEach((p, i) => add(p.selector, p.route, "box", (gOf.get(i) ?? i) + 1, { i, g: gOf.get(i) ?? i }));
+    (current?.problems || []).forEach((p, i) => add(p.selector, p.route, codeOnly(p) ? "box code" : "box", (gOf.get(i) ?? i) + 1, { i, g: gOf.get(i) ?? i }));
     notes.forEach((n, i) => add(n.selector, n.route, "box note", `M${i + 1}`, { note: n.id }));
     place();
   }

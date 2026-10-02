@@ -386,14 +386,23 @@ try {
     const human = { kind: "dropdown", name: "€ EUR", place: { area: "header" } };
     const boundary = (route, selector) => ({ check: "control boundary [1.9]", what: "input barely visible at rest (border 1.43:1, fill 1.00:1) [1.9, P09]", human, route, selector });
     const rv = requestReview({ url: base, title: "Explained", timeoutMs: 30000, problems: [
+      { check: "inline style [DOM]", what: "inline font-size", props: ["font-size"], human: { kind: "heading", name: "Settings" }, route: "/", selector: "h1" },
       boundary("/", "#country"), boundary("/", "select#country"), boundary("/pricing", "#country"),
       { ...boundary("/pricing", "select#country"), human: { ...human, place: { area: "footer" } } },
       { check: "native control [1.1]", what: "native <input type=checkbox>", human: { kind: "checkbox", name: "I agree", place: { area: "form", title: "Create Account" } }, route: "/", selector: "p.faint" },
     ] });
     const ps = "#__babysitter-studio";
     await page.locator(`${ps} #approve`).waitFor({ timeout: 10000 });
-    assert.equal(await page.locator(`${ps} .list li[data-g]`).count(), 2, "5 findings → 2 entries: the same switch on 2 pages / 4 places (header and footer) is one");
-    assert.equal(await page.locator(`${ps} .title`).textContent(), "Babysitter: 2 problems");
+    assert.equal(await page.locator(`${ps} .list li[data-g]`).count(), 3, "5 visible findings → 2 entries: the same switch on 2 pages / 4 places (header and footer) is one; + 1 code-only");
+    assert.equal(await page.locator(`${ps} .title`).textContent(), "Babysitter: 2 visible · 1 in code");
+    // style= changes nothing a person can see: listed after the visible ones, under its own heading, yellow
+    assert.match(await page.locator(`${ps} .list li[data-g]`).last().innerText(), /Style hard-coded on the element/);
+    assert.equal(await page.locator(`${ps} .list li[data-g]`).last().locator(".n.code").count(), 1);
+    assert.match(await page.locator(`${ps} .list li.sep`).innerText(), /Not visible on the page — only in the code \(1\)/);
+    assert.equal(await page.locator(`${ps} .box.code`).count(), 1, "the h1 gets a yellow frame");
+    assert.equal(await page.locator(`${ps} .box.code .tag`).textContent(), "3");
+    assert.equal(await page.locator(`${ps} .box.code`).evaluate((e) => getComputedStyle(e).borderTopColor), "rgb(234, 179, 8)");
+    assert.equal(await page.locator(`${ps} .box:not(.code)`).first().evaluate((e) => getComputedStyle(e).borderTopColor), "rgb(239, 68, 68)", "visible defects stay red");
     const first = await page.locator(`${ps} .list li[data-g]`).first().innerText();
     assert.match(first, /The control's edge is barely visible/);
     assert.match(first, /Dropdown «€ EUR» in the site header and in the footer · on 2 pages · 4 places/);
@@ -402,8 +411,8 @@ try {
     assert.ok(!(await page.locator(`${ps} .list li[data-g] .tech`).first().isVisible()), "selectors stay out of the way");
     await page.locator(`${ps} [data-more]`).first().click();
     assert.match(await page.locator(`${ps} .list li[data-g] .tech`).first().innerText(), /#country/);
-    assert.equal(await page.locator(`${ps} .box`).first().locator(".tag").textContent(), "1", "frames carry the entry's number");
-    ok("findings say what is wrong, why and how to fix it, name the element as a person would, and group repeats");
+    assert.equal(await page.locator(`${ps} .box:not(.code)`).first().locator(".tag").textContent(), "1", "frames carry the entry's number");
+    ok("findings say what is wrong, why and how to fix it, name the element as a person would, and group repeats; code-only ones (style=) come last with yellow frames");
 
     // Before/After is always there; without a repository it is off and says why
     assert.ok(await page.locator(`${ps} .seg button[data-side=BEFORE]`).isDisabled());
@@ -442,7 +451,7 @@ try {
     // EN ↔ RU, remembered across reloads
     await page.locator(`${ps} #lang`).click();
     assert.match(await page.locator(`${ps} .list li[data-g]`).first().innerText(), /Границы элемента управления почти не видно/);
-    assert.equal(await page.locator(`${ps} .title`).textContent(), "Babysitter: 2 проблемы");
+    assert.equal(await page.locator(`${ps} .title`).textContent(), "Babysitter: 2 видно · 1 в коде");
     await page.reload(); await page.locator(`${ps} #approve`).waitFor({ timeout: 10000 });
     assert.equal(await page.locator(`${ps} #lang`).textContent(), "RU");
     await page.locator(`${ps} #lang`).click();
