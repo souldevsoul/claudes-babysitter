@@ -8,6 +8,13 @@
   host.id = "__babysitter-studio";
   host.style.cssText = "all:initial;position:fixed;inset:0;pointer-events:none;z-index:2147483647;";
   const root = host.attachShadow({ mode: "open" });
+  // Smooth-scroll libraries (Lenis, Locomotive, GSAP ScrollSmoother) take every wheel/touch event on the window
+  // and scroll the page themselves, so the panel's own list never scrolls. Events that start inside the panel
+  // stop at the host; Lenis also honours data-lenis-prevent. The page under the panel keeps its scrolling.
+  host.setAttribute("data-lenis-prevent", "");
+  for (const type of ["wheel", "touchstart", "touchmove"]) {
+    host.addEventListener(type, (e) => { if (e.composedPath().some((n) => n.classList?.contains("panel"))) e.stopPropagation(); }, { passive: true });
+  }
   root.innerHTML = `
 <style>
   :host { all: initial; }
@@ -59,7 +66,7 @@
   .dot { width: 8px; height: 8px; border-radius: 50%; background: #71717a; }
   .dot.on { background: #22c55e; } .dot.alert { background: #ef4444; }
   .title { font-weight: 600; flex: 1; } .muted { color: #a1a1aa; font-size: 12px; }
-  .list { max-height: min(46vh, 360px); overflow: auto; margin: 0; padding: 6px 0; list-style: none; }
+  .list { max-height: min(46vh, 360px); overflow: auto; overscroll-behavior: contain; margin: 0; padding: 6px 0; list-style: none; }
   .list li { display: flex; gap: 8px; padding: 6px 14px; font-size: 12.5px; line-height: 1.4; cursor: pointer; }
   .list li:hover { background: #1b1e25; }
   .n { flex: none; width: 20px; height: 20px; border-radius: 10px; background: #ef4444; color: #fff; font-size: 11px; font-weight: 600; text-align: center; line-height: 20px; }

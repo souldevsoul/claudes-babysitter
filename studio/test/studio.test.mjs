@@ -114,6 +114,25 @@ try {
   await page.evaluate(() => { document.getElementById("spacer").remove(); scrollTo(0, 0); });
   ok("frames track scroll, resize and DOM changes; clicking a problem scrolls its element into view");
 
+  // a smooth-scroll library (Lenis-like: every wheel on the window is cancelled and replayed as a page scroll)
+  // must not steal the wheel from the panel's list — and the page outside the panel keeps scrolling
+  await page.evaluate(() => {
+    window.__smooth = (e) => { e.preventDefault(); window.scrollBy(0, e.deltaY); };
+    window.addEventListener("wheel", window.__smooth, { passive: false });
+    const st = document.createElement("style"); st.id = "short-list"; st.textContent = ".list{max-height:40px!important}";
+    document.querySelector("#__babysitter-studio").shadowRoot.append(st);
+  });
+  const lb = await page.locator("#__babysitter-studio .list").boundingBox();
+  await page.mouse.move(lb.x + lb.width / 2, lb.y + lb.height / 2);
+  await page.mouse.wheel(0, 200);
+  await page.waitForFunction(() => document.querySelector("#__babysitter-studio").shadowRoot.querySelector(".list").scrollTop > 0, null, { timeout: 5000 });
+  assert.equal(await page.evaluate(() => scrollY), 0, "the page did not move under the panel");
+  await page.mouse.move(lb.x + lb.width / 2, 20);
+  await page.mouse.wheel(0, 300);
+  await page.waitForFunction(() => scrollY > 0, null, { timeout: 5000 });
+  await page.evaluate(() => { window.removeEventListener("wheel", window.__smooth); document.querySelector("#__babysitter-studio").shadowRoot.getElementById("short-list").remove(); scrollTo(0, 0); });
+  ok("the problem list scrolls under a smooth-scroll library (Lenis) that takes the wheel; the page still scrolls outside the panel");
+
   assert.ok(await page.locator("#__babysitter-studio #comment-send").isDisabled(), "Send Comment needs text");
   await page.locator("#__babysitter-studio #comment-text").fill("Use the kit Select here, please");
   await page.locator("#__babysitter-studio #comment-send").click();
