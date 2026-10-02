@@ -254,4 +254,45 @@ t("registry: a theme ≥80% like a registered product is a warning, not a block"
   srv.kill();
 }
 
+// Moved code is existing debt, not new code: extracting a shared component must not block on the debt it
+// carries — but copying it, editing it on the way, or adding fresh debt still blocks.
+{
+  const BAD = '        className="rounded-xl bg-blue-500 px-3 py-2 text-sm"';
+  const link = (cls = BAD) => `      <a\n        href="/x"\n${cls}\n      >\n        Go somewhere\n      </a>`;
+  const page = (body) => `export default function P() {\n  return (\n    <main>\n${body}\n    </main>\n  );\n}\n`;
+  const shared = (body) => `export function Go() {\n  return (\n${body}\n  );\n}\n`;
+  const PAGE_USES = 'import { Go } from "@/components/shared/go";\nexport default function P() {\n  return (\n    <main>\n      <Go />\n    </main>\n  );\n}\n';
+  const PKG = '{"dependencies":{"next":"16","tailwindcss":"4"}}';
+  const put = (d, p, c) => { mkdirSync(dirname(join(d, p)), { recursive: true }); writeFileSync(join(d, p), c); };
+  const ui = (j) => j.problems.filter((p) => p.rule.startsWith("ui/"));
+
+  t("a pure move (extract to a shared component) does not block; the debt is listed as moved", (mk) => {
+    const d = mk({ "src/app/page.tsx": page(link()), "package.json": PKG });
+    put(d, "src/app/page.tsx", PAGE_USES);
+    put(d, "src/components/shared/go.tsx", shared(link()));
+    const j = changedJson(d);
+    assert.deepEqual(ui(j), [], JSON.stringify(ui(j)));
+    assert.ok(j.info.some((i) => /moved here unchanged/.test(i.message) && /no-raw-palette/.test(i.message)), JSON.stringify(j.info));
+  });
+  t("a copy (the original stays) is new debt and blocks", (mk) => {
+    const d = mk({ "src/app/page.tsx": page(link()), "package.json": PKG });
+    put(d, "src/components/shared/go.tsx", shared(link()));
+    assert.ok(ui(changedJson(d)).some((p) => p.rule === "ui/no-raw-palette" && p.file === "src/components/shared/go.tsx"));
+  });
+  t("moving a block but changing its classes on the way blocks", (mk) => {
+    const d = mk({ "src/app/page.tsx": page(link()), "package.json": PKG });
+    put(d, "src/app/page.tsx", PAGE_USES);
+    put(d, "src/components/shared/go.tsx", shared(link(BAD.replace("bg-blue-500", "bg-blue-600"))));
+    assert.ok(ui(changedJson(d)).some((p) => p.rule === "ui/no-raw-palette" && /bg-blue-600/.test(p.message)));
+  });
+  t("fresh debt next to moved code still blocks", (mk) => {
+    const d = mk({ "src/app/page.tsx": page(link()), "package.json": PKG });
+    put(d, "src/app/page.tsx", PAGE_USES);
+    put(d, "src/components/shared/go.tsx", shared("    <>\n" + link() + '\n      <p className="text-red-500">new</p>\n    </>'));
+    const p = ui(changedJson(d));
+    assert.ok(p.some((x) => /text-red-500/.test(x.message)), JSON.stringify(p));
+    assert.ok(!p.some((x) => /bg-blue-500/.test(x.message)), "the moved line is still old debt");
+  });
+}
+
 console.log(`ui-check: ${n} end-to-end cases passed`);

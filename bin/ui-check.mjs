@@ -32,20 +32,62 @@ const git = (c) => { try { return execSync(`git ${c}`, { cwd: repo, encoding: "u
 
 let files;
 let lineFilter = null; // file -> Set(line) | "all"
+const movedLines = new Map(); // file -> Set(line): content that only changed place
+// a line counts as moved only when it carries real content: braces, bare tags and blank lines are everywhere
+const moveKey = (t) => { const k = t.trim().replace(/\s+/g, " "); return k.length >= 8 && /[A-Za-z]/.test(k) ? k : null; };
 let baseRef = null;
 if (changed) {
   const base = baseRef = changed === true ? git("merge-base HEAD origin/main") || git("merge-base HEAD origin/master") || "HEAD" : changed;
   if (!opt("all-lines")) {
     lineFilter = new Map();
-    // base → working tree covers committed, staged and unstaged edits
-    let cur = null;
+    // base → working tree covers committed, staged and unstaged edits. A line that only MOVED — the same
+    // content removed somewhere else in this diff (extracting a shared component, splitting a file) — is not
+    // new code: its old problems are reported for information, never as a block.
+    const removed = new Map(); // normalised content → count
+    const added = []; // { file, line, key }
+    let cur = null, next = 0;
     for (const l of git(`diff -U0 --no-color ${base}`).split("\n")) {
-      const f = l.match(/^\+\+\+ b\/(.+)$/);
-      if (f) { cur = f[1]; if (!lineFilter.has(cur)) lineFilter.set(cur, new Set()); continue; }
+      const f = l.match(/^\+\+\+ (?:b\/(.+)|\/dev\/null)$/);
+      if (f) { cur = f[1] || null; if (cur && !lineFilter.has(cur)) lineFilter.set(cur, new Set()); continue; }
+      if (l.startsWith("--- ")) continue;
       const h = l.match(/^@@ -\d+(?:,\d+)? \+(\d+)(?:,(\d+))? @@/);
-      if (h && cur) { const start = Number(h[1]), n = h[2] === undefined ? 1 : Number(h[2]); for (let i = start; i < start + n; i++) lineFilter.get(cur).add(i); }
+      if (h) { next = Number(h[1]); continue; }
+      if (l.startsWith("-")) { const k = moveKey(l.slice(1)); if (k) removed.set(k, (removed.get(k) || 0) + 1); continue; }
+      if (l.startsWith("+") && cur) { added.push({ file: cur, line: next, key: moveKey(l.slice(1)), text: l.slice(1) }); next++; }
     }
-    for (const u of git("ls-files --others --exclude-standard").split("\n").filter(Boolean)) lineFilter.set(u, "all");
+    for (const u of git("ls-files --others --exclude-standard").split("\n").filter(Boolean)) {
+      lineFilter.set(u, new Set());
+      let text = ""; try { text = readFileSync(join(repo, u), "utf8"); } catch {}
+      if (text.length > 2_000_000 || text.includes("\u0000")) { lineFilter.set(u, "all"); continue; }
+      text.split("\n").forEach((t, i) => added.push({ file: u, line: i + 1, key: moveKey(t), text: t }));
+    }
+    const markMoved = (a) => (movedLines.get(a.file) || movedLines.set(a.file, new Set()).get(a.file)).add(a.line);
+    for (const a of added) {
+      const left = a.key ? removed.get(a.key) || 0 : 0;
+      if (left > 0) { removed.set(a.key, left - 1); markMoved(a); a.moved = true; }
+    }
+    // A bare opening tag ("<Button", "<Link") carries no content of its own, yet the rules report on it — about
+    // its className/style. Within the same multi-line opening tag: if the className/style line moved unchanged,
+    // the finding is old debt; otherwise fall back to the first real line of the tag.
+    added.forEach((a, i) => {
+      if (a.key || a.moved) return;
+      const isTag = /^\s*<[A-Za-z]/.test(a.text);
+      let firstReal = null, styleLine = null;
+      for (let j = i + 1; j < added.length && j <= i + 8; j++) {
+        const b = added[j];
+        if (b.file !== a.file || b.line !== a.line + (j - i)) break;
+        if (b.key && !firstReal) firstReal = b;
+        if (isTag && /\b(className|style)=/.test(b.text)) { styleLine = b; break; }
+        if (/^\s*\/?>\s*$|\/>\s*$/.test(b.text) || (!isTag && firstReal)) break;
+      }
+      const decider = styleLine || firstReal;
+      if (decider && decider.moved) { markMoved(a); a.moved = true; }
+    });
+    for (const a of added) {
+      if (a.moved) continue;
+      const lf = lineFilter.get(a.file);
+      if (lf instanceof Set) lf.add(a.line);
+    }
   }
   const list = [git(`diff --name-only --diff-filter=ACMR ${base}`), git("diff --name-only --diff-filter=ACMR"), git("ls-files --others --exclude-standard")].join("\n");
   files = [...new Set(list.split("\n").filter(Boolean))].filter((f) => /\.(jsx|tsx|ts|js|mjs|s?css)$/.test(f) && !/\.d\.ts$|(^|\/)(next|tailwind|postcss|eslint|vite|playwright)\.config\./.test(f) && existsSync(join(repo, f)));
@@ -160,9 +202,16 @@ if (lineFilter) {
     if (lf === "all" || String(p.rule).startsWith("ui-audit/")) return true;
     return !!lf && lf.has(p.line);
   };
+  const isMoved = (p) => !String(p.rule).startsWith("ui-audit/") && !!movedLines.get(p.file)?.has(p.line) && !(lineFilter.get(p.file) instanceof Set && lineFilter.get(p.file).has(p.line));
+  const moved = problems.filter(isMoved);
   const before = problems.length;
-  problems.splice(0, problems.length, ...problems.filter(keep));
-  if (before > problems.length && format !== "json") console.error(`(${before - problems.length} older problem(s) in untouched lines not shown — use --all-lines)`);
+  problems.splice(0, problems.length, ...problems.filter((p) => keep(p) && !isMoved(p)));
+  for (const p of moved) info.push({ file: p.file, message: `L${p.line} ${p.rule} (moved here unchanged — existing debt, not new): ${p.message}` });
+  const hidden = before - problems.length - moved.length;
+  if (format !== "json") {
+    if (hidden > 0) console.error(`(${hidden} older problem(s) in untouched lines not shown — use --all-lines)`);
+    if (moved.length) console.error(`(${moved.length} problem(s) on moved lines: existing debt that only changed place — listed below, not blocking)`);
+  }
 }
 
 /* ───────── theme gates (run after the line filter: they are about the theme, not about lines) ───────── */
