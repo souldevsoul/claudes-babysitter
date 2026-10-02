@@ -86,6 +86,7 @@ Or install it as a dev dependency: `npm i -D github:souldevsoul/claudes-babysitt
 - **Findings explained in plain language** (`lib/explain.js`, English and Russian; the panel follows the browser's language). Each finding names the element as a person would ("Dropdown «€ EUR» in the site header"), says what is wrong, why it matters (with the measured numbers) and how to fix it. Selectors, routes and rule ids go under *details*.
 - **Repeats are grouped**: the same issue on the same element is one entry ("on 12 pages · 4 places"), and frames carry the entry's number.
 - **The panel moves**: drag it by its header. It stays inside the window and keeps its place across reloads; double-click puts it back. The – button folds it, and a new review unfolds it.
+- **One list for the whole site, by what a person sees.** Red: visible on the page (contrast, invisible field edges, browser-default controls). Yellow, dashed: only in the code (`style=`), fixing it changes nothing on screen. Green: fixed since the previous check (`studio review --fixed-from earlier.json`). Filter chips hide any kind, both in the list and on the page. An entry on another page opens that page and points at its frame.
 - **Before / After is always shown.** When there is nothing to compare, it is off and says why. `studio review --repo . --base main` compares a whole branch with any ref, using the same journaled, crash-safe swap as the hooks.
 
 ## What changed in 3.11 (Claude Code integration without machine paths)

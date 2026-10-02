@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 // babysitter-studio [start] [--port 3001] [--target http://localhost:3000]
-// babysitter-studio review [--url http://localhost:3001] [--title "…"] [--timeout 900] [--repo .] [--base main] < problems.json
+// babysitter-studio review [--url http://localhost:3001] [--title "…"] [--timeout 900] [--repo .] [--base main] [--fixed-from earlier.json] < problems.json
 //   --repo enables Before/After for this review (BEFORE = --base, default HEAD); AFTER is restored when it ends
 //   problems.json: [{ "selector": "main > button", "message": "native control", "file": "src/app/page.tsx", "line": 4 }]
 //   exit 0 = approved, 1 = rejected, commented (the comment goes to stdout) or timed out (fail closed), 2 = no studio running
@@ -20,8 +20,18 @@ if (cmd === "start") {
   // close cleanly on Ctrl-C and on kill: stops the base sites (Before/After) and removes their worktrees
   for (const sig of ["SIGINT", "SIGTERM", "SIGHUP"]) process.on(sig, async () => { await s.close(); process.exit(0); });
 } else if (cmd === "review") {
-  let problems = [];
-  try { problems = JSON.parse(readFileSync(0, "utf8") || "[]"); } catch { console.error("review: stdin must be a JSON array of problems"); process.exit(2); }
+  // stdin: [problems…] or { problems: […], fixed: […] }; --fixed-from <earlier.json>: whatever that earlier
+  // check found and this one no longer does is listed as fixed (green)
+  let problems = [], fixed = [];
+  try { const j = JSON.parse(readFileSync(0, "utf8") || "[]"); problems = Array.isArray(j) ? j : j.problems || []; fixed = Array.isArray(j) ? [] : j.fixed || []; }
+  catch { console.error("review: stdin must be a JSON array of problems (or { problems, fixed })"); process.exit(2); }
+  if (opt("fixed-from", null)) {
+    let earlier = [];
+    try { const j = JSON.parse(readFileSync(opt("fixed-from"), "utf8")); earlier = Array.isArray(j) ? j : j.problems || []; } catch (e) { console.error(`review: --fixed-from: ${e.message}`); process.exit(2); }
+    const key = (p) => [p.route || "", p.viewport || "", p.check || p.rule || "", p.selector || p.where || `${p.file}:${p.line}`].join("|");
+    const now = new Set(problems.map(key));
+    fixed = fixed.concat(earlier.filter((p) => !now.has(key(p))));
+  }
   const url = opt("url", process.env.BABYSITTER_STUDIO || "http://localhost:3001");
   // Before/After: the same journaled, crash-safe swap the hooks use
   let tt = null, dispose = () => {};
@@ -34,7 +44,7 @@ if (cmd === "start") {
   }
   const { applyStaged } = tt ? await import("../../lib/time-travel.js") : {};
   const r = await requestReview({
-    url, problems, title: opt("title", "UI review"), timeoutMs: Number(opt("timeout", 900)) * 1000,
+    url, problems, fixed, title: opt("title", "UI review"), timeoutMs: Number(opt("timeout", 900)) * 1000,
     diff: repo ? { repo: (await import("node:path")).resolve(repo), base: opt("base", "HEAD"), files: tt ? tt.journal.files.length : 0, skipped: tt ? tt.journal.skipped.length : 0 } : null,
     onToggle: tt && ((side) => applyStaged(tt, side)),
     diffNote: repo ? "nothing" : "no-repo",

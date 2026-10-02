@@ -339,6 +339,7 @@ try {
       await p2.keyboard.press("b");
       assert.equal(await p2.locator(`${ps} .seg button[aria-pressed=true]`).getAttribute("data-side"), "AFTER");
       assert.ok(await p2.locator(`${ps} .cmp img.a`).isVisible() && !(await p2.locator(`${ps} .cmp img.b`).isVisible()), "B flips to the AFTER snapshot");
+      assert.ok(await p2.locator(`${ps} .box`).first().isVisible(), "frames are back on the AFTER side");
       await p2.keyboard.press("b");
       assert.ok(await p2.locator(`${ps} .cmp img.b`).isVisible());
       await p2.locator(`${ps} #cmp-slider`).click();
@@ -394,7 +395,8 @@ try {
     const ps = "#__babysitter-studio";
     await page.locator(`${ps} #approve`).waitFor({ timeout: 10000 });
     assert.equal(await page.locator(`${ps} .list li[data-g]`).count(), 3, "5 visible findings → 2 entries: the same switch on 2 pages / 4 places (header and footer) is one; + 1 code-only");
-    assert.equal(await page.locator(`${ps} .title`).textContent(), "Babysitter: 2 visible · 1 in code");
+    assert.equal(await page.locator(`${ps} .title`).textContent(), "Babysitter: 3 problems");
+    assert.deepEqual(await page.locator(`${ps} .filters button`).allInnerTexts(), ["Visible · 2", "In code · 1"], "no Fixed chip when nothing was fixed");
     // style= changes nothing a person can see: listed after the visible ones, under its own heading, yellow
     assert.match(await page.locator(`${ps} .list li[data-g]`).last().innerText(), /Style hard-coded on the element/);
     assert.equal(await page.locator(`${ps} .list li[data-g]`).last().locator(".n.code").count(), 1);
@@ -422,9 +424,9 @@ try {
     // the panel moves, remembers where, folds, and goes back on double-click
     const hb = await page.locator(`${ps} .head`).boundingBox(), pb0 = await page.locator(`${ps} .panel`).boundingBox();
     await page.mouse.move(hb.x + 40, hb.y + hb.height / 2); await page.mouse.down();
-    await page.mouse.move(hb.x - 200, hb.y - 60, { steps: 6 }); await page.mouse.up();
+    await page.mouse.move(hb.x - 200, hb.y + 40, { steps: 6 }); await page.mouse.up();
     const pb1 = await page.locator(`${ps} .panel`).boundingBox();
-    assert.ok(Math.abs(pb1.x - (pb0.x - 240)) <= 2 && Math.abs(pb1.y - (pb0.y - 60 - hb.height / 2)) <= 2, `moved ${JSON.stringify([pb0, pb1])}`);
+    assert.ok(Math.abs(pb1.x - (pb0.x - 240)) <= 2 && Math.abs(pb1.y - (pb0.y + 40 - hb.height / 2)) <= 2, `moved ${JSON.stringify([pb0, pb1])}`);
     // it cannot be dragged out of the window
     const hb1 = await page.locator(`${ps} .head`).boundingBox();
     await page.mouse.move(hb1.x + 40, hb1.y + 10); await page.mouse.down(); await page.mouse.move(hb1.x - 2000, hb1.y - 2000, { steps: 4 }); await page.mouse.up();
@@ -451,7 +453,7 @@ try {
     // EN ↔ RU, remembered across reloads
     await page.locator(`${ps} #lang`).click();
     assert.match(await page.locator(`${ps} .list li[data-g]`).first().innerText(), /Границы элемента управления почти не видно/);
-    assert.equal(await page.locator(`${ps} .title`).textContent(), "Babysitter: 2 видно · 1 в коде");
+    assert.deepEqual(await page.locator(`${ps} .filters button`).allInnerTexts(), ["Видно · 2", "В коде · 1"]);
     await page.reload(); await page.locator(`${ps} #approve`).waitFor({ timeout: 10000 });
     assert.equal(await page.locator(`${ps} #lang`).textContent(), "RU");
     await page.locator(`${ps} #lang`).click();
@@ -460,6 +462,51 @@ try {
     assert.equal((await rv).decision, "approve");
     await page.locator(`${ps} .min`).filter({ hasText: "Approved" }).waitFor({ timeout: 5000 });
     ok("the panel is dragged by its header, keeps its place across reloads, folds, double-click puts it back; frames on/off with peek; EN ↔ RU");
+  }
+
+  // ── the whole site in one list: visible / in code / fixed, filters, late elements, jumping to another page ──
+  {
+    const { requestReview } = await import("../lib/review-client.js");
+    const ps = "#__babysitter-studio";
+    await page.goto(base + "/"); await page.evaluate(() => localStorage.clear()); await page.reload();
+    const rv = requestReview({ url: base, title: "Site", timeoutMs: 60000, problems: [
+      { check: "native control [1.1]", what: "native <select type=select-one>", human: { kind: "dropdown", name: "Country" }, route: "/", selector: "#country" },
+      { check: "native control [1.1]", what: "native <select type=select-one>", human: { kind: "dropdown", name: "Late" }, route: "/", selector: "#late" },
+      { check: "native control [1.1]", what: "native <input type=checkbox>", human: { kind: "checkbox", name: "Agree" }, route: "/signup", selector: "#country", viewport: "1280" },
+      { check: "native control [1.1]", what: "native <input type=checkbox>", human: { kind: "checkbox", name: "Phone only" }, route: "/", selector: "h1", viewport: "390" },
+      { check: "inline style [DOM]", what: "inline font-size", props: ["font-size"], human: { kind: "heading", name: "Settings" }, route: "/", selector: "h1" },
+    ], fixed: [
+      { check: "contrast [6.4]", what: "contrast 3.58:1", human: { kind: "text", name: "fine print" }, route: "/", selector: "p.faint" },
+    ] });
+    await page.locator(`${ps} #approve`).waitFor({ timeout: 10000 });
+    assert.deepEqual(await page.locator(`${ps} .filters button`).allInnerTexts(), ["Visible · 4", "In code · 1", "Fixed · 1"]);
+    assert.deepEqual(await page.locator(`${ps} .list li[data-g]`).evaluateAll((ls) => ls.map((l) => l.className)), ["k-red", "k-red", "k-red", "k-red", "k-code", "k-fixed"], "visible, then code-only, then fixed");
+    assert.match(await page.locator(`${ps} .list li.sep.fixed`).innerText(), /Fixed since the previous check \(1\)/);
+    assert.equal(await page.locator(`${ps} .box.fixed`).evaluate((e) => getComputedStyle(e).borderTopColor), "rgb(34, 197, 94)", "fixed: green frame");
+    assert.equal(await page.locator(`${ps} .box.k-red`).count(), 1, "#late is not there yet; the phone-width finding is not framed on a desktop window");
+    // an element a client component renders later gets its frame then
+    await page.evaluate(() => { const s = document.createElement("select"); s.id = "late"; document.querySelector("main").append(s); });
+    await page.waitForFunction(() => document.querySelector("#__babysitter-studio").shadowRoot.querySelectorAll(".box.k-red").length === 2, null, { timeout: 3000 });
+    // filters hide the entries and their frames, and are remembered
+    await page.locator(`${ps} .filters button[data-f=code]`).click();
+    assert.equal(await page.locator(`${ps} .box.code`).isVisible(), false);
+    assert.equal(await page.locator(`${ps} .list li.k-code`).first().isVisible(), false);
+    assert.equal(await page.locator(`${ps} .list li.sep.k-code`).isVisible(), false);
+    await page.locator(`${ps} .filters button[data-f=red]`).click();
+    assert.equal(await page.locator(`${ps} .box.k-red`).first().isVisible(), false);
+    assert.ok(await page.locator(`${ps} .box.fixed`).isVisible() && await page.locator(`${ps} .list li[data-g].k-fixed`).isVisible(), "green still shown");
+    await page.reload(); await page.locator(`${ps} #approve`).waitFor({ timeout: 10000 });
+    assert.equal(await page.locator(`${ps} .filters button[data-f=red]`).getAttribute("aria-pressed"), "false", "filters survive a reload");
+    await page.locator(`${ps} .filters button[data-f=red]`).click(); await page.locator(`${ps} .filters button[data-f=code]`).click();
+    // an entry of another page: that page opens and its frame is pointed at
+    await page.locator(`${ps} .list li.k-red`).filter({ hasText: "Agree" }).click();
+    await page.waitForURL(/\/signup$/, { timeout: 10000 });
+    await page.locator(`${ps} .box.peek`).first().waitFor({ state: "attached", timeout: 5000 });
+    assert.equal(await page.locator(`${ps} .box.peek .tag`).first().textContent(), String(1 + await page.locator(`${ps} .list li[data-g]`).evaluateAll((ls) => ls.findIndex((l) => /Agree/.test(l.textContent)))));
+    await page.locator(`${ps} #approve`).click();
+    assert.equal((await rv).decision, "approve");
+    await page.goto(base + "/");
+    ok("one list for the whole site: visible (red), in code (yellow), fixed (green); filters hide entries and frames; late elements get frames; an entry of another page opens it at its frame");
   }
   // 6. the real git pre-commit gate of Claude's Babysitter, with "studio": { "enabled": true }
   const ROOT = join(dirname(fileURLToPath(import.meta.url)), "..", "..");

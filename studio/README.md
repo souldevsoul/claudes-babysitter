@@ -92,6 +92,8 @@ Manual review from any script:
 
 ```bash
 echo '[{"selector":"#country","message":"native select"}]' | npx babysitter-studio review --url http://localhost:3001
+# what an earlier check found and this one no longer does is listed as fixed (green):
+npx babysitter-studio review --fixed-from before.json < after.json
 ```
 
 `npm test` (from this folder) runs the end-to-end suite: a real HTTP target, the proxy, a real browser and real `git commit`s through the pre-commit gate.

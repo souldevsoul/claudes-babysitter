@@ -11,7 +11,7 @@ import { randomUUID } from "node:crypto";
 import { PATH } from "./protocol.js";
 import { explain } from "../../lib/explain.js";
 
-export function requestReview({ url = "http://localhost:3001", title = "UI review", problems = [], timeoutMs = 15 * 60_000, onWaiting = () => {}, diff = null, onToggle = null, diffNote = null } = {}) {
+export function requestReview({ url = "http://localhost:3001", title = "UI review", problems = [], fixed = [], timeoutMs = 15 * 60_000, onWaiting = () => {}, diff = null, onToggle = null, diffNote = null } = {}) {
   return new Promise((resolve) => {
     const reviewId = randomUUID().slice(0, 8);
     const ws = new WebSocket(url.replace(/^http/, "ws") + PATH + "?role=cli");
@@ -24,7 +24,7 @@ export function requestReview({ url = "http://localhost:3001", title = "UI revie
       const explained = problems.map(explain);
       // diff: { repo, base, files, live } — repo/base let Studio capture Before/After; live = files can also be swapped
       const d = diff ? { ...diff, live: !!onToggle } : null;
-      ws.send(JSON.stringify({ type: "REVIEW_REQUIRED", reviewId, title, problems: explained, diff: d && d.repo ? d : onToggle ? d : null, diffNote: d ? null : diffNote || "no-repo" }));
+      ws.send(JSON.stringify({ type: "REVIEW_REQUIRED", reviewId, title, problems: explained, fixed: fixed.map(explain), diff: d && d.repo ? d : onToggle ? d : null, diffNote: d ? null : diffNote || "no-repo" }));
       onWaiting({ reviewId, url });
     });
     ws.on("message", (raw) => {
