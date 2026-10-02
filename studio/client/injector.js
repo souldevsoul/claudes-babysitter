@@ -18,11 +18,27 @@
   .tag { position: absolute; top: -11px; left: -2px; min-width: 20px; height: 20px; padding: 0 6px; border-radius: 10px; background: #ef4444; color: #fff; font: 600 11px/20px ui-sans-serif, system-ui; text-align: center; }
   .panel { position: fixed; left: 50%; bottom: 16px; transform: translateX(-50%); width: min(560px, calc(100vw - 32px)); pointer-events: auto;
     background: #111318; color: #f4f4f5; border: 1px solid #2a2d35; border-radius: 14px; box-shadow: 0 12px 40px rgb(0 0 0 / .45); overflow: hidden; }
-  .head { display: flex; align-items: center; gap: 8px; padding: 10px 14px; border-bottom: 1px solid #23262d; font-size: 13px; }
+  .head { display: flex; align-items: center; gap: 8px; padding: 10px 14px; border-bottom: 1px solid #23262d; font-size: 13px; cursor: grab; user-select: none; touch-action: none; }
+  .panel.dragging .head { cursor: grabbing; }
+  .panel.dragging { transition: none; box-shadow: 0 18px 50px rgb(0 0 0 / .55); }
+  .grip { color: #52525b; font-size: 12px; letter-spacing: -2px; }
+  .collapse { padding: 2px 8px; font-size: 14px; line-height: 18px; background: transparent; color: #a1a1aa; border-color: #3f3f46; }
+  .panel.collapsed .body { display: none; }
+  .panel.collapsed .head { border-bottom: 0; }
+  .list li .ex { display: grid; gap: 3px; min-width: 0; }
+  .ex .t { font-weight: 600; color: #f4f4f5; }
+  .ex .el { color: #d4d4d8; }
+  .ex .el .cnt { color: #a1a1aa; }
+  .ex .why { color: #a1a1aa; }
+  .ex .fix { color: #86efac; }
+  .ex .tech { display: none; color: #71717a; font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 10.5px; word-break: break-all; }
+  li.open .ex .tech { display: block; }
+  .more { justify-self: start; padding: 0; border: 0; background: none; color: #71717a; font-size: 11px; font-weight: 500; text-decoration: underline; }
+  .seg button:disabled { opacity: .45; }
   .dot { width: 8px; height: 8px; border-radius: 50%; background: #71717a; }
   .dot.on { background: #22c55e; } .dot.alert { background: #ef4444; }
   .title { font-weight: 600; flex: 1; } .muted { color: #a1a1aa; font-size: 12px; }
-  .list { max-height: 180px; overflow: auto; margin: 0; padding: 6px 0; list-style: none; }
+  .list { max-height: min(46vh, 360px); overflow: auto; margin: 0; padding: 6px 0; list-style: none; }
   .list li { display: flex; gap: 8px; padding: 6px 14px; font-size: 12.5px; line-height: 1.4; cursor: pointer; }
   .list li:hover { background: #1b1e25; }
   .n { flex: none; width: 20px; height: 20px; border-radius: 10px; background: #ef4444; color: #fff; font-size: 11px; font-weight: 600; text-align: center; line-height: 20px; }
@@ -80,7 +96,7 @@
       <span><button class="ghost small" id="note-cancel" type="button">Cancel</button><button class="save small" id="note-save" type="button" disabled>Save</button></span></div>
   </div></div>
 <div class="panel" role="region" aria-label="Babysitter Studio">
-  <div class="head"><span class="dot"></span><span class="title">Babysitter Studio</span><span class="muted status">connecting…</span><button class="chip" id="inspect" type="button" aria-pressed="false" title="Point at any element and leave a note for Claude (Esc to stop)">🎯 Inspect</button></div>
+  <div class="head" title="Drag to move · double-click to put back"><span class="grip" aria-hidden="true">⋮⋮</span><span class="dot"></span><span class="title">Babysitter Studio</span><span class="muted status">connecting…</span><button class="chip collapse" id="collapse" type="button" aria-expanded="true" title="Collapse / expand">–</button><button class="chip" id="inspect" type="button" aria-pressed="false" title="Point at any element and leave a note for Claude (Esc to stop)">🎯 Inspect</button></div>
   <div class="body"></div>
 </div>`;
   const $ = (s) => root.querySelector(s);
@@ -89,7 +105,13 @@
 
   let ws, retry = 500, queue = [], current = null, boxes = [], raf = 0, side = "AFTER", notes = [];
   const panel = $(".panel");
-  const plural = (n) => `${n} problem${n === 1 ? "" : "s"}`;
+  // the reviewer's language for what the panel says (findings carry their explanations in en and ru)
+  const LANG = /^ru\b/i.test(navigator.language || "") ? "ru" : "en";
+  const T = {
+    en: { problems: (n) => `${n} problem${n === 1 ? "" : "s"}`, paused: "the CLI is paused until you decide", after: "After", before: "👁 Before", viewing: (b) => `Viewing ${b} · frames hidden`, differ: (n, b) => `Your changes · ${n} file(s) differ from ${b}`, nothing: "Nothing to compare — no changed UI files", noRepo: "Before/After needs the review's repository (the hooks pass it; studio review --repo)", details: "details", pages: (n) => `on ${n} pages`, places: (n) => `${n} places`, otherPage: (r) => `on ${r}`, placeholder: "What should change? Send Comment returns the work to its author with this brief…", send: "Send Comment", reject: "Reject", approve: "Approve" },
+    ru: { problems: (n) => `${n} ${n % 10 === 1 && n % 100 !== 11 ? "проблема" : n % 10 >= 2 && n % 10 <= 4 && (n % 100 < 12 || n % 100 > 14) ? "проблемы" : "проблем"}`, paused: "проверка ждёт вашего решения", after: "После", before: "👁 До", viewing: (b) => `Показано состояние ${b} · рамки скрыты`, differ: (n, b) => `Ваши изменения · ${n} файл(ов) отличаются от ${b}`, nothing: "Сравнивать нечего — изменённых UI-файлов нет", noRepo: "Для «До / После» ревью нужен репозиторий (хуки передают его сами; studio review --repo)", details: "подробности", pages: (n) => `на ${n} страницах`, places: (n) => `${n} мест`, otherPage: (r) => `на странице ${r}`, placeholder: "Что изменить? Send Comment вернёт работу автору с этим заданием…", send: "Send Comment", reject: "Reject", approve: "Approve" },
+  }[LANG];
+  const plural = T.problems;
   const esc = (s) => String(s ?? "").replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" })[c]);
   const send = (m) => ws && ws.readyState === 1 && ws.send(JSON.stringify(m));
 
@@ -104,7 +126,8 @@
     layer.classList.toggle("hidden", side === "BEFORE");
     root.querySelectorAll(".seg button").forEach((b) => { b.setAttribute("aria-pressed", String(b.dataset.side === side)); b.disabled = false; });
     const info = $(".tt .info");
-    if (info) info.innerHTML = note ? `<span class="err">${esc(note)}</span>` : side === "BEFORE" ? "Viewing HEAD · frames hidden" : `Your changes · ${current?.diff?.files ?? 0} file(s) differ from HEAD`;
+    const base = current?.diff?.base || "HEAD";
+    if (info) info.innerHTML = note ? `<span class="err">${esc(note)}</span>` : side === "BEFORE" ? esc(T.viewing(base)) : esc(T.differ(current?.diff?.files ?? 0, base));
     if (side === "AFTER") schedule();
   }
   function toggle(next) {
@@ -122,25 +145,57 @@
     syncFrames(); renderNotes();
   }
 
+  // one entry per issue × element as a person names it (the same switch in the header, the mobile menu and
+  // on twelve pages is one entry), each saying what is wrong, why it matters and how to fix it
+  function groupsOf(list) {
+    const map = new Map();
+    list.forEach((p, i) => {
+      const key = p.group || `${p.message}|${p.selector || p.file}`;
+      if (!map.has(key)) map.set(key, { key, items: [], p });
+      map.get(key).items.push({ p, i });
+    });
+    return [...map.values()];
+  }
+  function exOf(p) {
+    const e = p.explain && (p.explain[LANG] || p.explain.en);
+    return e || { title: p.message, why: "", fix: "", element: p.selector || [p.file, p.line].filter(Boolean).join(":") };
+  }
+  let groups = [];
+
   function renderReview(r) {
     const list = r.problems || [];
+    groups = groupsOf(list);
     dot.className = "dot alert";
-    title.textContent = `Babysitter: ${plural(list.length)}`;
+    title.textContent = `Babysitter: ${plural(groups.length)}`;
     status.textContent = `review ${r.reviewId}`;
-    const items = list.map((p, i) => `
-      <li data-i="${i}"><span class="n${p.selector ? "" : " static"}">${i + 1}</span>
-        <span><div>${esc(p.message)}</div><div class="where">${esc([p.route && p.route !== location.pathname ? "on " + p.route : "", p.selector || [p.file, p.line].filter(Boolean).join(":")].filter(Boolean).join(" · "))}</div></span></li>`).join("");
+    const items = groups.map((g, gi) => {
+      const ex = exOf(g.p);
+      const routes = [...new Set(g.items.map((x) => x.p.route).filter(Boolean))];
+      const here = routes.includes(location.pathname);
+      const count = [routes.length > 1 ? T.pages(routes.length) : routes.length === 1 && !here ? T.otherPage(routes[0]) : "", g.items.length > routes.length && g.items.length > 1 ? T.places(g.items.length) : ""].filter(Boolean).join(" · ");
+      const tech = [...new Set(g.items.map(({ p }) => [p.route, p.selector || [p.file, p.line].filter(Boolean).join(":"), p.check || p.rule].filter(Boolean).join("  ")))].slice(0, 12).join("\n");
+      return `
+      <li data-g="${gi}"><span class="n${g.items.some((x) => x.p.selector) ? "" : " static"}">${gi + 1}</span>
+        <span class="ex">
+          <span class="t">${esc(ex.title)}</span>
+          ${ex.element ? `<span class="el">${esc(ex.element)}${count ? ` <span class="cnt">· ${esc(count)}</span>` : ""}</span>` : ""}
+          ${ex.why ? `<span class="why">${esc(ex.why)}</span>` : ""}
+          ${ex.fix ? `<span class="fix">→ ${esc(ex.fix)}</span>` : ""}
+          <button class="more" type="button" data-more="${gi}">${T.details}</button>
+          <span class="tech">${esc(tech)}</span>
+        </span></li>`;
+    }).join("");
     body.innerHTML = `
-      <div class="min"><strong>${esc(r.title || "UI review")}</strong><span class="muted">· the CLI is paused until you decide</span></div>
-      ${r.diff ? `<div class="tt"><span class="seg" role="group" aria-label="Compare with HEAD"><button type="button" data-side="AFTER" aria-pressed="true">After</button><button type="button" data-side="BEFORE" aria-pressed="false">👁 Before (HEAD)</button></span><span class="muted info"></span></div>` : ""}
+      <div class="min"><strong>${esc(r.title || "UI review")}</strong><span class="muted">· ${T.paused}</span></div>
+      <div class="tt"><span class="seg" role="group" aria-label="Before / After"><button type="button" data-side="AFTER" aria-pressed="true">${T.after}</button><button type="button" data-side="BEFORE" aria-pressed="false">${T.before}${r.diff?.base ? ` (${esc(r.diff.base)})` : " (HEAD)"}</button></span><span class="muted info"></span></div>
       <ul class="list">${items}</ul>
       <div class="notes"></div>
       <div class="foot">
-        <textarea id="comment-text" placeholder="What should change? Send Comment returns the work to its author with this brief…" aria-label="Comment"></textarea>
+        <textarea id="comment-text" placeholder="${esc(T.placeholder)}" aria-label="Comment"></textarea>
         <div class="row">
-          <button class="ghost" id="comment-send" type="button" disabled>Send Comment</button>
-          <button class="reject" id="reject" type="button">Reject</button>
-          <button class="approve" id="approve" type="button">Approve</button>
+          <button class="ghost" id="comment-send" type="button" disabled>${T.send}</button>
+          <button class="reject" id="reject" type="button">${T.reject}</button>
+          <button class="approve" id="approve" type="button">${T.approve}</button>
         </div>
       </div>`;
     const text = () => $("#comment-text").value.trim();
@@ -148,10 +203,16 @@
     $("#comment-send").onclick = () => (text() || notes.length) && decide("COMMENT", text());
     $("#approve").onclick = () => decide("APPROVE", text());
     $("#reject").onclick = () => decide("REJECT", text());
-    root.querySelectorAll(".list li").forEach((li) => (li.onclick = () => focusProblem(Number(li.dataset.i))));
+    root.querySelectorAll(".list li[data-g]").forEach((li) => (li.onclick = () => focusGroup(Number(li.dataset.g))));
+    root.querySelectorAll("[data-more]").forEach((b) => (b.onclick = (e) => { e.stopPropagation(); b.closest("li").classList.toggle("open"); }));
     root.querySelectorAll(".seg button").forEach((b) => (b.onclick = () => toggle(b.dataset.side)));
     syncFrames(); renderNotes();
     if (r.diff) setSide(r.state?.side || "AFTER");
+    else {
+      // always visible, so reviewers know it exists; says why it is off
+      root.querySelectorAll(".seg button").forEach((b) => (b.disabled = true));
+      $(".tt .info").textContent = r.diffNote === "no-repo" ? T.noRepo : T.nothing;
+    }
   }
 
   // Send Comment needs either text or at least one note; the bus attaches the notes to REJECT / COMMENT
@@ -207,7 +268,8 @@
       boxes.push({ el, box, selector: sel });
       ro.observe(el);
     };
-    (current?.problems || []).forEach((p, i) => add(p.selector, p.route, "box", i + 1, { i }));
+    const gOf = new Map(); groups.forEach((g, gi) => g.items.forEach(({ i }) => gOf.set(i, gi)));
+    (current?.problems || []).forEach((p, i) => add(p.selector, p.route, "box", (gOf.get(i) ?? i) + 1, { i, g: gOf.get(i) ?? i }));
     notes.forEach((n, i) => add(n.selector, n.route, "box note", `M${i + 1}`, { note: n.id }));
     place();
   }
@@ -219,6 +281,15 @@
     if (!b) return;
     b.el.scrollIntoView({ block: "center", behavior: "smooth" });
     b.box.classList.add("pulse"); setTimeout(() => b.box.classList.remove("pulse"), 900);
+  }
+  function focusGroup(gi) {
+    const g = groups[gi]; if (!g) return;
+    const here = g.items.find(({ p }) => !p.route || p.route === location.pathname);
+    if (!here) { const r = g.items.find(({ p }) => p.route)?.p.route; if (r) location.href = r; return; } // the review is replayed there
+    const b = boxes.find((x) => x.box.dataset.g !== undefined && Number(x.box.dataset.g) === gi && x.el.getBoundingClientRect().width > 0) || boxes.find((x) => Number(x.box.dataset.g) === gi);
+    if (!b) return;
+    b.el.scrollIntoView({ block: "center", behavior: "smooth" });
+    boxes.filter((x) => Number(x.box.dataset.g) === gi).forEach((x) => { x.box.classList.add("pulse"); setTimeout(() => x.box.classList.remove("pulse"), 900); });
   }
   function focusProblem(i) {
     const p = current && current.problems[i];
@@ -379,6 +450,31 @@
   }
   window.__babysitterSelector = uniqueSelector; // for tests and the console
 
+  /* The panel moves: drag it by its header (mouse or touch), it stays inside the window, the place is
+   * remembered per site; double-click the header to put it back. The – button folds it to its header. */
+  const POS_KEY = "babysitter-studio-panel", store = { get() { try { return JSON.parse(localStorage.getItem(POS_KEY) || "{}"); } catch { return {}; } }, set(v) { try { localStorage.setItem(POS_KEY, JSON.stringify({ ...store.get(), ...v })); } catch {} } };
+  const head = $(".head"), collapseBtn = $("#collapse");
+  function placeAt(x, y) {
+    const w = panel.offsetWidth, h = panel.offsetHeight;
+    x = Math.max(8, Math.min(innerWidth - w - 8, x)); y = Math.max(8, Math.min(innerHeight - Math.min(h, 120) - 8, y));
+    Object.assign(panel.style, { left: `${x}px`, top: `${y}px`, bottom: "auto", transform: "none" });
+    return { x, y };
+  }
+  function resetPlace() { Object.assign(panel.style, { left: "", top: "", bottom: "", transform: "" }); store.set({ x: null, y: null }); }
+  head.addEventListener("pointerdown", (e) => {
+    if (e.button !== 0 || e.target.closest("button")) return;
+    const r = panel.getBoundingClientRect(), dx = e.clientX - r.left, dy = e.clientY - r.top;
+    panel.classList.add("dragging"); head.setPointerCapture(e.pointerId);
+    const move = (ev) => placeAt(ev.clientX - dx, ev.clientY - dy);
+    const up = (ev) => { head.removeEventListener("pointermove", move); head.removeEventListener("pointerup", up); panel.classList.remove("dragging"); store.set(placeAt(ev.clientX - dx, ev.clientY - dy)); };
+    head.addEventListener("pointermove", move); head.addEventListener("pointerup", up);
+  });
+  head.addEventListener("dblclick", (e) => { if (!e.target.closest("button")) resetPlace(); });
+  addEventListener("resize", () => { const s0 = store.get(); if (s0.x != null) placeAt(s0.x, s0.y); });
+  function setCollapsed(c) { panel.classList.toggle("collapsed", c); collapseBtn.textContent = c ? "+" : "–"; collapseBtn.setAttribute("aria-expanded", String(!c)); store.set({ collapsed: c }); }
+  collapseBtn.onclick = () => setCollapsed(!panel.classList.contains("collapsed"));
+  { const s0 = store.get(); if (s0.x != null) requestAnimationFrame(() => placeAt(s0.x, s0.y)); if (s0.collapsed) setCollapsed(true); }
+
   function next() {
     current = queue.shift() || null;
     if (current) renderReview(current); else renderIdle();
@@ -392,6 +488,7 @@
       if (m.type === "REVIEW_REQUIRED") {
         if (current?.reviewId === m.reviewId || queue.some((q) => q.reviewId === m.reviewId)) return;
         if (current) queue.push(m); else { current = m; renderReview(m); }
+        if (panel.classList.contains("collapsed")) setCollapsed(false); // a review waiting must not hide in a folded panel
       }
       if (m.type === "NOTES") { notes = m.notes || []; syncFrames(); renderNotes(); }
       if (m.type === "DIFF_STATE") {

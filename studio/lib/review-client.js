@@ -9,8 +9,9 @@
 import WebSocket from "ws";
 import { randomUUID } from "node:crypto";
 import { PATH } from "./protocol.js";
+import { explain } from "../../lib/explain.js";
 
-export function requestReview({ url = "http://localhost:3001", title = "UI review", problems = [], timeoutMs = 15 * 60_000, onWaiting = () => {}, diff = null, onToggle = null } = {}) {
+export function requestReview({ url = "http://localhost:3001", title = "UI review", problems = [], timeoutMs = 15 * 60_000, onWaiting = () => {}, diff = null, onToggle = null, diffNote = null } = {}) {
   return new Promise((resolve) => {
     const reviewId = randomUUID().slice(0, 8);
     const ws = new WebSocket(url.replace(/^http/, "ws") + PATH + "?role=cli");
@@ -19,7 +20,9 @@ export function requestReview({ url = "http://localhost:3001", title = "UI revie
     const timer = setTimeout(() => finish({ decision: "timeout" }), timeoutMs);
     ws.on("error", () => finish({ decision: "unavailable" }));
     ws.on("open", () => {
-      ws.send(JSON.stringify({ type: "REVIEW_REQUIRED", reviewId, title, problems, diff: onToggle ? diff : null }));
+      // every finding goes out with its plain-language explanation (what, why, how to fix) and a group key
+      const explained = problems.map(explain);
+      ws.send(JSON.stringify({ type: "REVIEW_REQUIRED", reviewId, title, problems: explained, diff: onToggle ? diff : null, diffNote: onToggle ? null : diffNote || "no-repo" }));
       onWaiting({ reviewId, url });
     });
     ws.on("message", (raw) => {

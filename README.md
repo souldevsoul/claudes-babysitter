@@ -64,6 +64,13 @@ Or install it as a dev dependency: `npm i -D github:souldevsoul/claudes-babysitt
 | `docs/` | The guidelines the rules enforce |
 | `test/`, `fixtures/` | `npm test`: RuleTester, Stylelint fixtures, end-to-end cases |
 
+## What changed in 3.12 (Studio: a panel a reviewer can read)
+
+- **Findings explained in plain language** (`lib/explain.js`, English and Russian; the panel follows the browser's language). Each finding names the element as a person would ("Dropdown «€ EUR» in the site header"), says what is wrong, why it matters (with the measured numbers) and how to fix it. Selectors, routes and rule ids go under *details*.
+- **Repeats are grouped**: the same issue on the same element is one entry ("on 12 pages · 4 places"), and frames carry the entry's number.
+- **The panel moves**: drag it by its header. It stays inside the window and keeps its place across reloads; double-click puts it back. The – button folds it, and a new review unfolds it.
+- **Before / After is always shown.** When there is nothing to compare, it is off and says why. `studio review --repo . --base main` compares a whole branch with any ref, using the same journaled, crash-safe swap as the hooks.
+
 ## What changed in 3.11 (Claude Code integration without machine paths)
 
 - **`init` package mode** — the team setup. It is chosen automatically when `claudes-babysitter` is installed or listed in `package.json`; `--package` forces it, and adds the devDependency pinned to the running version if it is missing. Everything `init` writes goes through `node_modules`, so every teammate's agent runs the version `package.json` pins:

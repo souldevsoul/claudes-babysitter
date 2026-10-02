@@ -73,6 +73,42 @@ window.__uiSelector = (el) => {
   }
   return parts.join(' > ');
 };
+// What a person would call this element, for Babysitter Studio: { kind, name, place }.
+window.__uiHuman = (el) => {
+  if (!el || el.nodeType !== 1) return null;
+  const tag = el.tagName.toLowerCase(), role = el.getAttribute('role') || '', type = (el.getAttribute('type') || '').toLowerCase();
+  const kind =
+    tag === 'input' && (type === 'checkbox' || type === 'radio') ? type :
+    tag === 'select' || role === 'combobox' || role === 'listbox' || el.getAttribute('aria-haspopup') === 'listbox' ? 'dropdown' :
+    tag === 'input' || tag === 'textarea' ? 'field' :
+    tag === 'button' || role === 'button' ? 'button' :
+    tag === 'a' ? 'link' :
+    /^h[1-6]$/.test(tag) ? 'heading' :
+    tag === 'img' || tag === 'svg' ? 'image' :
+    tag === 'table' ? 'table' :
+    tag === 'label' ? 'label' :
+    el.children.length === 0 || ['p', 'span', 'li', 'small', 'strong', 'em', 'dt', 'dd', 'td', 'th'].includes(tag) ? 'text' : 'block';
+  const clean = (t) => (t || '').replace(/\\s+/g, ' ').trim();
+  let name = clean(el.getAttribute('aria-label'));
+  if (!name && el.id) { const l = document.querySelector('label[for="' + el.id + '"]'); if (l) name = clean(l.textContent); }
+  if (!name && el.closest('label')) name = clean(el.closest('label').textContent);
+  if (!name) name = clean(el.getAttribute('placeholder')) || clean(el.getAttribute('alt')) || clean(el.getAttribute('title'));
+  if (!name) name = clean(el.innerText || el.textContent);
+  if (name.length > 48) name = name.slice(0, 45).replace(/\\s+\\S*$/, '') + '…';
+  let place = null;
+  const land = el.closest('header, footer, nav, aside, [role=dialog], dialog, form');
+  if (land) {
+    const t = land.tagName.toLowerCase(), r = land.getAttribute('role');
+    place = r === 'dialog' || t === 'dialog' ? { area: 'dialog' } : t === 'form' ? { area: 'form', title: clean((land.querySelector('h1,h2,h3,legend') || {}).textContent) } : { area: t };
+  }
+  if (!place || place.area === 'form' && !place.title) {
+    // the section it sits in, named by the nearest heading above it
+    let sec = el.closest('section, article, main > div'), title = '';
+    for (let s = sec; s && !title; s = s.parentElement && s.parentElement.closest('section, article')) title = clean((s.querySelector('h1, h2, h3') || {}).textContent);
+    if (title) place = { area: 'section', title: title.length > 40 ? title.slice(0, 37) + '…' : title };
+  }
+  return { kind, name, place };
+};
 window.__uiVisible = (el) => {
   const r = el.getBoundingClientRect();
   if (r.width < 1 || r.height < 1) return false;
@@ -140,7 +176,7 @@ export const horizontalOverflow = (page) => page.evaluate(() => {
                 }
             }
             if (!clipped)
-                out.push({ what: `extends to x=${Math.round(r.left)}..${Math.round(r.right)} (viewport ${vw})`, where: window.__uiDescribe(el), selector: window.__uiSelector(el) });
+                out.push({ what: `extends to x=${Math.round(r.left)}..${Math.round(r.right)} (viewport ${vw})`, where: window.__uiDescribe(el), selector: window.__uiSelector(el), human: window.__uiHuman(el) });
         }
         if (out.length > 15)
             break;
@@ -150,7 +186,7 @@ export const horizontalOverflow = (page) => page.evaluate(() => {
 /** 1.1 — no native select / date / file / checkbox / radio rendered. */
 export const nativeControls = (page) => page.evaluate(() => Array.from(document.querySelectorAll('select, input[type=date], input[type=datetime-local], input[type=month], input[type=time], input[type=file], input[type=checkbox], input[type=radio]'))
     .filter((el) => window.__uiVisible(el))
-    .map((el) => ({ what: `native <${el.tagName.toLowerCase()}${el.type ? ` type=${el.type}` : ""}>`, where: window.__uiDescribe(el), selector: window.__uiSelector(el) })));
+    .map((el) => ({ what: `native <${el.tagName.toLowerCase()}${el.type ? ` type=${el.type}` : ""}>`, where: window.__uiDescribe(el), selector: window.__uiSelector(el), human: window.__uiHuman(el) })));
 /** 6.4 — text ≥12px, weight ≥400, not translucent. */
 export const illegibleText = (page, allowLightWeights = false) => page.evaluate((allowLightWeights) => {
     const out = [];
@@ -192,12 +228,12 @@ export const illegibleText = (page, allowLightWeights = false) => page.evaluate(
             bad.push(`opacity ${opacity.toFixed(2)} on text`);
         if (ratio < (large ? 3 : 4.5)) {
             if (clipText || overImage)
-                eye.push({ what: `contrast ${clipText ? "of gradient-filled text" : "over image/gradient"} cannot be measured (${ratio.toFixed(2)}:1 vs solid) — check by eye`, where: window.__uiDescribe(el), selector: window.__uiSelector(el) });
+                eye.push({ what: `contrast ${clipText ? "of gradient-filled text" : "over image/gradient"} cannot be measured (${ratio.toFixed(2)}:1 vs solid) — check by eye`, where: window.__uiDescribe(el), selector: window.__uiSelector(el), human: window.__uiHuman(el) });
             else
                 bad.push(`contrast ${ratio.toFixed(2)}:1`);
         }
         if (bad.length)
-            out.push({ what: bad.join(", "), where: window.__uiDescribe(el), selector: window.__uiSelector(el) });
+            out.push({ what: bad.join(", "), where: window.__uiDescribe(el), selector: window.__uiSelector(el), human: window.__uiHuman(el) });
         if (out.length > 40)
             break;
     }
@@ -213,7 +249,7 @@ export const emoji = (page) => page.evaluate(() => {
         const t = n.textContent || "";
         const ch = [...t].find((c) => re.test(c) && !ok.has(c));
         if (ch && n.parentElement && window.__uiVisible(n.parentElement))
-            out.push({ what: `emoji ${ch}`, where: window.__uiDescribe(n.parentElement), selector: window.__uiSelector(n.parentElement) });
+            out.push({ what: `emoji ${ch}`, where: window.__uiDescribe(n.parentElement), selector: window.__uiSelector(n.parentElement), human: window.__uiHuman(n.parentElement) });
     }
     return out.slice(0, 20);
 });
@@ -283,7 +319,7 @@ export const wrappedNavItems = (page) => page.evaluate(() => {
     };
     return Array.from(document.querySelectorAll("header a, header button, nav a"))
         .filter((el) => window.__uiVisible(el) && (el.textContent || "").trim().length > 0 && lines(el) > 1)
-        .map((el) => ({ what: "nav item wraps onto two lines", where: window.__uiDescribe(el), selector: window.__uiSelector(el) }));
+        .map((el) => ({ what: "nav item wraps onto two lines", where: window.__uiDescribe(el), selector: window.__uiSelector(el), human: window.__uiHuman(el) }));
 });
 /** 2.12 — text blocks must not overlap each other (sampled). */
 export const overlappingText = (page) => page.evaluate(() => {
@@ -326,14 +362,14 @@ export const cookieCovers = (page) => page.evaluate(() => {
     const targets = Array.from(document.querySelectorAll('header a, header button, nav a, [aria-label*=menu i]')).filter((el) => window.__uiVisible(el) && !banner.contains(el));
     return targets
         .filter((el) => { const r = el.getBoundingClientRect(); const t = document.elementFromPoint(r.left + r.width / 2, r.top + r.height / 2); return !!t && banner.contains(t); })
-        .map((el) => ({ what: "covered by cookie banner", where: window.__uiDescribe(el), selector: window.__uiSelector(el) }));
+        .map((el) => ({ what: "covered by cookie banner", where: window.__uiDescribe(el), selector: window.__uiSelector(el), human: window.__uiHuman(el) }));
 });
 /** 6.9 — underline is a link affordance only. */
 export const fakeLinks = (page) => page.evaluate(() => Array.from(document.querySelectorAll("body *"))
     .filter((el) => window.__uiVisible(el) && el.children.length === 0 && (el.textContent || "").trim())
     .filter((el) => getComputedStyle(el).textDecorationLine.includes("underline") && !el.closest("a, button, [role=button], [role=link], abbr, summary, label"))
     .slice(0, 10)
-    .map((el) => ({ what: "underlined text that is not a link", where: window.__uiDescribe(el), selector: window.__uiSelector(el) })));
+    .map((el) => ({ what: "underlined text that is not a link", where: window.__uiDescribe(el), selector: window.__uiSelector(el), human: window.__uiHuman(el) })));
 /** 2.13 — cumulative layout shift. */
 export const cls = (page) => page.evaluate(() => window.__cls);
 /** Focus indicator visible when tabbing (1.9): focused styles must differ from the unfocused ones. */
@@ -375,7 +411,7 @@ export const logoLink = (page) => page.evaluate(() => {
         const content = r.getBoundingClientRect();
         const box = a.getBoundingClientRect();
         if (box.width > content.width + 32 || box.height > content.height + 32)
-            out.push({ what: `logo link box ${Math.round(box.width)}×${Math.round(box.height)} around ${Math.round(content.width)}×${Math.round(content.height)} content`, where: window.__uiDescribe(a), selector: window.__uiSelector(a) });
+            out.push({ what: `logo link box ${Math.round(box.width)}×${Math.round(box.height)} around ${Math.round(content.width)}×${Math.round(content.height)} content`, where: window.__uiDescribe(a), selector: window.__uiSelector(a), human: window.__uiHuman(a) });
     }
     return out;
 });
@@ -532,7 +568,7 @@ export const repeatedRowColumns = (page) => page.evaluate(() => {
             const sp = (xs) => Math.max(...xs) - Math.min(...xs);
             const ok = [rects.map((r) => r.left), rects.map((r) => r.right), rects.map((r) => r.left + r.width / 2)].some((xs) => sp(xs) <= 3);
             if (!ok) {
-                out.push({ what: `column ${i + 1} shifts between rows (Δ${Math.round(sp(rects.map((r) => r.left)))}px) [2.12, P48]`, where: W.__uiDescribe(list), selector: W.__uiSelector(list) });
+                out.push({ what: `column ${i + 1} shifts between rows (Δ${Math.round(sp(rects.map((r) => r.left)))}px) [2.12, P48]`, where: W.__uiDescribe(list), selector: W.__uiSelector(list), human: W.__uiHuman(list) });
                 break;
             }
         }
@@ -555,7 +591,7 @@ export const scrollbarRadius = (page) => page.evaluate(() => {
         return scrolls && bar && parseFloat(cs.borderTopRightRadius) > 0;
     })
         .slice(0, 10)
-        .map((el) => ({ what: "scroll container has rounded corners — the scrollbar cuts the radius [5.1, P21]", where: W.__uiDescribe(el), selector: W.__uiSelector(el) }));
+        .map((el) => ({ what: "scroll container has rounded corners — the scrollbar cuts the radius [5.1, P21]", where: W.__uiDescribe(el), selector: W.__uiSelector(el), human: W.__uiHuman(el) }));
 });
 /** 1.9 — inputs visible at rest: border ≥3:1 against the surface, or a distinct fill (P09). */
 export const inputVisibility = (page) => page.evaluate(() => {
@@ -578,7 +614,7 @@ export const inputVisibility = (page) => page.evaluate(() => {
         const border = mix(W.__uiRGBA(cs.borderBottomColor), fill);
         const borderOk = bw > 0 && ratio(border, bg) >= 3;
         const fillOk = ratio(fill, bg) >= 1.25;
-        return borderOk || fillOk ? null : { what: `input barely visible at rest (border ${bw ? ratio(border, bg).toFixed(2) + ":1" : "none"}, fill ${ratio(fill, bg).toFixed(2)}:1) [1.9, P09]`, where: W.__uiDescribe(el), selector: W.__uiSelector(el) };
+        return borderOk || fillOk ? null : { what: `input barely visible at rest (border ${bw ? ratio(border, bg).toFixed(2) + ":1" : "none"}, fill ${ratio(fill, bg).toFixed(2)}:1) [1.9, P09]`, where: W.__uiDescribe(el), selector: W.__uiSelector(el), human: W.__uiHuman(el) };
     })
         .filter(Boolean)
         .slice(0, 10);
@@ -608,7 +644,7 @@ export async function hoverContrast(page, max = 12) {
                     break;
                 }
             const c = W.__uiContrast(t);
-            return c.ratio < 3 ? { what: `label contrast on hover ${c.ratio.toFixed(2)}:1 [1.4, P06]`, where: W.__uiDescribe(el), selector: W.__uiSelector(el) } : null;
+            return c.ratio < 3 ? { what: `label contrast on hover ${c.ratio.toFixed(2)}:1 [1.4, P06]`, where: W.__uiDescribe(el), selector: W.__uiSelector(el), human: W.__uiHuman(el) } : null;
         }).catch(() => null);
         if (r)
             out.push(r);
@@ -627,7 +663,7 @@ const openPopups = (page) => page.evaluate(() => {
         const scrollable = [el, ...Array.from(el.querySelectorAll("*"))].some((n) => /(auto|scroll)/.test(getComputedStyle(n).overflowY) && n.scrollHeight > n.clientHeight + 1);
         const clipped = r.bottom > innerHeight + 1 || r.top < -1 || r.right > innerWidth + 1 || r.left < -1;
         const overflowing = el.scrollHeight > el.clientHeight + 1 && cs.overflowY !== "visible" && !scrollable;
-        return { where: W.__uiDescribe(el), selector: W.__uiSelector(el), role: el.getAttribute("role") || "popper", clipped, overflowing, rect: [r.top, r.bottom, r.left, r.right].map(Math.round) };
+        return { where: W.__uiDescribe(el), selector: W.__uiSelector(el), human: W.__uiHuman(el), role: el.getAttribute("role") || "popper", clipped, overflowing, rect: [r.top, r.bottom, r.left, r.right].map(Math.round) };
     });
 });
 const headerRect = (page) => page.evaluate(() => { const h = document.querySelector("header"); if (!h)
@@ -640,7 +676,7 @@ export async function interactiveStates(page, max = 8) {
     for (const t of triggers) {
         if (n >= max)
             break;
-        const info = await t.evaluate((el) => ({ vis: window.__uiVisible(el), link: el.matches("a[href]"), where: window.__uiDescribe(el), selector: window.__uiSelector(el) })).catch(() => null);
+        const info = await t.evaluate((el) => ({ vis: window.__uiVisible(el), link: el.matches("a[href]"), where: window.__uiDescribe(el), selector: window.__uiSelector(el), human: window.__uiHuman(el) })).catch(() => null);
         if (!info || !info.vis || info.link)
             continue;
         n++;
@@ -713,14 +749,14 @@ export const collectSignatures = (page, route) => page.evaluate((route) => {
         if (el.closest("nav") && !filled)
             continue;
         const variant = filled ? `filled ${W.__uiRGBA(cs.backgroundColor).slice(0, 3).map((x) => Math.round(x / 8)).join(",")}` : "outlined";
-        sigs.push({ kind: "button", filled, variant, radius: Math.min(Math.round(parseFloat(cs.borderTopLeftRadius)), 999), height: Math.round(r.height), font: font(cs), size: Math.round(parseFloat(cs.fontSize)), weight: Number(cs.fontWeight), route, where: W.__uiDescribe(el), selector: W.__uiSelector(el) });
+        sigs.push({ kind: "button", filled, variant, radius: Math.min(Math.round(parseFloat(cs.borderTopLeftRadius)), 999), height: Math.round(r.height), font: font(cs), size: Math.round(parseFloat(cs.fontSize)), weight: Number(cs.fontWeight), route, where: W.__uiDescribe(el), selector: W.__uiSelector(el), human: W.__uiHuman(el) });
     }
     for (const el of Array.from(document.querySelectorAll('input:not([type=hidden]):not([type=checkbox]):not([type=radio]), textarea, [role=combobox]'))) {
         if (!W.__uiVisible(el))
             continue;
         const cs = getComputedStyle(el);
         const r = el.getBoundingClientRect();
-        sigs.push({ kind: "input", radius: Math.round(parseFloat(cs.borderTopLeftRadius)), height: el.tagName === "TEXTAREA" ? 0 : Math.round(r.height), font: font(cs), size: Math.round(parseFloat(cs.fontSize)), weight: Number(cs.fontWeight), route, where: W.__uiDescribe(el), selector: W.__uiSelector(el) });
+        sigs.push({ kind: "input", radius: Math.round(parseFloat(cs.borderTopLeftRadius)), height: el.tagName === "TEXTAREA" ? 0 : Math.round(r.height), font: font(cs), size: Math.round(parseFloat(cs.fontSize)), weight: Number(cs.fontWeight), route, where: W.__uiDescribe(el), selector: W.__uiSelector(el), human: W.__uiHuman(el) });
     }
     for (const el of Array.from(document.querySelectorAll("main *, body > div *"))) {
         if (!W.__uiVisible(el))
@@ -734,7 +770,7 @@ export const collectSignatures = (page, route) => page.evaluate((route) => {
         if (!(border || shadow) || parseFloat(cs.paddingTop) < 12)
             continue;
         const skin = `r${Math.round(parseFloat(cs.borderTopLeftRadius))} bg(${W.__uiRGBA(cs.backgroundColor).map((x) => Math.round(x * 20) / 20).join(",")}) b${cs.borderTopWidth} ${shadow ? "shadow" : "flat"} p${cs.paddingTop}`;
-        sigs.push({ kind: "card", skin, radius: Math.round(parseFloat(cs.borderTopLeftRadius)), height: 0, font: "", size: 0, weight: 0, route, where: W.__uiDescribe(el), selector: W.__uiSelector(el) });
+        sigs.push({ kind: "card", skin, radius: Math.round(parseFloat(cs.borderTopLeftRadius)), height: 0, font: "", size: 0, weight: 0, route, where: W.__uiDescribe(el), selector: W.__uiSelector(el), human: W.__uiHuman(el) });
     }
     return sigs;
 }, route);
@@ -774,7 +810,7 @@ export const tableClipping = (page) => page.evaluate(() => {
             const cols = Array.from(t.querySelector("tr")?.children || []);
             const box = clip ? clip.getBoundingClientRect() : { left: 0, right: vw };
             const hidden = cols.filter((c) => { const r = c.getBoundingClientRect(); return r.right > box.right + 1 || r.left < box.left - 1; }).map((c) => (c.textContent || "").trim()).filter(Boolean);
-            out.push({ what: `table is ${Math.round(tr.width)}px wide in ${Math.round(visible)}px — columns cut or behind a sideways scroll${hidden.length ? ` (${hidden.join(", ")})` : ""}. Below 640px render each row as a stacked card [2.3, P16]`, where: W.__uiDescribe(t), selector: W.__uiSelector(t) });
+            out.push({ what: `table is ${Math.round(tr.width)}px wide in ${Math.round(visible)}px — columns cut or behind a sideways scroll${hidden.length ? ` (${hidden.join(", ")})` : ""}. Below 640px render each row as a stacked card [2.3, P16]`, where: W.__uiDescribe(t), selector: W.__uiSelector(t), human: W.__uiHuman(t) });
         }
     }
     return out;

@@ -244,6 +244,62 @@ try {
   r4.proc.kill("SIGKILL");
   await page.locator("#__babysitter-studio .min").filter({ hasText: "stopped waiting" }).waitFor({ timeout: 5000 });
   ok("an abandoned review is taken off the panel");
+
+  // ── what a reviewer reads: plain-language findings, grouped; a movable panel; Before/After always present ──
+  {
+    const { requestReview } = await import("../lib/review-client.js");
+    const human = { kind: "dropdown", name: "€ EUR", place: { area: "header" } };
+    const boundary = (route, selector) => ({ check: "control boundary [1.9]", what: "input barely visible at rest (border 1.43:1, fill 1.00:1) [1.9, P09]", human, route, selector });
+    const rv = requestReview({ url: base, title: "Explained", timeoutMs: 30000, problems: [
+      boundary("/", "#country"), boundary("/", "select#country"), boundary("/pricing", "#country"),
+      { check: "native control [1.1]", what: "native <input type=checkbox>", human: { kind: "checkbox", name: "I agree", place: { area: "form", title: "Create Account" } }, route: "/", selector: "p.faint" },
+    ] });
+    const ps = "#__babysitter-studio";
+    await page.locator(`${ps} #approve`).waitFor({ timeout: 10000 });
+    assert.equal(await page.locator(`${ps} .list li[data-g]`).count(), 2, "4 findings → 2 entries: the same switch on 2 pages / 3 places is one");
+    assert.equal(await page.locator(`${ps} .title`).textContent(), "Babysitter: 2 problems");
+    const first = await page.locator(`${ps} .list li[data-g]`).first().innerText();
+    assert.match(first, /The control's edge is barely visible/);
+    assert.match(first, /Dropdown «€ EUR» in the site header · on 2 pages · 3 places/);
+    assert.match(first, /3:1 \(WCAG 1\.4\.11\).*border is 1\.43:1/s);
+    assert.match(first, /→ Give it the theme's input border/);
+    assert.ok(!(await page.locator(`${ps} .list li[data-g] .tech`).first().isVisible()), "selectors stay out of the way");
+    await page.locator(`${ps} [data-more]`).first().click();
+    assert.match(await page.locator(`${ps} .list li[data-g] .tech`).first().innerText(), /#country/);
+    assert.equal(await page.locator(`${ps} .box`).first().locator(".tag").textContent(), "1", "frames carry the entry's number");
+    ok("findings say what is wrong, why and how to fix it, name the element as a person would, and group repeats");
+
+    // Before/After is always there; without a repository it is off and says why
+    assert.ok(await page.locator(`${ps} .seg button[data-side=BEFORE]`).isDisabled());
+    assert.match(await page.locator(`${ps} .tt .info`).textContent(), /needs the review's repository/);
+    ok("Before/After is always shown; off with the reason when the review has no repository");
+
+    // the panel moves, remembers where, folds, and goes back on double-click
+    const hb = await page.locator(`${ps} .head`).boundingBox(), pb0 = await page.locator(`${ps} .panel`).boundingBox();
+    await page.mouse.move(hb.x + 40, hb.y + hb.height / 2); await page.mouse.down();
+    await page.mouse.move(hb.x - 200, hb.y - 60, { steps: 6 }); await page.mouse.up();
+    const pb1 = await page.locator(`${ps} .panel`).boundingBox();
+    assert.ok(Math.abs(pb1.x - (pb0.x - 240)) <= 2 && Math.abs(pb1.y - (pb0.y - 60 - hb.height / 2)) <= 2, `moved ${JSON.stringify([pb0, pb1])}`);
+    // it cannot be dragged out of the window
+    const hb1 = await page.locator(`${ps} .head`).boundingBox();
+    await page.mouse.move(hb1.x + 40, hb1.y + 10); await page.mouse.down(); await page.mouse.move(hb1.x - 2000, hb1.y - 2000, { steps: 4 }); await page.mouse.up();
+    const pbc = await page.locator(`${ps} .panel`).boundingBox();
+    assert.ok(pbc.x === 8 && pbc.y === 8, `clamped ${JSON.stringify(pbc)}`);
+    await page.mouse.move(pbc.x + 40, pbc.y + 10); await page.mouse.down(); await page.mouse.move(pb1.x + 40, pb1.y + 10, { steps: 4 }); await page.mouse.up();
+    await page.reload(); await page.locator(`${ps} #approve`).waitFor({ timeout: 10000 });
+    const pb2 = await page.locator(`${ps} .panel`).boundingBox();
+    assert.ok(Math.abs(pb2.x - pb1.x) <= 2 && Math.abs(pb2.y - pb1.y) <= 2, "the place survives a reload");
+    await page.locator(`${ps} #collapse`).click();
+    assert.ok(!(await page.locator(`${ps} .list`).isVisible()), "folded to its header");
+    await page.locator(`${ps} #collapse`).click();
+    await page.locator(`${ps} .head`).dblclick({ position: { x: 30, y: 10 } });
+    const pb3 = await page.locator(`${ps} .panel`).boundingBox();
+    assert.ok(Math.abs(pb3.x - pb0.x) <= 2 && Math.abs(pb3.y + pb3.height - (pb0.y + pb0.height)) <= 2, "double-click puts it back");
+    await page.locator(`${ps} #approve`).click();
+    assert.equal((await rv).decision, "approve");
+    await page.locator(`${ps} .min`).filter({ hasText: "Approved" }).waitFor({ timeout: 5000 });
+    ok("the panel is dragged by its header, keeps its place across reloads, folds, and double-click puts it back");
+  }
   // 6. the real git pre-commit gate of Claude's Babysitter, with "studio": { "enabled": true }
   const ROOT = join(dirname(fileURLToPath(import.meta.url)), "..", "..");
   const repo = mkdtempSync(join(tmpdir(), "studio-git-"));
@@ -265,7 +321,7 @@ try {
     writeFileSync(join(repo, "src/app/page.tsx"), "export default function P(){ return <select />; }\n");
     const c1 = commit("needs review");
     await page.locator("#__babysitter-studio #approve").waitFor({ timeout: 30000 });
-    assert.match(await page.locator("#__babysitter-studio .list").innerText(), /no-native-controls/);
+    assert.match(await page.locator("#__babysitter-studio .list").innerText(), /A browser-default control instead of the kit's/); // the human title; the rule id sits under "details"
     await page.locator("#__babysitter-studio #approve").click();
     const r1 = await c1;
     assert.equal(r1.code, 0, r1.err); assert.match(r1.err, /Approved in Studio/);
@@ -346,6 +402,25 @@ try {
     execSync(`node ${join(ROOT, "bin/babysitter.mjs")} restore`, { cwd: repo });
     assert.equal(readFileSync(LIVE, "utf8"), AFTER_SRC, "…and `babysitter restore` (or any hook) puts AFTER back");
     ok("hook killed while viewing HEAD: SIGTERM restores at once, SIGKILL is recovered from the journal");
+
+    // studio review --repo --base <ref>: Before/After against any ref (a branch's whole change vs main)
+    const root = execSync("git rev-list --max-parents=0 HEAD", { cwd: repo, encoding: "utf8" }).trim();
+    const ROOT_SRC = execSync(`git show ${root}:src/app/page.tsx`, { cwd: repo, encoding: "utf8" });
+    const NOW_SRC = readFileSync(LIVE, "utf8");
+    assert.notEqual(ROOT_SRC, NOW_SRC);
+    const cli = spawn(process.execPath, [BIN, "review", "--url", base, "--title", "Branch vs base", "--timeout", "60", "--repo", repo, "--base", root], { stdio: ["pipe", "pipe", "pipe"] });
+    let cliErr = ""; cli.stderr.on("data", (d) => (cliErr += d));
+    cli.stdin.end(JSON.stringify([{ file: "src/app/page.tsx", line: 1, message: "demo" }]));
+    const cliDone = new Promise((r) => cli.on("exit", r));
+    await page.locator("#__babysitter-studio .seg button[data-side=BEFORE]:not([disabled])").waitFor({ timeout: 30000 });
+    assert.match(await page.locator("#__babysitter-studio .seg button[data-side=BEFORE]").textContent(), new RegExp(root.slice(0, 7)));
+    await page.locator("#__babysitter-studio .seg button[data-side=BEFORE]").click();
+    await page.locator("#__babysitter-studio .panel.before").waitFor({ timeout: 10000 });
+    assert.equal(readFileSync(LIVE, "utf8"), ROOT_SRC, "BEFORE = the file at --base");
+    await page.locator("#__babysitter-studio #approve").click();
+    assert.equal(await cliDone, 0, cliErr);
+    assert.equal(readFileSync(LIVE, "utf8"), NOW_SRC, "AFTER is back when the review ends");
+    ok("studio review --repo --base <ref>: Before shows the files at that ref, the work is restored when it ends");
 
     // notes pinned while nothing waits: UserPromptSubmit hands them over with the next prompt…
     const pin = (comment) => page.evaluate(([c, s]) => new Promise((r) => { const w = new WebSocket(`ws://${location.host}/__babysitter/ws?role=studio`); w.onopen = () => { w.send(JSON.stringify({ type: "NOTE_ADD", note: { selector: s, comment: c, route: "/", text: "Save", classes: "btn px-4" } })); setTimeout(() => { w.close(); r(); }, 150); }; }), [comment, pk.btn]);
