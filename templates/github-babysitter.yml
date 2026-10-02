@@ -1,0 +1,38 @@
+# Claude's Babysitter — the CI gate. A pull request fails only on UI problems it ADDS: old debt on touched or
+# moved lines does not count, and findings become annotations on the PR's lines.
+# Copy to .github/workflows/babysitter.yml. Requires "claudes-babysitter" in the project's devDependencies.
+name: Babysitter
+
+on:
+  pull_request:
+    branches: [main, develop]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: babysitter-${{ github.event.pull_request.number }}
+  cancel-in-progress: true
+
+jobs:
+  ui-gate:
+    name: UI guardrails (new problems only)
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0 # the gate compares the PR with the merge-base on the target branch
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+
+      - name: Install
+        run: npm ci # "prepare" → babysitter install-hooks is a no-op in CI
+
+      - name: Babysitter — fail on new UI problems
+        env:
+          BASE: ${{ github.base_ref }} # via env, never interpolated into the script
+        run: npx babysitter audit --diff "origin/$BASE"

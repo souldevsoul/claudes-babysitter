@@ -64,6 +64,19 @@ Or install it as a dev dependency: `npm i -D github:souldevsoul/claudes-babysitt
 | `docs/` | The guidelines the rules enforce |
 | `test/`, `fixtures/` | `npm test`: RuleTester, Stylelint fixtures, end-to-end cases |
 
+## What changed in 3.10 (team rollout: install on npm install, gate in CI)
+
+```jsonc
+// package.json of the product
+"devDependencies": { "claudes-babysitter": "github:souldevsoul/claudes-babysitter#v3.10.0" },
+"scripts": { "prepare": "babysitter install-hooks", "babysitter": "babysitter" }
+```
+
+- **`babysitter install-hooks`** for `prepare`: every clone gets the git pre-commit gate on `npm install` / `pnpm i`. It is silent and never fails the install. It does nothing in CI or outside a git work tree. It is idempotent and runs the project's own `node_modules` copy, so it follows upgrades. A foreign `pre-commit` is kept as `pre-commit.local` and still runs first. Under husky (`core.hooksPath`) it never rewrites the other tool's hook; it prints the one line to add.
+- **`babysitter audit --diff [origin/main]`** — the CI gate. It reports only what the branch added since it left the base (the merge-base, so debt that landed on main later is not the PR's). Old debt on touched or moved lines does not fail it (3.9). Under GitHub Actions each finding becomes an `::error` annotation on the PR line, plus a step summary. Exit 0 clean, 1 new problems, 2 unknown base (check out with `fetch-depth: 0`).
+- `--format github` for `check`; `babysitter studio …`; `ws` and `http-proxy` are root dependencies, so a git install has Studio too.
+- Workflow template: `templates/github-babysitter.yml`.
+
 ## What changed in 3.9 (the gate blocks new debt, not old debt that moved or was touched)
 
 - **"New" now means new.** In `--changed` mode each changed file is also linted at the base version, and findings are matched as a multiset of rule + message. A finding is new only if the file has more of it than before. A codemod that rewrites one token on a line no longer owns the rest of that line's debt; adding one more copy of that debt still blocks. An override counts as the same finding when its classes are edited, because the finding is about the component.
@@ -96,7 +109,7 @@ Or install it as a dev dependency: `npm i -D github:souldevsoul/claudes-babysitt
 
 - **`studio/` — `@babysitter/studio`**, an npm workspace. A local proxy injects a Shadow-DOM review panel into the dev site, and a WebSocket bus connects it to the CLI. See [`studio/README.md`](studio/README.md).
 - **The git pre-commit gate can ask a human.** With `"studio": { "enabled": true }`, a commit with problems sends `REVIEW_REQUIRED`, red frames appear on the page, and the gate waits for the decision. Approve commits, reject or a timeout aborts, and if no studio is running the plain gate decides.
-- **DOM findings now carry a unique `selector`** (`playwright/checks.ts → __uiSelector`), so they can be outlined on the page.
+- **DOM findings now carry a unique `selector`** (`playwright/checks.js → __uiSelector`), so they can be outlined on the page.
 
 ## What changed in 3.4 (adoption wizard)
 

@@ -16,7 +16,7 @@ import { chromium } from "@playwright/test";
 import { existsSync, readFileSync } from "node:fs";
 import { join, resolve } from "node:path";
 import { execSync } from "node:child_process";
-import * as c from "../playwright/checks.ts";
+import * as c from "../playwright/checks.js";
 
 const args = process.argv.slice(2);
 const opt = (n) => { const i = args.indexOf(`--${n}`); return i >= 0 && args[i + 1] && !args[i + 1].startsWith("--") ? args[i + 1] : null; };

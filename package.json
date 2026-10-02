@@ -1,8 +1,8 @@
 {
   "name": "claudes-babysitter",
-  "version": "3.9.0",
+  "version": "3.10.0",
   "private": true,
-  "description": "Claude's Babysitter — keeps AI code generators inside a product's UI system: AST lint rules, static WCAG contrast of theme tokens, component-reuse audit, Claude Code + git hooks and Playwright micro-checks. Enforces the UI Architecture & Consistency Guidelines (58 recurring UI bug patterns).",
+  "description": "Claude's Babysitter \u2014 keeps AI code generators inside a product's UI system: AST lint rules, static WCAG contrast of theme tokens, component-reuse audit, Claude Code + git hooks and Playwright micro-checks. Enforces the UI Architecture & Consistency Guidelines (58 recurring UI bug patterns).",
   "type": "module",
   "bin": {
     "babysitter": "bin/babysitter.mjs",
@@ -27,7 +27,7 @@
     "node": ">=22.18"
   },
   "scripts": {
-    "test": "npm run test:eslint && npm run test:stylelint && npm run test:check && npm run test:tt && npm run test:studio",
+    "test": "npm run test:eslint && npm run test:stylelint && npm run test:check && npm run test:tt && npm run test:team && npm run test:studio",
     "test:eslint": "node rules/eslint/test.mjs",
     "test:stylelint": "node rules/stylelint/test.mjs",
     "check": "node bin/ui-check.mjs",
@@ -38,7 +38,8 @@
     "test:check": "node test/ui-check.test.mjs",
     "test:tt": "node test/time-travel.test.mjs && node test/tool-failure.test.mjs",
     "init": "node bin/ui-init.mjs",
-    "test:studio": "npm test -w @babysitter/studio"
+    "test:studio": "npm test -w @babysitter/studio",
+    "test:team": "node test/team.test.mjs"
   },
   "dependencies": {
     "@clack/prompts": "^1.8.1",
@@ -46,10 +47,12 @@
     "@typescript-eslint/parser": "^8.71.0",
     "@typescript-eslint/typescript-estree": "^8.71.0",
     "eslint": "^9.12.0",
+    "http-proxy": "^1.18.1",
     "postcss": "^8.5.28",
     "postcss-scss": "^4.0.9",
     "stylelint": "^16.9.0",
-    "stylelint-declaration-strict-value": "^1.12.1"
+    "stylelint-declaration-strict-value": "^1.12.1",
+    "ws": "^8.18.0"
   },
   "devDependencies": {
     "@types/node": "^26.6.3",

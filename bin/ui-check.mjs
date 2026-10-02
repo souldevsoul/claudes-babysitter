@@ -2,7 +2,7 @@
 // One command for humans, CI and code generators.
 //   ui-check                       lint every jsx/tsx/css file in the repo
 //   ui-check --changed [base]      only files changed vs base (default: merge-base with origin/main, plus uncommitted/untracked)
-//   ui-check --format agent        compact fix-list to feed back into a code generator (default: text; also json)
+//   ui-check --format agent        compact fix-list to feed back into a code generator (default: text; also json, github)
 //   ui-check --repo ../my-app
 //   ui-check --changed --file src/app/page.tsx   just this file (used by the editor hook)
 //   ui-check --changed --all-lines               report old problems in changed files too (default: only changed lines)
@@ -10,7 +10,7 @@
 import { ESLint } from "eslint";
 import stylelint from "stylelint";
 import { execSync, spawnSync } from "node:child_process";
-import { existsSync, readFileSync, mkdtempSync, rmSync, copyFileSync } from "node:fs";
+import { existsSync, readFileSync, mkdtempSync, rmSync, copyFileSync, appendFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { resolve, relative, join, dirname } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -317,6 +317,22 @@ Rules of the fix:
     printWarnings();
     printInfo();
   }
+} else if (format === "github") {
+  // GitHub Actions workflow commands: each finding becomes an annotation on the PR's diff
+  const data = (v) => String(v).replace(/%/g, "%25").replace(/\r/g, "%0D").replace(/\n/g, "%0A");
+  const prop = (v) => data(v).replace(/:/g, "%3A").replace(/,/g, "%2C");
+  for (const p of problems) console.log(`::error file=${prop(p.file)},line=${p.line || 1},title=${prop(`Babysitter ${p.rule}`)}::${data(p.message)}`);
+  for (const w of warnings) console.log(`::warning file=${prop(w.file)},title=${prop(`Babysitter ${w.rule}`)}::${data(w.message)}`);
+  const summary = process.env.GITHUB_STEP_SUMMARY;
+  if (summary) {
+    const rows = problems.slice(0, 50).map((p) => `| \`${p.file}:${p.line}\` | ${p.rule} | ${String(p.message).replace(/\|/g, "\\|").slice(0, 200)} |`);
+    const md = problems.length
+      ? `### ✋ Claude's Babysitter: ${problems.length} new problem(s)\n\n| Where | Rule | What |\n|---|---|---|\n${rows.join("\n")}${problems.length > 50 ? `\n\n…and ${problems.length - 50} more (see the annotations).` : ""}\n`
+      : `### ✅ Claude's Babysitter: no new problems\n`;
+    const tail = info.length ? `\n<sub>${info.length} older finding(s) on touched or moved lines were already in the code — not blocking.</sub>\n` : "";
+    appendFileSync(summary, md + tail);
+  }
+  console.log(problems.length ? `Claude's Babysitter: ${problems.length} new problem(s) — see the annotations.` : "Claude's Babysitter: no new problems.");
 } else {
   for (const p of problems) console.log(`${p.file}:${p.line}  ${p.rule}  ${p.message}`);
   for (const w of warnings) console.log(`${w.file}  ${w.rule} (warning)  ${w.message}`);
