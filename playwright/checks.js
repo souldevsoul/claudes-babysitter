@@ -855,7 +855,7 @@ export const inlineStyles = (page, allowProps = [], skip = [], strict = false) =
         if (!props.length)
             continue;
         const tag = el.tagName.toLowerCase();
-        out.push({ tag, props, what: `<${tag}> has inline ${props.join(", ")}`, where: W.__uiDescribe ? W.__uiDescribe(el) : tag });
+        out.push({ tag, props, what: `<${tag}> has inline ${props.join(", ")}`, where: W.__uiDescribe ? W.__uiDescribe(el) : tag, selector: W.__uiSelector ? W.__uiSelector(el) : undefined, human: W.__uiHuman ? W.__uiHuman(el) : undefined });
         if (out.length > 30)
             break;
     }

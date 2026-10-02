@@ -274,7 +274,7 @@ try {
     const { requestReview } = await import("../lib/review-client.js");
     const proj = mkdtempSync(join(tmpdir(), "studio-cmp-"));
     const server = `const http=require("http"),fs=require("fs");const i=process.argv.indexOf("--port");const port=+(i>0?process.argv[i+1]:process.env.PORT);http.createServer((q,r)=>{r.writeHead(200,{"content-type":"text/html; charset=utf-8"});r.end(fs.readFileSync(__dirname+"/index.html"))}).listen(port,"127.0.0.1",()=>console.log("up "+port));`;
-    const html = (color) => `<!doctype html><html><head><style>body{margin:0;font:16px sans-serif;background:#fff}h1{margin:0;padding:40px;font-size:48px}.tall{height:2600px}.low{padding:40px;font-size:32px}</style></head><body><h1 id="t" style="color:${color}">Title</h1><p>same text</p><div class="tall"></div><p class="low" style="color:${color}">low line</p></body></html>`;
+    const html = (color) => `<!doctype html><html><head><style>body{margin:0;font:16px sans-serif;background:#fff}h1{margin:0;padding:40px;font-size:48px}.tall{height:2600px}.low{padding:40px;font-size:32px}</style></head><body><h1 id="t" style="color:${color}">Title</h1><p>same text</p><p id="tick" style="font:24px monospace">-</p><p class="blink" id="blink">|</p><style>@keyframes b{50%{opacity:0}}.blink{animation:b 1s steps(1) infinite;font-size:32px}</style><script>setInterval(()=>{document.getElementById("tick").textContent=(Date.now()%100000)+" "+Math.random().toFixed(6)},37)</script><div class="tall"></div><p class="low" style="color:${color}">low line</p></body></html>`;
     writeFileSync(join(proj, "server.js"), server);
     writeFileSync(join(proj, "package.json"), JSON.stringify({ name: "cmp", scripts: { dev: "node server.js" } }));
     writeFileSync(join(proj, "index.html"), html("#ff0000"));
@@ -326,7 +326,9 @@ try {
       assert.ok(await p2.locator(`${ps} .cmp .handle`).isVisible() && await p2.locator(`${ps} .cmp img.a`).isVisible() && await p2.locator(`${ps} .cmp img.b`).isVisible(), "slider shows both");
       await p2.locator(`${ps} #cmp-diff`).click();
       await p2.locator(`${ps} .tt .info`).filter({ hasText: /changed area/ }).waitFor({ timeout: 10000 });
-      assert.match(await p2.locator(`${ps} .tt .info`).textContent(), /^[1-9]\d* changed area\(s\) highlighted$/);
+      // a JS ticker (Date.now + Math.random) and an endless CSS blink are identical on both sides: frozen clock,
+      // seeded random, parked animations — so the only changed area is the heading whose colour changed
+      assert.equal(await p2.locator(`${ps} .tt .info`).textContent(), "1 changed area(s) highlighted");
       await p2.locator(`${ps} #cmp-diff`).click(); await p2.locator(`${ps} #cmp-slider`).click();
       ok("B flips instantly; the slider shows both sides; Differences counts the changed areas");
 

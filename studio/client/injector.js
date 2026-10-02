@@ -236,7 +236,9 @@
       let n = 0;
       for (let y = cy * cell; y < Math.min(h, (cy + 1) * cell) && n < 3; y += 2) for (let x = cx * cell; x < Math.min(w, (cx + 1) * cell); x += 2) {
         const k = (y * w + x) * 4;
-        if (Math.max(Math.abs(A[k] - B[k]), Math.abs(A[k + 1] - B[k + 1]), Math.abs(A[k + 2] - B[k + 2])) > 32 && ++n >= 3) break;
+        // both snapshots come from the same headless browser and the same frozen moment, so even a quiet change
+        // (a border two shades lighter) counts; a single stray pixel does not
+        if (Math.max(Math.abs(A[k] - B[k]), Math.abs(A[k + 1] - B[k + 1]), Math.abs(A[k + 2] - B[k + 2])) > 10 && ++n >= 3) break;
       }
       if (n >= 3) hot[cy * cw + cx] = 1;
     }
