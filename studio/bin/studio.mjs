@@ -31,11 +31,11 @@ if (cmd === "start") {
     if (tt) dispose = guard(tt, (m) => console.error(m));
     else console.error(`Before/After: nothing to compare against ${opt("base", "HEAD")} in ${repo}.`);
   }
-  const { apply } = tt ? await import("../../lib/time-travel.js") : {};
+  const { applyStaged } = tt ? await import("../../lib/time-travel.js") : {};
   const r = await requestReview({
     url, problems, title: opt("title", "UI review"), timeoutMs: Number(opt("timeout", 900)) * 1000,
     diff: tt && { files: tt.journal.files.length, skipped: tt.journal.skipped.length, base: opt("base", "HEAD") },
-    onToggle: tt && ((side) => apply(tt, side)),
+    onToggle: tt && ((side) => applyStaged(tt, side)),
     diffNote: repo ? "nothing" : "no-repo",
     onWaiting: () => console.error(`⏳ Visual Review required. Open ${url} — ${problems.length} problem(s)`),
   });

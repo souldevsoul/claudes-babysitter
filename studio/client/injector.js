@@ -15,7 +15,9 @@
   .layer { position: fixed; inset: 0; pointer-events: none; }
   .box { position: fixed; border: 2px solid #ef4444; border-radius: 4px; background: rgb(239 68 68 / 0.08); box-shadow: 0 0 0 1px rgb(255 255 255 / 0.6); transition: box-shadow .2s; }
   .box.pulse { box-shadow: 0 0 0 6px rgb(239 68 68 / 0.35); }
-  .tag { position: absolute; top: -11px; left: -2px; min-width: 20px; height: 20px; padding: 0 6px; border-radius: 10px; background: #ef4444; color: #fff; font: 600 11px/20px ui-sans-serif, system-ui; text-align: center; }
+  .layer.off .box { display: none; }
+  .layer.off .box.peek { display: block; }
+  .tag { position: absolute; top: -12px; left: -12px; min-width: 20px; height: 20px; padding: 0 6px; border-radius: 10px; background: #ef4444; color: #fff; font: 600 11px/20px ui-sans-serif, system-ui; text-align: center; }
   .panel { position: fixed; left: 50%; bottom: 16px; transform: translateX(-50%); width: min(560px, calc(100vw - 32px)); pointer-events: auto;
     background: #111318; color: #f4f4f5; border: 1px solid #2a2d35; border-radius: 14px; box-shadow: 0 12px 40px rgb(0 0 0 / .45); overflow: hidden; }
   .head { display: flex; align-items: center; gap: 8px; padding: 10px 14px; border-bottom: 1px solid #23262d; font-size: 13px; cursor: grab; user-select: none; touch-action: none; }
@@ -96,7 +98,7 @@
       <span><button class="ghost small" id="note-cancel" type="button">Cancel</button><button class="save small" id="note-save" type="button" disabled>Save</button></span></div>
   </div></div>
 <div class="panel" role="region" aria-label="Babysitter Studio">
-  <div class="head" title="Drag to move · double-click to put back"><span class="grip" aria-hidden="true">⋮⋮</span><span class="dot"></span><span class="title">Babysitter Studio</span><span class="muted status">connecting…</span><button class="chip collapse" id="collapse" type="button" aria-expanded="true" title="Collapse / expand">–</button><button class="chip" id="inspect" type="button" aria-pressed="false" title="Point at any element and leave a note for Claude (Esc to stop)">🎯 Inspect</button></div>
+  <div class="head" title="Drag to move · double-click to put back"><span class="grip" aria-hidden="true">⋮⋮</span><span class="dot"></span><span class="title">Babysitter Studio</span><span class="muted status">connecting…</span><button class="chip" id="frames" type="button" aria-pressed="true" title="Frames on the page: on / off">▢</button><button class="chip" id="lang" type="button" title="Language / Язык">EN</button><button class="chip collapse" id="collapse" type="button" aria-expanded="true" title="Collapse / expand">–</button><button class="chip" id="inspect" type="button" aria-pressed="false" title="Point at any element and leave a note for Claude (Esc to stop)">🎯 Inspect</button></div>
   <div class="body"></div>
 </div>`;
   const $ = (s) => root.querySelector(s);
@@ -106,12 +108,15 @@
   let ws, retry = 500, queue = [], current = null, boxes = [], raf = 0, side = "AFTER", notes = [];
   const panel = $(".panel");
   // the reviewer's language for what the panel says (findings carry their explanations in en and ru)
-  const LANG = /^ru\b/i.test(navigator.language || "") ? "ru" : "en";
-  const T = {
-    en: { problems: (n) => `${n} problem${n === 1 ? "" : "s"}`, paused: "the CLI is paused until you decide", after: "After", before: "👁 Before", viewing: (b) => `Viewing ${b} · frames hidden`, differ: (n, b) => `Your changes · ${n} file(s) differ from ${b}`, nothing: "Nothing to compare — no changed UI files", noRepo: "Before/After needs the review's repository (the hooks pass it; studio review --repo)", details: "details", pages: (n) => `on ${n} pages`, places: (n) => `${n} places`, otherPage: (r) => `on ${r}`, placeholder: "What should change? Send Comment returns the work to its author with this brief…", send: "Send Comment", reject: "Reject", approve: "Approve" },
-    ru: { problems: (n) => `${n} ${n % 10 === 1 && n % 100 !== 11 ? "проблема" : n % 10 >= 2 && n % 10 <= 4 && (n % 100 < 12 || n % 100 > 14) ? "проблемы" : "проблем"}`, paused: "проверка ждёт вашего решения", after: "После", before: "👁 До", viewing: (b) => `Показано состояние ${b} · рамки скрыты`, differ: (n, b) => `Ваши изменения · ${n} файл(ов) отличаются от ${b}`, nothing: "Сравнивать нечего — изменённых UI-файлов нет", noRepo: "Для «До / После» ревью нужен репозиторий (хуки передают его сами; studio review --repo)", details: "подробности", pages: (n) => `на ${n} страницах`, places: (n) => `${n} мест`, otherPage: (r) => `на странице ${r}`, placeholder: "Что изменить? Send Comment вернёт работу автору с этим заданием…", send: "Send Comment", reject: "Reject", approve: "Approve" },
-  }[LANG];
-  const plural = T.problems;
+  const PREF_KEY = "babysitter-studio-prefs";
+  const prefs = { get() { try { return JSON.parse(localStorage.getItem(PREF_KEY) || "{}"); } catch { return {}; } }, set(v) { try { localStorage.setItem(PREF_KEY, JSON.stringify({ ...prefs.get(), ...v })); } catch {} } };
+  let LANG = prefs.get().lang || (/^ru\b/i.test(navigator.language || "") ? "ru" : "en");
+  const DICT = {
+    en: { problems: (n) => `${n} problem${n === 1 ? "" : "s"}`, paused: "the CLI is paused until you decide", after: "After", before: "👁 Before", viewing: (b) => `Viewing ${b} · frames hidden`, differ: (n, b) => `Your changes · ${n} file(s) differ from ${b}`, switching: "Swapping the files and waiting for the dev server to rebuild (~5 s)…", framesOn: "Frames on the page: on", framesOff: "Frames on the page: off (click an entry to see its frame)", nothing: "Nothing to compare — no changed UI files", noRepo: "Before/After needs the review's repository (the hooks pass it; studio review --repo)", details: "details", pages: (n) => `on ${n} pages`, places: (n) => `${n} places`, otherPage: (r) => `on ${r}`, placeholder: "What should change? Send Comment returns the work to its author with this brief…", send: "Send Comment", reject: "Reject", approve: "Approve" },
+    ru: { problems: (n) => `${n} ${n % 10 === 1 && n % 100 !== 11 ? "проблема" : n % 10 >= 2 && n % 10 <= 4 && (n % 100 < 12 || n % 100 > 14) ? "проблемы" : "проблем"}`, paused: "проверка ждёт вашего решения", after: "После", before: "👁 До", viewing: (b) => `Показано состояние ${b} · рамки скрыты`, differ: (n, b) => `Ваши изменения · ${n} файл(ов) отличаются от ${b}`, switching: "Подменяю файлы и жду, пока dev-сервер пересоберёт (~5 с)…", framesOn: "Рамки на странице: включены", framesOff: "Рамки на странице: выключены (клик по пункту покажет его рамку)", nothing: "Сравнивать нечего — изменённых UI-файлов нет", noRepo: "Для «До / После» ревью нужен репозиторий (хуки передают его сами; studio review --repo)", details: "подробности", pages: (n) => `на ${n} страницах`, places: (n) => `${n} мест`, otherPage: (r) => `на странице ${r}`, placeholder: "Что изменить? Send Comment вернёт работу автору с этим заданием…", send: "Send Comment", reject: "Reject", approve: "Approve" },
+  };
+  let T = DICT[LANG];
+  const plural = (n) => T.problems(n);
   const esc = (s) => String(s ?? "").replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" })[c]);
   const send = (m) => ws && ws.readyState === 1 && ws.send(JSON.stringify(m));
 
@@ -133,7 +138,8 @@
   function toggle(next) {
     if (!current?.diff || next === side) return;
     root.querySelectorAll(".seg button").forEach((b) => (b.disabled = true));
-    $(".tt .info").textContent = "switching…";
+    $(".tt .info").textContent = T.switching;
+    awaitingSwap = true;
     send({ type: "TOGGLE_DIFF", reviewId: current.reviewId, side: next });
   }
 
@@ -160,7 +166,7 @@
     const e = p.explain && (p.explain[LANG] || p.explain.en);
     return e || { title: p.message, why: "", fix: "", element: p.selector || [p.file, p.line].filter(Boolean).join(":") };
   }
-  let groups = [];
+  let groups = [], awaitingSwap = false;
 
   function renderReview(r) {
     const list = r.problems || [];
@@ -210,6 +216,7 @@
     root.querySelectorAll("[data-more]").forEach((b) => (b.onclick = (e) => { e.stopPropagation(); b.closest("li").classList.toggle("open"); }));
     root.querySelectorAll(".seg button").forEach((b) => (b.onclick = () => toggle(b.dataset.side)));
     syncFrames(); renderNotes();
+    if (restoreView) { const v = restoreView; restoreView = null; requestAnimationFrame(() => scrollTo(0, v.y)); if (v.draft) $("#comment-text").value = v.draft; }
     if (r.diff) setSide(r.state?.side || "AFTER");
     else {
       // always visible, so reviewers know it exists; says why it is off
@@ -249,9 +256,11 @@
       if (!b.el.isConnected) { try { b.el = document.querySelector(b.selector) || b.el; ro.observe(b.el); } catch {} }
       const r = b.el.getBoundingClientRect();
       const shown = b.el.isConnected && (r.width || r.height);
-      b.box.style.cssText = shown ? `left:${r.left - 3}px;top:${r.top - 3}px;width:${r.width + 6}px;height:${r.height + 6}px` : "display:none";
+      // 6px of air between the element and the 2px frame, so the frame never sits on the element's own edge
+      b.box.style.cssText = shown ? `left:${r.left - GAP}px;top:${r.top - GAP}px;width:${r.width + GAP * 2}px;height:${r.height + GAP * 2}px` : "display:none";
     }
   }
+  const GAP = 8; // 2px border + 6px of air
   const schedule = () => { if ((boxes.length || picking) && !raf) raf = requestAnimationFrame(place); };
   const ro = new ResizeObserver(schedule);
   addEventListener("scroll", schedule, { capture: true, passive: true });
@@ -292,7 +301,7 @@
     const b = boxes.find((x) => x.box.dataset.g !== undefined && Number(x.box.dataset.g) === gi && x.el.getBoundingClientRect().width > 0) || boxes.find((x) => Number(x.box.dataset.g) === gi);
     if (!b) return;
     b.el.scrollIntoView({ block: "center", behavior: "smooth" });
-    boxes.filter((x) => Number(x.box.dataset.g) === gi).forEach((x) => { x.box.classList.add("pulse"); setTimeout(() => x.box.classList.remove("pulse"), 900); });
+    boxes.filter((x) => Number(x.box.dataset.g) === gi).forEach((x) => { x.box.classList.add("pulse", "peek"); setTimeout(() => x.box.classList.remove("pulse"), 900); setTimeout(() => x.box.classList.remove("peek"), 2500); });
   }
   function focusProblem(i) {
     const p = current && current.problems[i];
@@ -478,6 +487,23 @@
   collapseBtn.onclick = () => setCollapsed(!panel.classList.contains("collapsed"));
   { const s0 = store.get(); if (s0.x != null) requestAnimationFrame(() => placeAt(s0.x, s0.y)); if (s0.collapsed) setCollapsed(true); }
 
+  // frames on/off (the reviewer may want the page clean to compare Before/After); off = peek on click
+  const framesBtn = $("#frames"), langBtn = $("#lang");
+  function setFrames(on) { layer.classList.toggle("off", !on); framesBtn.setAttribute("aria-pressed", String(on)); framesBtn.title = on ? T.framesOn : T.framesOff; framesBtn.textContent = on ? "▣" : "▢"; prefs.set({ frames: on }); }
+  framesBtn.onclick = () => setFrames(layer.classList.contains("off"));
+  setFrames(prefs.get().frames !== false);
+  // language of the panel and of the explanations: EN / RU
+  function setLang(l) {
+    LANG = l; T = DICT[l]; langBtn.textContent = l.toUpperCase(); prefs.set({ lang: l });
+    setFrames(!layer.classList.contains("off"));
+    const draft = $("#comment-text")?.value;
+    if (current) { renderReview(current); if (draft) $("#comment-text").value = draft; } else renderIdle();
+  }
+  langBtn.onclick = () => setLang(LANG === "ru" ? "en" : "ru");
+  langBtn.textContent = LANG.toUpperCase();
+  let restoreView = null;
+  try { const v = JSON.parse(sessionStorage.getItem("babysitter-studio-scroll") || "null"); sessionStorage.removeItem("babysitter-studio-scroll"); if (v && v.path === location.pathname) restoreView = v; } catch {}
+
   function next() {
     current = queue.shift() || null;
     if (current) renderReview(current); else renderIdle();
@@ -494,6 +520,14 @@
         if (panel.classList.contains("collapsed")) setCollapsed(false); // a review waiting must not hide in a folded panel
       }
       if (m.type === "NOTES") { notes = m.notes || []; syncFrames(); renderNotes(); }
+      // only the answer to a switch THIS panel asked for reloads it — never a replayed state (no reload loop)
+      if (m.type === "DIFF_STATE" && awaitingSwap && !m.error && current?.reviewId === m.reviewId) {
+        awaitingSwap = false;
+        // the files changed under the dev server; HMR may keep a stale stylesheet — load the page fresh, same scroll
+        try { sessionStorage.setItem("babysitter-studio-scroll", JSON.stringify({ path: location.pathname, y: scrollY, draft: $("#comment-text")?.value || "" })); } catch {}
+        current.state = m;
+        setTimeout(() => location.reload(), 600);
+      }
       if (m.type === "DIFF_STATE") {
         if (current?.reviewId === m.reviewId) { current.state = m; setSide(m.side, m.error || (m.conflicts?.length ? `Edits made while viewing HEAD were kept in ${m.conflicts[0].replace(/\/[^/]*$/, "")}` : "")); }
         else { const q = queue.find((x) => x.reviewId === m.reviewId); if (q) q.state = m; }

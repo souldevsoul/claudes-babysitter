@@ -15,7 +15,7 @@ export function requestReview({ url = "http://localhost:3001", title = "UI revie
   return new Promise((resolve) => {
     const reviewId = randomUUID().slice(0, 8);
     const ws = new WebSocket(url.replace(/^http/, "ws") + PATH + "?role=cli");
-    let done = false;
+    let done = false, toggling = Promise.resolve();
     const finish = (r) => { if (done) return; done = true; clearTimeout(timer); try { ws.close(); } catch {} resolve({ reviewId, ...r }); };
     const timer = setTimeout(() => finish({ decision: "timeout" }), timeoutMs);
     ws.on("error", () => finish({ decision: "unavailable" }));
@@ -29,9 +29,12 @@ export function requestReview({ url = "http://localhost:3001", title = "UI revie
       let m; try { m = JSON.parse(String(raw)); } catch { return; }
       if (m.reviewId !== reviewId) return;
       if (m.type === "TOGGLE_DIFF" && onToggle) {
-        let state;
-        try { state = { ...onToggle(m.side), error: undefined }; } catch (e) { state = { side: m.side === "BEFORE" ? "AFTER" : "BEFORE", error: e.message }; }
-        if (ws.readyState === 1) ws.send(JSON.stringify({ type: "DIFF_STATE", reviewId, ...state }));
+        // one switch at a time: a staged swap takes a few seconds and must not interleave with the next
+        toggling = toggling.then(async () => {
+          let state;
+          try { state = { ...(await onToggle(m.side)), error: undefined }; } catch (e) { state = { side: m.side === "BEFORE" ? "AFTER" : "BEFORE", error: e.message }; }
+          if (ws.readyState === 1) ws.send(JSON.stringify({ type: "DIFF_STATE", reviewId, ...state }));
+        });
       }
       if (m.type === "DECISION") finish({ decision: m.decision, text: m.text, manual: m.manual || [] });
     });

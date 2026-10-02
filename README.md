@@ -64,6 +64,13 @@ Or install it as a dev dependency: `npm i -D github:souldevsoul/claudes-babysitt
 | `docs/` | The guidelines the rules enforce |
 | `test/`, `fixtures/` | `npm test`: RuleTester, Stylelint fixtures, end-to-end cases |
 
+## What changed in 3.13 (Before/After that the page really shows)
+
+- **The dev server now follows the swap.** On Orbit (Next 16, Turbopack) the switch changed the files but the page kept the old look: the theme CSS was one step behind and Tailwind missed the classes of re-created files. Swaps are now staged (`applyStaged`): stylesheets first, a pause, the components, then one more real write of the stylesheets on a settled tree. The page is then reloaded with its scroll position and comment draft kept, so it shows the rebuilt CSS. Verified on Orbit: page, theme and Tailwind classes match the chosen side every time, within about 5 s.
+- A decision taken mid-swap cancels it cleanly: the work is on disk at the end, the rescan marker never stays, no false conflict copies.
+- **Frames have 6 px of air** around the element. **▣/▢ toggles the frames**; with frames off, clicking an entry shows its frame for a moment.
+- **EN / RU switch** in the panel, remembered per site.
+
 ## What changed in 3.12 (Studio: a panel a reviewer can read)
 
 - **Findings explained in plain language** (`lib/explain.js`, English and Russian; the panel follows the browser's language). Each finding names the element as a person would ("Dropdown «€ EUR» in the site header"), says what is wrong, why it matters (with the measured numbers) and how to fix it. Selectors, routes and rule ids go under *details*.

@@ -17,6 +17,7 @@ const PAGE = `<!doctype html><html><head><title>t</title></head><body class="bg-
 <main><h1>Settings</h1><select id="country"><option>DE</option></select><p class="faint" style="color:#ccc">fine print</p>
 <section class="cards"><div class="card flex gap-2"><button class="btn px-4 hover:bg-red-500" onclick="window.appClicks=(window.appClicks||0)+1">Save</button></div><div class="card flex gap-2"><button class="btn px-4 hover:bg-red-500" onclick="window.appClicks=(window.appClicks||0)+1">Save</button></div></section>
 <div id=":r1:"><span>generated id</span></div><div id="base-ui-_R_4j9bn5rlb_"><button class="pick-me"><span class="flex flex-1">Неделя</span></button></div><button aria-label='Период: "Выручка"'>x</button><ul><li>a</li><li>b</li><li><a href="/x">c</a></li></ul>
+<div class="tall-tail" aria-hidden="true" style="height:1400px"></div>
 <script>window.snippet = "</body>";</script></main></body></html>`;
 let LIVE = null; // a file of the test repo, served raw — stands in for the dev server re-rendering after HMR
 const target = http.createServer((req, res) => {
@@ -70,6 +71,13 @@ try {
 
   const browser = await chromium.launch({ channel: process.env.PW_CHANNEL || "chrome" });
   const page = await browser.newPage();
+  // a Before/After switch reloads the page once the swap is done: click, then wait for that reload
+  const clickSide = async (side, opts = {}) => {
+    const nav = page.waitForEvent("framenavigated", { predicate: (f) => f === page.mainFrame(), timeout: 30000 });
+    await page.locator(`#__babysitter-studio .seg button[data-side=${side}]`).click(opts);
+    await nav;
+  };
+
   await page.goto(base + "/");
   await page.locator("#__babysitter-studio .status").filter({ hasText: "connected" }).waitFor({ timeout: 10000 });
   ok("panel mounts in a Shadow DOM and connects to the bus");
@@ -80,7 +88,8 @@ try {
   assert.equal(await page.locator("#__babysitter-studio .box").count(), 2, "one red frame per DOM problem, none for the file-only one");
   const frame = await page.locator("#__babysitter-studio .box").first().boundingBox();
   const sel = await page.locator("#country").boundingBox();
-  assert.ok(Math.abs(frame.x - (sel.x - 3)) <= 1 && Math.abs(frame.width - (sel.width + 6)) <= 1, "frame sits on the element");
+  assert.ok(Math.abs(frame.x - (sel.x - 8)) <= 1 && Math.abs(frame.width - (sel.width + 16)) <= 1, "frame wraps the element with 6px of air");
+  assert.ok(frame.x < sel.x - 5 && frame.y < sel.y - 5, "never touching the element's own edge");
   assert.equal(await page.locator("#__babysitter-studio .list li").count(), 3);
   assert.equal(await page.locator("#__babysitter-studio .title").textContent(), "Babysitter: 3 problems");
   assert.match(r1.err, /⏳ Visual Review required\. Open http:\/\/localhost:\d+/);
@@ -88,9 +97,11 @@ try {
 
   // frames follow the element: DOM change (HMR-like) pushes it below the fold, then the page scrolls
   const frameOn = async (sel) => {
+    // let a smooth scroll finish first: the frame follows the element one animation frame later
+    await page.evaluate(() => new Promise((r) => { let last = -1, still = 0; const tick = () => { if (scrollY === last && ++still >= 3) return r(); if (scrollY !== last) still = 0; last = scrollY; requestAnimationFrame(tick); }; tick(); }));
     await page.evaluate(() => new Promise((r) => requestAnimationFrame(() => requestAnimationFrame(r))));
     const [f, e] = [await page.locator("#__babysitter-studio .box").first().boundingBox(), await page.locator(sel).boundingBox()];
-    return Math.abs(f.y - (e.y - 3)) <= 1 && Math.abs(f.x - (e.x - 3)) <= 1;
+    return Math.abs(f.y - (e.y - 8)) <= 1 && Math.abs(f.x - (e.x - 8)) <= 1;
   };
   await page.evaluate(() => { const d = document.createElement("div"); d.id = "spacer"; d.style.height = "2400px"; document.querySelector("main").prepend(d); });
   assert.ok(await frameOn("#country"), "frame moved with the DOM change");
@@ -126,12 +137,24 @@ try {
   await page.locator("#__babysitter-studio .seg").waitFor({ timeout: 10000 });
   assert.ok(await page.locator("#__babysitter-studio .box").first().isVisible());
   assert.equal(await page.locator("#__babysitter-studio .seg button[data-side=AFTER]").getAttribute("aria-pressed"), "true", "After by default");
-  await page.locator("#__babysitter-studio .seg button[data-side=BEFORE]").click();
-  await page.locator("#__babysitter-studio .panel.before").waitFor({ timeout: 5000 });
+  // a switch reloads the page once the swap is done (the browser then shows what the dev server rebuilt)
+  const reloaded = () => page.waitForEvent("framenavigated", { predicate: (f) => f === page.mainFrame(), timeout: 10000 });
+  await page.evaluate(() => scrollTo(0, 120));
+  assert.equal(await page.evaluate(() => scrollY), 120);
+  await page.locator("#__babysitter-studio #comment-text").fill("draft that must survive");
+  let nav = reloaded();
+  await clickSide("BEFORE");
+  await nav; await page.locator("#__babysitter-studio .panel.before").waitFor({ timeout: 5000 });
+  await page.waitForFunction(() => scrollY === 120, null, { timeout: 3000 }).catch(() => {});
+  assert.equal(await page.evaluate(() => scrollY), 120, "the reload keeps the reader's scroll position");
+  assert.equal(await page.locator("#__babysitter-studio #comment-text").inputValue(), "draft that must survive", "and the comment draft");
+  await page.locator("#__babysitter-studio #comment-text").fill("");
   assert.equal(await page.locator("#__babysitter-studio .box").first().isVisible(), false, "frames hidden on BEFORE");
   assert.match(await page.locator("#__babysitter-studio .tt .info").textContent(), /Viewing HEAD/);
-  await page.locator("#__babysitter-studio .seg button[data-side=AFTER]").click();
-  await page.locator("#__babysitter-studio .panel:not(.before)").waitFor({ timeout: 5000 });
+  nav = reloaded();
+  await clickSide("AFTER");
+  await nav; await page.locator("#__babysitter-studio .panel:not(.before) .seg").waitFor({ timeout: 5000 });
+  await page.evaluate(() => scrollTo(0, 0));
   assert.ok(await page.locator("#__babysitter-studio .box").first().isVisible(), "frames back on AFTER");
   await page.evaluate(() => { const w = new WebSocket(`ws://${location.host}/__babysitter/ws?role=studio`); w.onopen = () => w.send(JSON.stringify({ type: "TOGGLE_DIFF", reviewId: "x", side: "../../etc/passwd" })); });
   await page.locator("#__babysitter-studio #approve").click();
@@ -177,7 +200,7 @@ try {
   await page.locator(`${ps} .sec`).filter({ hasText: "Manual Feedback · 1" }).waitFor({ timeout: 5000 });
   assert.equal(await page.locator(`${ps} #inspect`).getAttribute("aria-pressed"), "false", "picking ends after Save");
   const nb = await page.locator(`${ps} .box.note`).boundingBox();
-  assert.ok(Math.abs(nb.x - (tb.x - 3)) <= 1, "the note keeps a blue frame on its element");
+  assert.ok(Math.abs(nb.x - (tb.x - 8)) <= 1, "the note keeps a blue frame on its element");
   await target2.click(); assert.equal(await page.evaluate(() => window.appClicks), 1, "the page is clickable again");
 
   // Esc: unlock, then leave; Alt+↑ goes to the parent
@@ -296,10 +319,26 @@ try {
     await page.locator(`${ps} .head`).dblclick({ position: { x: 30, y: 10 } });
     const pb3 = await page.locator(`${ps} .panel`).boundingBox();
     assert.ok(Math.abs(pb3.x - pb0.x) <= 2 && Math.abs(pb3.y + pb3.height - (pb0.y + pb0.height)) <= 2, "double-click puts it back");
+    // frames off: the page is clean for comparing; clicking an entry shows that entry's frame for a moment
+    await page.locator(`${ps} #frames`).click();
+    assert.equal(await page.locator(`${ps} .box`).first().isVisible(), false, "frames hidden");
+    await page.locator(`${ps} .list li[data-g]`).nth(1).click();
+    await page.locator(`${ps} .box.peek`).first().waitFor({ state: "visible", timeout: 3000 });
+    await page.locator(`${ps} .box.peek`).first().waitFor({ state: "hidden", timeout: 5000 });
+    await page.locator(`${ps} #frames`).click();
+    assert.ok(await page.locator(`${ps} .box`).first().isVisible(), "frames back");
+    // EN ↔ RU, remembered across reloads
+    await page.locator(`${ps} #lang`).click();
+    assert.match(await page.locator(`${ps} .list li[data-g]`).first().innerText(), /Границы элемента управления почти не видно/);
+    assert.equal(await page.locator(`${ps} .title`).textContent(), "Babysitter: 2 проблемы");
+    await page.reload(); await page.locator(`${ps} #approve`).waitFor({ timeout: 10000 });
+    assert.equal(await page.locator(`${ps} #lang`).textContent(), "RU");
+    await page.locator(`${ps} #lang`).click();
+    assert.match(await page.locator(`${ps} .list li[data-g]`).first().innerText(), /The control's edge is barely visible/);
     await page.locator(`${ps} #approve`).click();
     assert.equal((await rv).decision, "approve");
     await page.locator(`${ps} .min`).filter({ hasText: "Approved" }).waitFor({ timeout: 5000 });
-    ok("the panel is dragged by its header, keeps its place across reloads, folds, and double-click puts it back");
+    ok("the panel is dragged by its header, keeps its place across reloads, folds, double-click puts it back; frames on/off with peek; EN ↔ RU");
   }
   // 6. the real git pre-commit gate of Claude's Babysitter, with "studio": { "enabled": true }
   const ROOT = join(dirname(fileURLToPath(import.meta.url)), "..", "..");
@@ -366,16 +405,16 @@ try {
     const h3 = stopHook();
     await page.locator("#__babysitter-studio .seg").waitFor({ timeout: 30000 });
     assert.match(await page.locator("#__babysitter-studio .tt .info").textContent(), /1 file\(s\) differ from HEAD/);
-    await page.locator("#__babysitter-studio .seg button[data-side=BEFORE]").click();
+    await clickSide("BEFORE");
     await page.locator("#__babysitter-studio .panel.before").waitFor({ timeout: 10000 });
     assert.equal(readFileSync(LIVE, "utf8"), HEAD_SRC, "HEAD version on disk");
     assert.ok(existsSync(join(repo, ".babysitter/time-travel/journal.json")), "journaled while BEFORE is on disk");
     const live = await browser.newPage(); await live.goto(base + "/live");
     assert.equal(await live.locator("#src").textContent(), HEAD_SRC, "the dev server renders the HEAD version");
-    await page.locator("#__babysitter-studio .seg button[data-side=AFTER]").click();
+    await clickSide("AFTER");
     await page.locator("#__babysitter-studio .panel:not(.before)").waitFor({ timeout: 10000 });
     assert.equal(readFileSync(LIVE, "utf8"), AFTER_SRC);
-    await page.locator("#__babysitter-studio .seg button[data-side=BEFORE]").click();
+    await clickSide("BEFORE");
     await page.locator("#__babysitter-studio .panel.before").waitFor({ timeout: 10000 });
     await page.locator("#__babysitter-studio #approve").click(); // approve while viewing HEAD
     const s3 = await h3;
@@ -389,14 +428,14 @@ try {
     // the hook is killed while HEAD is on disk: SIGTERM → its guard restores; SIGKILL → the next hook recovers
     const h4 = spawn(process.execPath, [join(ROOT, "bin/hook-stop.mjs")], { cwd: repo, env: { ...process.env, CLAUDE_PROJECT_DIR: repo } });
     h4.stdin.end("{}");
-    await page.locator("#__babysitter-studio .seg button[data-side=BEFORE]").click({ timeout: 30000 });
+    await clickSide("BEFORE", { timeout: 30000 });
     await page.locator("#__babysitter-studio .panel.before").waitFor({ timeout: 10000 });
     h4.kill("SIGTERM"); await new Promise((r) => h4.on("exit", r));
     assert.equal(readFileSync(LIVE, "utf8"), AFTER_SRC, "SIGTERM → restored");
     const h5 = spawn(process.execPath, [join(ROOT, "bin/hook-stop.mjs")], { cwd: repo, env: { ...process.env, CLAUDE_PROJECT_DIR: repo } });
     h5.stdin.end("{}");
     await page.locator("#__babysitter-studio .min").filter({ hasText: "stopped waiting" }).waitFor({ timeout: 10000 }).catch(() => {});
-    await page.locator("#__babysitter-studio .seg button[data-side=BEFORE]").click({ timeout: 30000 });
+    await clickSide("BEFORE", { timeout: 30000 });
     await page.locator("#__babysitter-studio .panel.before").waitFor({ timeout: 10000 });
     h5.kill("SIGKILL"); await new Promise((r) => h5.on("exit", r));
     assert.equal(readFileSync(LIVE, "utf8"), HEAD_SRC, "SIGKILL leaves HEAD on disk…");
@@ -415,7 +454,7 @@ try {
     const cliDone = new Promise((r) => cli.on("exit", r));
     await page.locator("#__babysitter-studio .seg button[data-side=BEFORE]:not([disabled])").waitFor({ timeout: 30000 });
     assert.match(await page.locator("#__babysitter-studio .seg button[data-side=BEFORE]").textContent(), new RegExp(root.slice(0, 7)));
-    await page.locator("#__babysitter-studio .seg button[data-side=BEFORE]").click();
+    await clickSide("BEFORE");
     await page.locator("#__babysitter-studio .panel.before").waitFor({ timeout: 10000 });
     assert.equal(readFileSync(LIVE, "utf8"), ROOT_SRC, "BEFORE = the file at --base");
     await page.locator("#__babysitter-studio #approve").click();

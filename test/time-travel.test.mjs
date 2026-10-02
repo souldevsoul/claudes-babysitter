@@ -5,7 +5,7 @@ import { mkdtempSync, mkdirSync, writeFileSync, readFileSync, existsSync, statSy
 import { tmpdir } from "node:os";
 import { join, dirname } from "node:path";
 import { fileURLToPath } from "node:url";
-import { snapshot, apply, restore, recover } from "../lib/time-travel.js";
+import { snapshot, apply, applyStaged, restore, recover } from "../lib/time-travel.js";
 
 const LIB = join(dirname(fileURLToPath(import.meta.url)), "..", "lib", "time-travel.js");
 let n = 0;
@@ -99,6 +99,27 @@ try {
   await exit(p);
   assert.ok(isAfter(repo) && noJournal(repo));
   ok("SIGTERM, SIGINT and an uncaught exception → AFTER restored before the process exits");
+
+  // 8. staged swap for dev servers: same files as apply(), the rescan marker never stays, a decision mid-swap wins
+  repo = makeRepo(); repos.push(repo);
+  mkdirSync(join(repo, "src/app"), { recursive: true });
+  writeFileSync(join(repo, "src/app/globals.css"), ":root{--a:1}\n"); execSync("git add src/app/globals.css && git -c user.email=t@t -c user.name=t commit -qm css", { cwd: repo });
+  writeFileSync(join(repo, "src/app/globals.css"), ":root{--a:2}\n");
+  const t8 = snapshot(repo);
+  await applyStaged(t8, "BEFORE", { pauseMs: 30 });
+  assert.equal(read(repo, "src/app/globals.css"), ":root{--a:1}\n", "stylesheet at HEAD, without the rescan marker");
+  assert.equal(read(repo, "src/app/page.tsx"), HEAD["src/app/page.tsx"]);
+  await applyStaged(t8, "AFTER", { pauseMs: 30 });
+  assert.equal(read(repo, "src/app/globals.css"), ":root{--a:2}\n"); assert.ok(isAfter(repo));
+  // the reviewer decides while a staged swap is between its steps: AFTER is on disk at the end, nothing else
+  const inflight = applyStaged(t8, "BEFORE", { pauseMs: 120 });
+  await new Promise((r) => setTimeout(r, 40)); // stylesheets swapped, components not yet
+  const r8 = restore(t8);
+  const res = await inflight;
+  assert.equal(res.cancelled, true);
+  assert.ok(isAfter(repo) && read(repo, "src/app/globals.css") === ":root{--a:2}\n" && noJournal(repo), "a decision mid-swap leaves the work on disk");
+  assert.deepEqual(r8.conflicts, []);
+  ok("applyStaged: stylesheets first, components, a rescan that never sticks; a decision mid-swap cancels it cleanly");
 
   // 7. nothing to compare
   repo = mkdtempSync(join(tmpdir(), "tt-")); repos.push(repo);
