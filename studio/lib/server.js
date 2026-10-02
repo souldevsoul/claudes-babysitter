@@ -26,16 +26,21 @@ export function startStudio({ port = 3001, target = "http://localhost:3000", hos
   // Proposals mode: Before = the developer's page (the original), After = a dev server of the original with the
   // pending fixes applied (a commit built without touching the disk); a new set of fixes replaces that server.
   const proposalSites = new Map(); // repo -> { ref, stop }
+  const alive = (url) => fetch(url, { signal: AbortSignal.timeout(8000) }).then(() => true, () => false);
   const onCompare = async ({ repo, base, mode, ref, path, view, progress }) => {
+    const live = target.replace(/\/$/, "") + path;
+    // the developer's own server must answer, or there is nothing to capture: say so instead of waiting
+    if (!(await alive(target))) throw new Error(`the dev server at ${target} does not answer — start it again and press Before/After once more`);
     progress("base-site");
-    const site = await baseSite({ repo, ref: mode === "proposals" ? ref : base, log });
+    let site = await baseSite({ repo, ref: mode === "proposals" ? ref : base, log });
+    // the second server may have been killed since it started (it happens): start it again
+    if (!(await alive(site.url))) { log(`base site ${site.url} stopped answering — starting it again`); site.stop(); site = await baseSite({ repo, ref: mode === "proposals" ? ref : base, log }); }
     if (mode === "proposals") {
       const old = proposalSites.get(repo);
       if (old && old.ref !== site.sha) old.stop();
       proposalSites.set(repo, { ref: site.sha, stop: site.stop });
     }
     progress("capture");
-    const live = target.replace(/\/$/, "") + path;
     const [a, b] = await Promise.all([capture(site.url + path, view), capture(live, view)]);
     return mode === "proposals" ? { before: b, after: a } : { before: a, after: b };
   };

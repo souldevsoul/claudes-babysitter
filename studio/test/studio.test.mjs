@@ -70,6 +70,8 @@ try {
   ok("cross-site WebSocket hijacking refused (foreign origin, origin-less panel, browser posing as CLI); loopback-only");
 
   const browser = await chromium.launch({ channel: process.env.PW_CHANNEL || "chrome" });
+  // a click that cannot happen must fail the run, not hang it: every page waits at most 60 s for anything
+  { const newPage = browser.newPage.bind(browser); browser.newPage = async (...a) => { const p = await newPage(...a); p.setDefaultTimeout(60000); return p; }; }
   const page = await browser.newPage();
   // a Before/After switch reloads the page once the swap is done: click, then wait for that reload
   const clickSide = async (side, opts = {}) => {
@@ -707,8 +709,22 @@ try {
       assert.ok(blue, "After: the title is blue (the fix)");
       assert.equal(await p3.locator(`${ps} .box[data-g="0"] .ba button[data-ba=AFTER]`).getAttribute("aria-pressed"), "true");
       assert.ok(await p3.locator(`${ps} .box[data-g="0"]`).isVisible(), "the frame stays above the snapshot");
+      assert.match(await p3.locator(`${ps} .tt .info`).textContent(), /After for this element: [\d.]+% of its frame changes/, "says how much the fix changes in this frame");
       await p3.locator(`${ps} .box[data-g="0"] .ba button[data-ba=BEFORE]`).click();
       assert.equal(await p3.locator(`${ps} .cmp.on`).count(), 0, "Before = the live page");
+      // the same from the entry itself: "Before/After on the page" goes to the element and shows its After
+      await p3.locator(`${ps} .prop[data-prop="darker-title"] button[data-pa=show]`).click();
+      await p3.locator(`${ps} .cmp.on`).waitFor({ timeout: 30000 });
+      assert.ok(/inset\(/.test(await p3.locator(`${ps} .cmp img.a`).evaluate((e) => e.style.clipPath)), "After inside the frame");
+      const pb = await p3.locator(`${ps} .panel`).boundingBox();
+      assert.ok(pb.y >= 0 && pb.y + pb.height <= 600 && pb.x >= 0 && pb.x + pb.width <= 900, `the panel moved aside but stays whole on screen: ${JSON.stringify(pb)}`);
+      await p3.locator(`${ps} .prop[data-prop="darker-title"] button[data-pa=show]`).click();
+      await p3.waitForFunction(() => !document.getElementById("__babysitter-studio").shadowRoot.querySelector(".cmp.on"), null, { timeout: 5000 });
+      // the whole page: After (with fixes) is a snapshot; Before (now) is the live page again
+      await p3.locator(`${ps} .seg button[data-side=AFTER]`).click();
+      await p3.locator(`${ps} .cmp.on`).waitFor({ timeout: 30000 });
+      await p3.locator(`${ps} .seg button[data-side=BEFORE]`).click();
+      assert.equal(await p3.locator(`${ps} .cmp.on`).count(), 0, "Before (now) = the live page, not a snapshot");
       assert.equal(readFileSync(join(proj, "index.html"), "utf8"), page0("#ff9999", "#cccccc"), "nothing applied yet");
       ok("proposals: only visible findings, each with its fix; Before/After on a frame shows the fix inside that frame; the original untouched");
 

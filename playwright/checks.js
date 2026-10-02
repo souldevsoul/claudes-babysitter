@@ -469,6 +469,8 @@ export const rowAlignment = (page) => page.evaluate(() => {
             if (Math.max(...widths) / Math.min(...widths) > 1.3)
                 continue; // not a row of peers
             const where = W.__uiDescribe(c);
+            // the row itself gets the frame in Studio (and a Before/After for its fix)
+            const at = { selector: W.__uiSelector(c), human: W.__uiHuman(c) };
             if (seen.has(where))
                 continue;
             const cardish = row.every(isCardish);
@@ -477,7 +479,7 @@ export const rowAlignment = (page) => page.evaluate(() => {
             // offer cards (each has a CTA or a price) must match heights; bento/masonry/editorial tiles may not
             const offers = row.every((_, i) => ctas[i] || prices[i]);
             if (cardish && offers && spread(rects.map((r) => r.height)) > 2) {
-                out.push({ what: `offer cards in one row have different heights (${rects.map((r) => Math.round(r.height)).join("/")}px) [2.6, P27]`, where });
+                out.push({ what: `offer cards in one row have different heights (${rects.map((r) => Math.round(r.height)).join("/")}px) [2.6, P27]`, where, ...at });
                 seen.add(where);
             }
             // peers must share one look: radius + padding always; fill/border/shadow may differ on ONE card (featured)
@@ -494,21 +496,21 @@ export const rowAlignment = (page) => page.evaluate(() => {
                 st.forEach((x) => skins.set(x.skin, (skins.get(x.skin) || 0) + 1));
                 const minority = [...skins.values()].sort((a, b) => b - a).slice(1).reduce((a, b) => a + b, 0);
                 if (shapes.size > 1 || minority > 1) {
-                    out.push({ what: `cards in one row are styled differently [1.16, P46 P47]: ${shapes.size > 1 ? [...shapes].join(" | ") : [...skins.keys()].join(" | ")}`, where });
+                    out.push({ what: `cards in one row are styled differently [1.16, P46 P47]: ${shapes.size > 1 ? [...shapes].join(" | ") : [...skins.keys()].join(" | ")}`, where, ...at });
                     seen.add(where);
                 }
             }
             if (ctas.every(Boolean)) {
                 const tops = ctas.map((e) => e.getBoundingClientRect().top);
                 if (spread(tops) > 3) {
-                    out.push({ what: `CTAs in one row sit at different heights (Δ${Math.round(spread(tops))}px) [2.6, P27]`, where });
+                    out.push({ what: `CTAs in one row sit at different heights (Δ${Math.round(spread(tops))}px) [2.6, P27]`, where, ...at });
                     seen.add(where);
                 }
             }
             if (prices.every(Boolean)) {
                 const tops = prices.map((e) => e.getBoundingClientRect().top);
                 if (spread(tops) > 3) {
-                    out.push({ what: `prices in one row sit at different heights (Δ${Math.round(spread(tops))}px) [2.6, P27]`, where });
+                    out.push({ what: `prices in one row sit at different heights (Δ${Math.round(spread(tops))}px) [2.6, P27]`, where, ...at });
                     seen.add(where);
                 }
             }
@@ -518,7 +520,7 @@ export const rowAlignment = (page) => page.evaluate(() => {
                 const a = sorted[i - 1], b = sorted[i];
                 const ra = a.getBoundingClientRect(), rb = b.getBoundingClientRect();
                 if (Math.abs(rb.left - ra.right) <= 1 && parseFloat(getComputedStyle(a).borderRightWidth) > 0 && parseFloat(getComputedStyle(b).borderLeftWidth) > 0) {
-                    out.push({ what: "double border between touching neighbours [1.7, P55]", where });
+                    out.push({ what: "double border between touching neighbours [1.7, P55]", where, ...at });
                     seen.add(where);
                     break;
                 }
@@ -532,7 +534,7 @@ export const rowAlignment = (page) => page.evaluate(() => {
             if (Math.abs(rb.top - ra.bottom) <= 1 && Math.abs(ra.left - rb.left) <= 2 && parseFloat(getComputedStyle(a).borderBottomWidth) > 0 && parseFloat(getComputedStyle(b).borderTopWidth) > 0) {
                 const where = W.__uiDescribe(c);
                 if (!seen.has(where)) {
-                    out.push({ what: "double border between stacked rows [1.7, P55]", where });
+                    out.push({ what: "double border between stacked rows [1.7, P55]", where, ...at });
                     seen.add(where);
                 }
                 break;

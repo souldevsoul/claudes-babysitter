@@ -64,6 +64,8 @@ export function baseSite({ repo, ref = "HEAD", log = () => {}, timeoutMs = 18000
     const out = openSync(logFile, "w");
     const child = spawn(cmd, args, { cwd: dir, env: { ...process.env, PORT: String(port), BROWSER: "none" }, stdio: ["ignore", out, out], detached: process.platform !== "win32" });
     closeSync(out);
+    // a server that dies (killed from outside, crashed) is forgotten at once: the next request starts a new one
+    child.on("exit", () => { if (sites.get(key) === started) sites.delete(key); });
     const url = `http://127.0.0.1:${port}`;
     const stop = () => {
       try { process.platform !== "win32" ? process.kill(-child.pid, "SIGTERM") : child.kill(); } catch {}

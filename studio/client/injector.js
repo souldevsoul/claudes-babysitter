@@ -53,6 +53,12 @@
   .panel.dragging { transition: none; box-shadow: 0 18px 50px rgb(0 0 0 / .55); }
   .grip { color: #52525b; font-size: 12px; letter-spacing: -2px; }
   .collapse { padding: 2px 8px; font-size: 14px; line-height: 18px; background: transparent; color: #a1a1aa; border-color: #3f3f46; }
+  /* never taller than the window: the list gives up its height first, the decision buttons stay */
+  .panel { max-height: calc(100vh - 16px); display: flex; flex-direction: column; }
+  .panel > .head { flex: none; }
+  .body { flex: 1 1 auto; min-height: 0; display: flex; flex-direction: column; }
+  .body > * { flex: none; }
+  .body > .list { flex: 0 1 auto; min-height: 48px; }
   .panel.collapsed .body { display: none; }
   .panel.collapsed .head { border-bottom: 0; }
   .list li .ex { display: grid; gap: 3px; min-width: 0; }
@@ -177,8 +183,8 @@
   const prefs = { get() { try { return JSON.parse(localStorage.getItem(PREF_KEY) || "{}"); } catch { return {}; } }, set(v) { try { localStorage.setItem(PREF_KEY, JSON.stringify({ ...prefs.get(), ...v })); } catch {} } };
   let LANG = prefs.get().lang || (/^ru\b/i.test(navigator.language || "") ? "ru" : "en");
   const DICT = {
-    en: { problems: (n) => `${n} problem${n === 1 ? "" : "s"}`, paused: "the CLI is paused until you decide", after: "After", before: "👁 Before", viewing: (b) => `Viewing ${b} · frames hidden`, differ: (n, b) => `Your changes · ${n} file(s) differ from ${b}`, cmpHint: (n, b) => `Your changes · ${n} file(s) differ from ${b} · Before = a snapshot right here, no reload (B)`, switching: "Swapping the files and waiting for the dev server to rebuild (~5 s)…", startingBase: (b) => `Starting a dev server of ${b} next to yours (first time ~10–30 s)…`, capturing: "Capturing both versions at your scroll position…", cmpBefore: (b) => `Snapshot of ${b} · B flips · scroll re-captures`, cmpAfter: "Snapshot of your changes · B flips", slider: "⇆ Slider", diffs: "◫ Differences", exit: "✕ Live page", live: "↻ Live", liveBack: "↺ Back to your changes", noDiffHere: "No visible differences on this screen", diffCount: (n) => `${n} changed area(s) highlighted`, badgeBefore: (b) => `BEFORE · ${b}`, badgeAfter: "AFTER", framesOn: "Frames on the page: on", framesOff: "Frames on the page: off (click an entry to see its frame)", nothing: "Nothing to compare — no changed UI files", noRepo: "Before/After needs the review's repository (the hooks pass it; studio review --repo)", details: "details", beforeNow: "Before (now)", afterFix: "👁 After (with fixes)", startingFix: "Starting a dev server with the proposed fixes next to yours (first time ~10–30 s)…", beforeShort: "Before", afterShort: "After", propHint: (n) => `${n} fix(es) proposed · the page is the original; After shows it with the fixes, nothing applied yet (B)`, cmpAfterProp: "With the proposed fixes · B flips · the original files are untouched", cmpBeforeProp: "Snapshot of the original · B flips", clipInfo: "After for this element only · the Before/After buttons on its frame switch", badgeOrig: "BEFORE · original", badgeFixed: "AFTER · with fixes", fix: "Fix", accept: "Accept", decline: "Reject", comment: "Comment", send2: "Send", pcPlaceholder: "What should be different in this fix?", covers: (n) => `fixes ${n} findings at once`, pstatus: { pending: "waiting for your decision", approved: "applied to the files", rejected: "rejected — not applied", revising: "being revised after your comment…", conflict: "does not apply to the files as they are now" }, applying: "applying…", approveAll: "Approve all", rejectAll: "Reject all", applied: "applied", codeSum: (n) => `${n} finding(s) only in the code (style= …) are fixed without your approval — the page looks exactly the same.`, fVisible: "Visible", fCode: "In code", fFixed: "Fixed", was: "Was:", openHead: (n) => `Visible on the page — not fixed yet (${n})`, done: "fixed", fixedHead: (n) => `Fixed since the previous check (${n}) <span>· green frames: these were problems and are gone now</span>`, split: (v, c) => `${v} visible · ${c} in code`, codeOnly: (n) => `Not visible on the page — only in the code (${n}) <span>· yellow frames: fixing them changes nothing you can see</span>`, pages: (n) => `on ${n} pages`, places: (n) => `${n} places`, otherPage: (r) => `on ${r}`, placeholder: "What should change? Send Comment returns the work to its author with this brief…", send: "Send Comment", reject: "Reject", approve: "Approve" },
-    ru: { problems: (n) => `${n} ${n % 10 === 1 && n % 100 !== 11 ? "проблема" : n % 10 >= 2 && n % 10 <= 4 && (n % 100 < 12 || n % 100 > 14) ? "проблемы" : "проблем"}`, paused: "проверка ждёт вашего решения", after: "После", before: "👁 До", viewing: (b) => `Показано состояние ${b} · рамки скрыты`, differ: (n, b) => `Ваши изменения · ${n} файл(ов) отличаются от ${b}`, cmpHint: (n, b) => `Ваши изменения · ${n} файл(ов) отличаются от ${b} · «До» — снимок прямо здесь, без перезагрузки (B)`, switching: "Подменяю файлы и жду, пока dev-сервер пересоберёт (~5 с)…", startingBase: (b) => `Запускаю рядом dev-сервер версии ${b} (в первый раз ~10–30 с)…`, capturing: "Снимаю обе версии на вашей прокрутке…", cmpBefore: (b) => `Снимок версии ${b} · B — переключить · при прокрутке пересниму`, cmpAfter: "Снимок ваших изменений · B — переключить", slider: "⇆ Шторка", diffs: "◫ Отличия", exit: "✕ Живая страница", live: "↻ Вживую", liveBack: "↺ Вернуть ваши изменения", noDiffHere: "На этом экране видимых отличий нет", diffCount: (n) => `Подсвечено изменённых мест: ${n}`, badgeBefore: (b) => `ДО · ${b}`, badgeAfter: "ПОСЛЕ", framesOn: "Рамки на странице: включены", framesOff: "Рамки на странице: выключены (клик по пункту покажет его рамку)", nothing: "Сравнивать нечего — изменённых UI-файлов нет", noRepo: "Для «До / После» ревью нужен репозиторий (хуки передают его сами; studio review --repo)", details: "подробности", beforeNow: "До (сейчас)", afterFix: "👁 После (с исправлениями)", startingFix: "Запускаю рядом dev-сервер с предложенными исправлениями (в первый раз ~10–30 с)…", beforeShort: "До", afterShort: "После", propHint: (n) => `Предложено исправлений: ${n} · страница — оригинал; «После» — она же с исправлениями, ничего ещё не применено (B)`, cmpAfterProp: "С предложенными исправлениями · B — переключить · оригинальные файлы не тронуты", cmpBeforeProp: "Снимок оригинала · B — переключить", clipInfo: "«После» только для этого элемента · кнопки До/После на рамке переключают", badgeOrig: "ДО · оригинал", badgeFixed: "ПОСЛЕ · с исправлениями", fix: "Исправление", accept: "Принять", decline: "Отклонить", comment: "Комментарий", send2: "Отправить", pcPlaceholder: "Что изменить в этом исправлении?", covers: (n) => `исправляет сразу ${n} пункт(ов)`, pstatus: { pending: "ждёт вашего решения", approved: "применено к файлам", rejected: "отклонено — не применено", revising: "дорабатывается по вашему комментарию…", conflict: "не применяется к текущим файлам" }, applying: "применяю…", approveAll: "Approve all", rejectAll: "Reject all", applied: "применено", codeSum: (n) => `Замечаний только в коде (style= и т.п.): ${n} — их исправляю без вашего одобрения, вид страницы при этом не меняется.`, fVisible: "Видно", fCode: "В коде", fFixed: "Исправлено", was: "Было:", openHead: (n) => `Видно глазами — ещё не исправлено (${n})`, done: "исправлено", fixedHead: (n) => `Исправлено с прошлой проверки (${n}) <span>· зелёные рамки: здесь были проблемы, теперь их нет</span>`, split: (v, c) => `${v} видно · ${c} в коде`, codeOnly: (n) => `Глазами не видно — только в коде (${n}) <span>· жёлтые рамки: их исправление ничего на странице не меняет</span>`, pages: (n) => `на ${n} страницах`, places: (n) => `${n} мест`, otherPage: (r) => `на странице ${r}`, placeholder: "Что изменить? Send Comment вернёт работу автору с этим заданием…", send: "Send Comment", reject: "Reject", approve: "Approve" },
+    en: { problems: (n) => `${n} problem${n === 1 ? "" : "s"}`, paused: "the CLI is paused until you decide", after: "After", before: "👁 Before", viewing: (b) => `Viewing ${b} · frames hidden`, differ: (n, b) => `Your changes · ${n} file(s) differ from ${b}`, cmpHint: (n, b) => `Your changes · ${n} file(s) differ from ${b} · Before = a snapshot right here, no reload (B)`, switching: "Swapping the files and waiting for the dev server to rebuild (~5 s)…", startingBase: (b) => `Starting a dev server of ${b} next to yours (first time ~10–30 s)…`, capturing: "Capturing both versions at your scroll position…", cmpBefore: (b) => `Snapshot of ${b} · B flips · scroll re-captures`, cmpAfter: "Snapshot of your changes · B flips", slider: "⇆ Slider", diffs: "◫ Differences", exit: "✕ Live page", live: "↻ Live", liveBack: "↺ Back to your changes", noDiffHere: "No visible differences on this screen", diffCount: (n) => `${n} changed area(s) highlighted`, badgeBefore: (b) => `BEFORE · ${b}`, badgeAfter: "AFTER", framesOn: "Frames on the page: on", framesOff: "Frames on the page: off (click an entry to see its frame)", nothing: "Nothing to compare — no changed UI files", noRepo: "Before/After needs the review's repository (the hooks pass it; studio review --repo)", details: "details", beforeNow: "Before (now)", afterFix: "👁 After (with fixes)", startingFix: "Starting a dev server with the proposed fixes next to yours (first time ~10–30 s)…", beforeShort: "Before", afterShort: "After", cmpTimeout: "⚠ No snapshot in 2 minutes — the dev server may have stopped. Press Before/After again.", clipChanged: (p) => `After for this element: ${p}% of its frame changes · Before/After on the frame switch`, clipSame: "⚠ In this frame the two versions look the same — this fix does not change this element (tell the agent with Comment)", propHint: (n) => `${n} fix(es) proposed · the page is the original; After shows it with the fixes, nothing applied yet (B)`, cmpAfterProp: "With the proposed fixes · B flips · the original files are untouched", cmpBeforeProp: "Snapshot of the original · B flips", clipInfo: "After for this element only · the Before/After buttons on its frame switch", badgeOrig: "BEFORE · original", badgeFixed: "AFTER · with fixes", fix: "Fix", accept: "Accept", decline: "Reject", comment: "Comment", send2: "Send", pcPlaceholder: "What should be different in this fix?", covers: (n) => `fixes ${n} findings at once`, pstatus: { pending: "waiting for your decision", approved: "applied to the files", rejected: "rejected — not applied", revising: "being revised after your comment…", conflict: "does not apply to the files as they are now" }, applying: "applying…", approveAll: "Approve all", rejectAll: "Reject all", applied: "applied", codeSum: (n) => `${n} finding(s) only in the code (style= …) are fixed without your approval — the page looks exactly the same.`, fVisible: "Visible", fCode: "In code", fFixed: "Fixed", showOnPage: "Before/After on the page", was: "Was:", openHead: (n) => `Visible on the page — not fixed yet (${n})`, done: "fixed", fixedHead: (n) => `Fixed since the previous check (${n}) <span>· green frames: these were problems and are gone now</span>`, split: (v, c) => `${v} visible · ${c} in code`, codeOnly: (n) => `Not visible on the page — only in the code (${n}) <span>· yellow frames: fixing them changes nothing you can see</span>`, pages: (n) => `on ${n} pages`, places: (n) => `${n} places`, otherPage: (r) => `on ${r}`, placeholder: "What should change? Send Comment returns the work to its author with this brief…", send: "Send Comment", reject: "Reject", approve: "Approve" },
+    ru: { problems: (n) => `${n} ${n % 10 === 1 && n % 100 !== 11 ? "проблема" : n % 10 >= 2 && n % 10 <= 4 && (n % 100 < 12 || n % 100 > 14) ? "проблемы" : "проблем"}`, paused: "проверка ждёт вашего решения", after: "После", before: "👁 До", viewing: (b) => `Показано состояние ${b} · рамки скрыты`, differ: (n, b) => `Ваши изменения · ${n} файл(ов) отличаются от ${b}`, cmpHint: (n, b) => `Ваши изменения · ${n} файл(ов) отличаются от ${b} · «До» — снимок прямо здесь, без перезагрузки (B)`, switching: "Подменяю файлы и жду, пока dev-сервер пересоберёт (~5 с)…", startingBase: (b) => `Запускаю рядом dev-сервер версии ${b} (в первый раз ~10–30 с)…`, capturing: "Снимаю обе версии на вашей прокрутке…", cmpBefore: (b) => `Снимок версии ${b} · B — переключить · при прокрутке пересниму`, cmpAfter: "Снимок ваших изменений · B — переключить", slider: "⇆ Шторка", diffs: "◫ Отличия", exit: "✕ Живая страница", live: "↻ Вживую", liveBack: "↺ Вернуть ваши изменения", noDiffHere: "На этом экране видимых отличий нет", diffCount: (n) => `Подсвечено изменённых мест: ${n}`, badgeBefore: (b) => `ДО · ${b}`, badgeAfter: "ПОСЛЕ", framesOn: "Рамки на странице: включены", framesOff: "Рамки на странице: выключены (клик по пункту покажет его рамку)", nothing: "Сравнивать нечего — изменённых UI-файлов нет", noRepo: "Для «До / После» ревью нужен репозиторий (хуки передают его сами; studio review --repo)", details: "подробности", beforeNow: "До (сейчас)", afterFix: "👁 После (с исправлениями)", startingFix: "Запускаю рядом dev-сервер с предложенными исправлениями (в первый раз ~10–30 с)…", beforeShort: "До", afterShort: "После", cmpTimeout: "⚠ Снимок не пришёл за 2 минуты — возможно, dev-сервер остановился. Нажмите «До/После» ещё раз.", clipChanged: (p) => `«После» для этого элемента: в рамке изменилось ${p}% · кнопки До/После на рамке переключают`, clipSame: "⚠ В этой рамке версии выглядят одинаково — исправление этот элемент не меняет (напишите об этом в «Комментарий»)", propHint: (n) => `Предложено исправлений: ${n} · страница — оригинал; «После» — она же с исправлениями, ничего ещё не применено (B)`, cmpAfterProp: "С предложенными исправлениями · B — переключить · оригинальные файлы не тронуты", cmpBeforeProp: "Снимок оригинала · B — переключить", clipInfo: "«После» только для этого элемента · кнопки До/После на рамке переключают", badgeOrig: "ДО · оригинал", badgeFixed: "ПОСЛЕ · с исправлениями", fix: "Исправление", accept: "Принять", decline: "Отклонить", comment: "Комментарий", send2: "Отправить", pcPlaceholder: "Что изменить в этом исправлении?", covers: (n) => `исправляет сразу ${n} пункт(ов)`, pstatus: { pending: "ждёт вашего решения", approved: "применено к файлам", rejected: "отклонено — не применено", revising: "дорабатывается по вашему комментарию…", conflict: "не применяется к текущим файлам" }, applying: "применяю…", approveAll: "Approve all", rejectAll: "Reject all", applied: "применено", codeSum: (n) => `Замечаний только в коде (style= и т.п.): ${n} — их исправляю без вашего одобрения, вид страницы при этом не меняется.`, fVisible: "Видно", fCode: "В коде", fFixed: "Исправлено", showOnPage: "До/После на странице", was: "Было:", openHead: (n) => `Видно глазами — ещё не исправлено (${n})`, done: "исправлено", fixedHead: (n) => `Исправлено с прошлой проверки (${n}) <span>· зелёные рамки: здесь были проблемы, теперь их нет</span>`, split: (v, c) => `${v} видно · ${c} в коде`, codeOnly: (n) => `Глазами не видно — только в коде (${n}) <span>· жёлтые рамки: их исправление ничего на странице не меняет</span>`, pages: (n) => `на ${n} страницах`, places: (n) => `${n} мест`, otherPage: (r) => `на странице ${r}`, placeholder: "Что изменить? Send Comment вернёт работу автору с этим заданием…", send: "Send Comment", reject: "Reject", approve: "Approve" },
   };
   let T = DICT[LANG];
   const plural = (n) => T.problems(n);
@@ -233,6 +239,8 @@
     cmpInfo(T.capturing);
     const storage = {};
     try { for (let i = 0; i < localStorage.length; i++) { const k = localStorage.key(i); storage[k] = localStorage.getItem(k); } } catch {}
+    // never stuck on "capturing…": no answer in 2 minutes → say so; pressing Before/After again asks anew
+    setTimeout(() => { if (cmp.pending?.reqId !== reqId) return; cmp.pending = null; cmp.want = false; cmp.clipG = null; renderCompare(); cmpInfo(T.cmpTimeout); }, 120000);
     send({ type: "COMPARE", reviewId: current.reviewId, reqId, path: location.pathname + location.search, width: innerWidth, height: innerHeight, dpr: devicePixelRatio || 1, scrollY: Math.round(scrollY), storage, cookies: document.cookie });
   }
   function compareShow(next) {
@@ -250,6 +258,24 @@
   function exitCompare() { Object.assign(cmp, { on: false, want: false, side: liveSide(), slider: false, diffs: false, pending: null, clipG: null }); renderCompare(); }
   // one element's After: the snapshot with the fixes shown only inside that element's frame
   function elementAfter(gi) { Object.assign(cmp, { clipG: gi, slider: false, diffs: false }); compareShow("AFTER"); }
+  // how much the fix changes inside this one frame: counted on the two snapshots, so "no difference" is said
+  // out loud instead of leaving the reviewer to wonder
+  const clipDiffs = new Map(); // `${cmp.key}|${gi}` -> n
+  async function clipDiff(gi, key, r) {
+    const k = `${key}|${gi}`;
+    if (clipDiffs.has(k)) return clipDiffs.get(k);
+    const load = (src) => new Promise((ok, no) => { const i = new Image(); i.onload = () => ok(i); i.onerror = no; i.src = src; });
+    const [a, b] = await Promise.all([load(cmp.after), load(cmp.before)]);
+    const sx = a.naturalWidth / innerWidth, x = Math.round(r.left * sx), y = Math.round(r.top * sx);
+    const w = Math.max(1, Math.round((innerWidth - r.left - r.right) * sx)), h = Math.max(1, Math.round((innerHeight - r.top - r.bottom) * sx));
+    const px = (img) => { const c = document.createElement("canvas"); c.width = w; c.height = h; const g = c.getContext("2d", { willReadFrequently: true }); g.drawImage(img, x, y, w, h, 0, 0, w, h); return g.getImageData(0, 0, w, h).data; };
+    const A = px(a), B = px(b);
+    let n = 0;
+    for (let i = 0; i < A.length; i += 4) if (Math.max(Math.abs(A[i] - B[i]), Math.abs(A[i + 1] - B[i + 1]), Math.abs(A[i + 2] - B[i + 2])) > 10) n++;
+    const pct = Math.round((n / (w * h)) * 1000) / 10;
+    clipDiffs.set(k, { n, pct });
+    return { n, pct };
+  }
   function clipRect() {
     if (cmp.clipG == null) return null;
     const b = boxes.find((x) => Number(x.box.dataset.g) === cmp.clipG && x.el.getBoundingClientRect().width > 0);
@@ -272,6 +298,7 @@
       imgB.style.clipPath = cmp.slider ? `inset(0 ${((1 - cmp.x) * 100).toFixed(2)}% 0 0)` : "";
       const cr = !cmp.slider && cmp.side === "AFTER" ? clipRect() : null;
       imgA.style.clipPath = cr ? `inset(${cr.top}px ${cr.right}px ${cr.bottom}px ${cr.left}px round 6px)` : "";
+      if (cr && cmp.clipG != null) { const gi = cmp.clipG, key = cmp.key; clipDiff(gi, key, cr).then((d) => { if (cmp.on && cmp.clipG === gi && cmp.key === key && cmp.side === "AFTER") cmpInfo(d.n ? T.clipChanged(d.pct) : T.clipSame); }).catch(() => {}); }
       handle.style.left = `${(cmp.x * 100).toFixed(2)}%`;
       const bb = $(".cmp .badge.b"), ba = $(".cmp .badge.a");
       bb.textContent = propMode() ? T.badgeOrig : T.badgeBefore(current?.diff?.base || "HEAD"); ba.textContent = propMode() ? T.badgeFixed : T.badgeAfter;
@@ -343,7 +370,7 @@
     if (!current || picking || e.metaKey || e.ctrlKey || e.altKey) return;
     const t = e.composedPath()[0];
     if (t && (t.isContentEditable || /^(input|textarea|select)$/i.test(t.tagName || ""))) return;
-    if (/^[bBиИ]$/.test(e.key) && canCompare()) { e.preventDefault(); cmp.clipG = null; compareShow(cmp.want && cmp.side === otherSide() ? liveSide() : otherSide()); }
+    if (/^[bBиИ]$/.test(e.key) && canCompare()) { e.preventDefault(); cmp.clipG = null; if (cmp.want && cmp.side === otherSide() && !cmp.slider && !cmp.diffs && propMode()) exitCompare(); else compareShow(cmp.want && cmp.side === otherSide() ? liveSide() : otherSide()); }
     else if (e.key === "Escape" && cmp.want) { e.preventDefault(); exitCompare(); }
   }, true);
 
@@ -415,6 +442,7 @@
             ${pr.findings > 1 ? `<div class="pnote">${esc(T.covers(pr.findings))}</div>` : ""}
             ${pr.error && pr.status === "conflict" ? `<div class="perr">⚠ ${esc(pr.error)}</div>` : ""}
             ${pr.status === "revising" && pr.comment ? `<div class="pnote">💬 ${esc(pr.comment)}</div>` : ""}
+            ${busy && g.items.some((x) => x.p.selector) ? `<div class="pbtn"><button type="button" data-pa="show">👁 ${esc(T.showOnPage)}</button></div>` : ""}
             ${busy ? `<div class="pbtn"><button type="button" data-pa="approve">✓ ${esc(T.accept)}</button><button type="button" data-pa="reject">✗ ${esc(T.decline)}</button><button type="button" data-pa="comment">💬 ${esc(T.comment)}</button></div>
             <div class="pc" hidden><textarea aria-label="${esc(T.comment)}" placeholder="${esc(T.pcPlaceholder)}"></textarea><button type="button" data-pa="send">${esc(T.send2)}</button></div>` : ""}
           </div>` : "";
@@ -462,6 +490,14 @@
       e.stopPropagation();
       const b = e.target.closest("button[data-pa]"); if (!b) return;
       const id = box.dataset.prop, pa = b.dataset.pa;
+      if (pa === "show") {
+        // to the element (another page opens if need be), the panel out of its way, then After inside its frame
+        const gi = Number(box.closest("li").dataset.g);
+        if (cmp.want && cmp.clipG === gi) { exitCompare(); return; }
+        const g = groups[gi], here = g?.items.some(({ p }) => !p.route || p.route === location.pathname);
+        if (!here) { try { sessionStorage.setItem("babysitter-studio-show", g.key); } catch {} focusGroup(gi); return; }
+        focusGroup(gi); setTimeout(() => elementAfter(gi), 900); return;
+      }
       if (pa === "comment") { const pc = box.querySelector(".pc"); pc.hidden = !pc.hidden; if (!pc.hidden) pc.querySelector("textarea").focus(); return; }
       const text = pa === "send" ? box.querySelector(".pc textarea").value.trim() : undefined;
       if (pa === "send" && !text) return;
@@ -470,7 +506,8 @@
       send({ type: "PROPOSAL", reviewId: current.reviewId, id, decision: pa === "send" ? "comment" : pa, text });
     }));
     root.querySelectorAll("[data-more]").forEach((b) => (b.onclick = (e) => { e.stopPropagation(); b.closest("li").classList.toggle("open"); }));
-    root.querySelectorAll(".seg button").forEach((b) => (b.onclick = () => compareShow(b.dataset.side)));
+    // the live side of the switch is the live page itself (no snapshot), unless the slider or the map is on
+    root.querySelectorAll(".seg button").forEach((b) => (b.onclick = () => (b.dataset.side === liveSide() && !cmp.slider && !cmp.diffs ? exitCompare() : compareShow(b.dataset.side))));
     if ($("#cmp-slider")) $("#cmp-slider").onclick = () => { cmp.slider = !cmp.slider; if (cmp.slider && !cmp.on) compareShow(otherSide()); else renderCompare(); };
     if ($("#cmp-diff")) $("#cmp-diff").onclick = () => { cmp.diffs = !cmp.diffs; if (cmp.diffs && !cmp.on) compareShow(cmp.side); else renderCompare(); };
     if ($("#cmp-exit")) $("#cmp-exit").onclick = exitCompare;
@@ -479,6 +516,8 @@
     // an entry clicked on another page: this page was opened for it — find its frame and point at it
     let want = null; try { want = sessionStorage.getItem("babysitter-studio-focus"); sessionStorage.removeItem("babysitter-studio-focus"); } catch {}
     if (want) { const gi = groups.findIndex((g) => g.key === want); if (gi >= 0) focusSoon(gi); }
+    let show = null; try { show = sessionStorage.getItem("babysitter-studio-show"); sessionStorage.removeItem("babysitter-studio-show"); } catch {}
+    if (show) { const gi = groups.findIndex((g) => g.key === show); if (gi >= 0) { focusSoon(gi); setTimeout(() => elementAfter(gi), 2500); } }
     if (restoreView) { const v = restoreView; restoreView = null; requestAnimationFrame(() => scrollTo(0, v.y)); if (v.draft) $("#comment-text").value = v.draft; }
     if (r.diff && pm) { if (cmp.want) compareShow(cmp.side); else renderCompare(); }
     else if (r.diff) { setSide(r.state?.side || "AFTER"); if (cmp.want) compareShow(cmp.side); else renderCompare(); }
@@ -620,14 +659,23 @@
   function makeRoom(el) {
     if (panel.classList.contains("collapsed")) return;
     let r = el.getBoundingClientRect(); const p = panel.getBoundingClientRect();
-    const overlap = !(r.right + GAP < p.left || r.left - GAP > p.right || r.bottom + GAP < p.top || r.top - GAP > p.bottom);
-    if (!overlap || r.height > innerHeight * 0.6) return;
+    const overlap = (r) => !(r.right + GAP < p.left || r.left - GAP > p.right || r.bottom + GAP < p.top || r.top - GAP > p.bottom);
+    if (!overlap(r) || r.height > innerHeight * 0.6) return;
+    // the panel always stays whole on screen (its buttons must stay reachable): beside the element, else below it,
+    // else above it — otherwise it stays where it is
     const left = r.left - GAP - 16, right = innerWidth - r.right - GAP - 16;
-    if (Math.max(left, right) >= p.width) { placeAt(right >= left ? r.right + GAP + 16 : r.left - GAP - 16 - p.width, p.top); return; }
-    scrollBy({ top: r.top - 96, behavior: "instant" });
-    r = el.getBoundingClientRect();
-    placeAt(p.left, r.bottom + GAP + 16);
+    if (Math.max(left, right) >= p.width) { placeAt(right >= left ? r.right + GAP + 16 : r.left - GAP - 16 - p.width, Math.min(p.top, innerHeight - p.height - 8)); return; }
+    const top = 96;
+    if (top + r.height + GAP + 16 + p.height + 8 <= innerHeight) {
+      scrollBy({ top: r.top - top, behavior: "instant" }); r = el.getBoundingClientRect();
+      placeAt(p.left, r.bottom + GAP + 16); return;
+    }
+    if (p.height + 8 + 16 + GAP + r.height + 24 <= innerHeight) {
+      scrollBy({ top: r.top - (innerHeight - r.height - 24), behavior: "instant" });
+      placeAt(p.left, 8);
+    }
   }
+
 
   // after a page load the element may render late (hydration, lazy sections): retry for a few seconds
   function focusSoon(gi, tries = 20) {
@@ -793,10 +841,11 @@
   function placeAt(x, y) {
     const w = panel.offsetWidth, h = panel.offsetHeight;
     x = Math.max(8, Math.min(innerWidth - w - 8, x)); y = Math.max(8, Math.min(innerHeight - Math.min(h, 120) - 8, y));
-    Object.assign(panel.style, { left: `${x}px`, top: `${y}px`, bottom: "auto", transform: "none" });
+    // placed by its top: it may never reach past the bottom edge, however the list grows later
+    Object.assign(panel.style, { left: `${x}px`, top: `${y}px`, bottom: "auto", transform: "none", maxHeight: `${Math.max(160, innerHeight - y - 8)}px` });
     return { x, y };
   }
-  function resetPlace() { Object.assign(panel.style, { left: "", top: "", bottom: "", transform: "" }); store.set({ x: null, y: null }); }
+  function resetPlace() { Object.assign(panel.style, { left: "", top: "", bottom: "", transform: "", maxHeight: "" }); store.set({ x: null, y: null }); }
   head.addEventListener("pointerdown", (e) => {
     if (e.button !== 0 || e.target.closest("button")) return;
     const r = panel.getBoundingClientRect(), dx = e.clientX - r.left, dy = e.clientY - r.top;
@@ -865,7 +914,7 @@
         if (shots.size > 8) shots.delete(shots.keys().next().value);
         if (cmp.want && key === viewKey()) { Object.assign(cmp, { before: m.before, after: m.after, key, on: true }); renderCompare(); }
       }
-      if (m.type === "COMPARE_FAILED" && cmp.pending?.reqId === m.reqId) { cmp.pending = null; cmp.want = false; renderCompare(); cmpInfo(m.error === "no-repo" ? T.noRepo : `⚠ ${m.error}`); }
+      if (m.type === "COMPARE_FAILED" && cmp.pending?.reqId === m.reqId) { cmp.pending = null; cmp.want = false; cmp.clipG = null; renderCompare(); cmpInfo(m.error === "no-repo" ? T.noRepo : `⚠ ${m.error}`); }
       if (m.type === "NOTES") { notes = m.notes || []; syncFrames(); renderNotes(); }
       // only the answer to a switch THIS panel asked for reloads it — never a replayed state (no reload loop)
       if (m.type === "DIFF_STATE" && awaitingSwap && !m.error && current?.reviewId === m.reviewId) {
