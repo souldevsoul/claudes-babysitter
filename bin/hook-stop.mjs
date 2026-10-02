@@ -8,6 +8,7 @@ import { fileURLToPath } from "node:url";
 import { existsSync, readFileSync, writeFileSync, mkdirSync } from "node:fs";
 import { projectMode, ADOPTION_NOTE } from "../lib/mode.js";
 import { recover } from "../lib/time-travel.js";
+import { toolFailure } from "../lib/tool-failure.js";
 import { collectProblems, freezeForReview, pendingNotes, formatManual } from "../lib/studio-gate.js";
 
 let input = "";
@@ -21,11 +22,14 @@ const MAX = Number(process.env.BABYSITTER_MAX_STOP_BLOCKS || 3);
 const r = spawnSync(process.execPath, [join(dirname(fileURLToPath(import.meta.url)), "ui-check.mjs"), "--repo", repo, "--changed", "--format", "agent"], { encoding: "utf8" });
 mkdirSync(stateDir, { recursive: true });
 let report = r.stdout;
+// a broken checker must not trap Claude in a loop it cannot fix: tell the user, let the turn end
+const broken = toolFailure(r);
+if (broken) { process.stdout.write(JSON.stringify({ systemMessage: broken })); process.exit(0); }
 let failed = r.status === 1;
 // static check clean → optional rendered micro-run against a running dev server (skipped if none)
 if (!failed) {
   const m = spawnSync(process.execPath, [join(dirname(fileURLToPath(import.meta.url)), "micro-check.mjs"), "--repo", repo], { encoding: "utf8", timeout: 150000 });
-  if (m.status === 1) { failed = true; report = m.stdout; }
+  if (m.status === 1 && !toolFailure(m)) { failed = true; report = m.stdout; }
 }
 if (!failed) {
   writeFileSync(counter, "0");

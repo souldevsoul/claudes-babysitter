@@ -6,6 +6,7 @@ import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { projectMode, ADOPTION_NOTE } from "../lib/mode.js";
 import { recover } from "../lib/time-travel.js";
+import { toolFailure } from "../lib/tool-failure.js";
 
 let input = "";
 for await (const chunk of process.stdin) input += chunk;
@@ -16,6 +17,8 @@ if (!file || !/\.(jsx|tsx|ts|js|mjs|s?css)$/.test(file) || /\.d\.ts$/.test(file)
 const repo = process.env.CLAUDE_PROJECT_DIR || process.cwd();
 try { recover(repo); } catch {} // a killed Studio review left HEAD versions on disk: put the work back first
 const r = spawnSync(process.execPath, [join(dirname(fileURLToPath(import.meta.url)), "ui-check.mjs"), "--repo", repo, "--changed", "HEAD", "--file", file, "--format", "agent"], { encoding: "utf8" });
+const broken = toolFailure(r);
+if (broken) { process.stdout.write(JSON.stringify({ systemMessage: broken })); process.exit(0); }
 if (r.status === 1) {
   if (projectMode(repo) === "adoption") {
     // adoption: tell the model (so it can fix what it touched) but do not block the edit

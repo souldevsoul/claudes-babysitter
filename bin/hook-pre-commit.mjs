@@ -7,6 +7,7 @@ import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { projectMode, ADOPTION_NOTE } from "../lib/mode.js";
 import { recover } from "../lib/time-travel.js";
+import { toolFailure } from "../lib/tool-failure.js";
 import { collectProblems, freezeForReview, formatManual } from "../lib/studio-gate.js";
 
 const here = dirname(fileURLToPath(import.meta.url));
@@ -14,8 +15,11 @@ const repo = execSync("git rev-parse --show-toplevel", { encoding: "utf8" }).tri
 try { recover(repo); } catch {} // never lint or commit around HEAD versions left by a killed Studio review
 const run = (script, args) => spawnSync(process.execPath, [join(here, script), ...args], { encoding: "utf8", stdio: ["ignore", "pipe", "pipe"] });
 const check = run("ui-check.mjs", ["--repo", repo, "--changed", "HEAD", "--format", "agent"]);
+// the gate fails closed when the checker itself breaks, but says so plainly instead of an empty "blocked"
+const broken = toolFailure(check);
+if (broken) { process.stderr.write(`\n✋ ${broken}\n  The commit is blocked until the check can run. To bypass deliberately: git commit --no-verify\n`); process.exit(1); }
 let failed = check.status === 1, out = check.stdout;
-if (!failed) { const m = run("micro-check.mjs", ["--repo", repo]); if (m.status === 1) { failed = true; out = m.stdout; } }
+if (!failed) { const m = run("micro-check.mjs", ["--repo", repo]); if (m.status === 1 && !toolFailure(m)) { failed = true; out = m.stdout; } }
 if (failed && projectMode(repo) === "adoption") {
   process.stderr.write(`\n⚠️  Claude's Babysitter (${ADOPTION_NOTE}):\n\n${out}\n`);
   process.exit(0);
