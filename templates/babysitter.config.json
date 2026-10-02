@@ -28,6 +28,7 @@
     "lightWeights": "editorial brand: 200-weight display serif — contrast is still enforced"
   },
   "consistency": { "buttonRadii": 2, "buttonFonts": 1, "buttonHeights": 3, "cardRadii": 3, "cardStyles": 4, "inputHeights": 2, "inputRadii": 2 },
+  "domSniper": { "allowProps": [], "skip": [], "strict": false },
   "ignore": ["src/legacy/"],
   "audit": { "exclude": ["design-lab"] }
 }

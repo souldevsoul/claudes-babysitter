@@ -1,6 +1,6 @@
 {
   "name": "claudes-babysitter",
-  "version": "3.2.0",
+  "version": "3.3.0",
   "private": true,
   "description": "Claude's Babysitter — keeps AI code generators inside a product's UI system: AST lint rules, static WCAG contrast of theme tokens, component-reuse audit, Claude Code + git hooks and Playwright micro-checks. Enforces the UI Architecture & Consistency Guidelines (58 recurring UI bug patterns).",
   "type": "module",
@@ -44,7 +44,8 @@
     "eslint": "^9.12.0",
     "postcss": "^8.5.28",
     "postcss-scss": "^4.0.9",
-    "stylelint": "^16.9.0"
+    "stylelint": "^16.9.0",
+    "stylelint-declaration-strict-value": "^1.12.1"
   },
   "devDependencies": {
     "@types/node": "^26.6.3",

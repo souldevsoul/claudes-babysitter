@@ -10,6 +10,7 @@
  *   • tables keep every column visible at 390px (stacked rows, no sideways scroll)          [2.3]
  *   • fields/selects visible at rest: border ≥ 3:1 or a distinct fill                       [1.9]
  *   • no native select/date/file/checkbox/radio in the rendered page                        [1.1]
+ *   • DOM sniper: no [style] attribute with anything but CSS custom properties (--x)         [6.5]
  */
 import { chromium } from "@playwright/test";
 import { existsSync, readFileSync } from "node:fs";
@@ -54,6 +55,9 @@ function routesFromChanges() {
   return [...new Set(list)].slice(0, 5);
 }
 
+// DOM sniper settings (babysitter.config.json → domSniper): { "allowProps": [...], "skip": ["css selector"], "strict": false }
+// strict: true drops the built-in framework/motion exceptions (checks/SNIPER_SKIP, SNIPER_MOTION_PROPS)
+const sniper = { allowProps: [], skip: [], strict: false, ...(cfg.domSniper || {}) };
 const routes = routesFromChanges();
 if (!routes.length) { if (format === "json") out("[]"); process.exit(0); }
 const storage = join(repo, ".babysitter/storage.json");
@@ -76,6 +80,8 @@ for (const route of routes) {
     if (v.mobile) for (const o of await c.tableClipping(page)) problems.push({ route, viewport: v.name, check: "mobile table [2.3]", ...o });
     for (const o of await c.inputVisibility(page)) problems.push({ route, viewport: v.name, check: "control boundary [1.9]", ...o });
     if (!v.mobile) for (const o of await c.nativeControls(page)) problems.push({ route, viewport: v.name, check: "native control [1.1]", ...o });
+    // DOM sniper: rendered style attributes may only carry CSS custom properties
+    if (!v.mobile) for (const o of await c.inlineStyles(page, sniper.allowProps, sniper.skip, sniper.strict)) problems.push({ route, viewport: v.name, check: "inline style [DOM]", ...o });
     await ctx.close();
   }
 }
@@ -85,7 +91,9 @@ if (format === "json") out(JSON.stringify(problems, null, 2));
 else if (!problems.length) out(`micro-check: clean (${routes.join(", ")} at 390 and 1280)`);
 else {
   out(`Claude's Babysitter (rendered check on ${url}): ${problems.length} problem(s) on the pages you changed. Fix them, then finish.`);
-  for (const p of problems.slice(0, 25)) out(`  ${p.route} @${p.viewport}px  ${p.check}: ${p.what} — ${p.where || ""}`);
+  for (const p of problems.filter((x) => x.check === "inline style [DOM]").slice(0, 15))
+    out(`❌ [Playwright] Нарушение архитектуры! Обнаружены хардкодные inline-стили в DOM: <${p.tag}> содержит запрещенные свойства ${p.props.join(", ")} (${p.route} — ${p.where})`);
+  for (const p of problems.filter((x) => x.check !== "inline style [DOM]").slice(0, 25)) out(`  ${p.route} @${p.viewport}px  ${p.check}: ${p.what} — ${p.where || ""}`);
   if (problems.length > 25) out(`  … and ${problems.length - 25} more`);
 }
 process.exitCode = problems.length ? 1 : 0;

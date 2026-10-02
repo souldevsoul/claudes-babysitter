@@ -102,18 +102,6 @@ tester.run("no-arbitrary-values", R["no-arbitrary-values"], {
   ],
 });
 
-tester.run("no-inline-style", R["no-inline-style"], {
-  valid: [
-    '<div style={{ width: `${p}%` }} />',
-    '<div style={{ "--progress": p, transform: `translateX(${x}px)` }} />',
-  ],
-  invalid: [
-    { code: '<section style={{ padding: 13 }} />', errors: [{ messageId: "prop" }] },
-    { code: '<p style={{ color: "#999" }} />', errors: [{ messageId: "prop" }] },
-    { code: '<div style={{ zIndex: 9999 }} />', errors: [{ messageId: "prop" }] },
-    { code: "<div style={styles.box} />", errors: [{ messageId: "opaque" }] },
-  ],
-});
 
 tester.run("no-thin-kit-wrapper", R["no-thin-kit-wrapper"], {
   valid: [
@@ -188,15 +176,6 @@ tester.run("no-css-in-js-literals", R["no-css-in-js-literals"], {
   ],
 });
 
-tester.run("no-inline-style (spread + references)", R["no-inline-style"], {
-  valid: ['<div style={{ color: "var(--brand)", width: w }} />', 'const base = { width: 10 }; const X = () => <div style={{ ...base, "--x": 1 }} />'],
-  invalid: [
-    { code: '<div {...{ style: { color: "#999", fontSize: 11 } }} />', errors: [{ messageId: "prop" }, { messageId: "prop" }] },
-    { code: 'const base = { padding: 13 }; const X = () => <div style={{ ...base, width: 1 }} />', errors: [{ messageId: "prop" }] },
-    { code: 'const s = { color: "red" }; const X = () => <div style={s} />', errors: [{ messageId: "prop" }] },
-    { code: 'const props = { style: { margin: 4 } }; const X = () => <div {...props} />', errors: [{ messageId: "prop" }] },
-  ],
-});
 
 // ── red-team regressions (2026-10-02): every evasion that got through must stay blocked ──
 tester.run("red-team: concatenated / joined classes", R["no-dynamic-classes"], {
@@ -204,13 +183,6 @@ tester.run("red-team: concatenated / joined classes", R["no-dynamic-classes"], {
   invalid: [
     { code: 'const X = ({ c }) => <span className={"px-2 py-1 bg-" + c + "-500 rounded"} />', ...err("bad") },
     { code: 'const cls = ["bg", tone, "500"].join("-")', ...err("bad") },
-  ],
-});
-tester.run("red-team: style object in a .ts module", R["no-inline-style"], {
-  valid: ['export const noteProps = { style: { width: 10, "--x": 1 } };', 'const p = { style: { paragraph: { indent: { left: 720 } } } };'],
-  invalid: [
-    { code: 'export const noteProps = { style: { color: "#999999", margin: "24px" } };', errors: [{ messageId: "prop" }, { messageId: "prop" }] },
-    { code: 'import { noteProps } from "./note-props"; const X = () => <div {...noteProps} />', errors: [{ messageId: "opaque" }] },
   ],
 });
 tester.run("red-team: raw <style> in JSX", R["no-css-in-js-literals"], {
@@ -227,6 +199,30 @@ tester.run("red-team: native controls behind a mask", R["no-native-controls"], {
     { code: 'const X = () => <input type={"da" + "te"} />', ...err("input") },
     { code: 'const t = "date"; const X = () => <input type={t} />', ...err("input") },
     { code: 'React.createElement("select", null)', ...err("select") },
+  ],
+});
+
+// ── ui/no-inline-style 3.3: the style prop is forbidden; only all-custom-property object literals pass ──
+tester.run("no-inline-style (3.3 strict)", R["no-inline-style"], {
+  valid: [
+    '<div style={{ "--progress": p }} />',
+    '<div style={{ "--x": a, "--y": `${b}px` }} />',
+    "<Button style={{ '--dynamic-offset': value }} />",
+    'const p = { style: { paragraph: { indent: { left: 720 } } } };', // a docx style, not CSS
+    'export const noteProps = { style: { "--x": 1 } };',
+  ],
+  invalid: [
+    { code: '<div style={{ color: "#999" }} />', errors: [{ messageId: "prop" }] },
+    { code: "<div style={{ width: `${p}%` }} />", errors: [{ messageId: "prop" }] }, // geometry too — use --var
+    { code: '<div style={{ "--x": 1, margin: 4 }} />', errors: [{ messageId: "prop" }] }, // one plain key is enough
+    { code: "<Card style={{ padding: 13 }} />", errors: [{ messageId: "prop" }] }, // components as well as DOM
+    { code: "const s = { '--x': 1 }; const X = () => <div style={{ ...s }} />", errors: [{ messageId: "spread" }] },
+    { code: "const X = () => <div style={styles.box} />", errors: [{ messageId: "notLiteral" }] },
+    { code: "const X = () => <div style={cond ? a : b} />", errors: [{ messageId: "notLiteral" }] },
+    { code: '<div style="color: red" />', errors: [{ messageId: "string" }] },
+    { code: '<div {...{ style: { color: "#999999", margin: "24px" } }} />', errors: [{ messageId: "prop" }] },
+    { code: 'export const noteProps = { style: { color: "#999999", margin: "24px" } };', errors: [{ messageId: "definition" }] },
+    { code: 'import { noteProps } from "./note-props"; const X = () => <div {...noteProps} />', errors: [{ messageId: "opaque" }] },
   ],
 });
 

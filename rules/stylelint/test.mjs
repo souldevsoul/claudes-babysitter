@@ -11,7 +11,7 @@ const lint = async (file) => {
 
 const bad = await lint("bad.css");
 const good = await lint("good.css");
-const expected = ["ui/require-layer", "ui/z-index-scale", "ui/token-values", "ui/apply-values", "declaration-property-value-disallowed-list", "declaration-no-important", "color-named"];
+const expected = ["ui/require-layer", "ui/z-index-scale", "ui/token-values", "ui/apply-values", "scale-unlimited/declaration-strict-value", "declaration-property-value-disallowed-list", "declaration-no-important", "color-named"];
 const missing = expected.filter((r) => !bad.includes(r));
 if (missing.length) { console.error("bad.css did not trigger:", missing, "got:", bad); process.exit(1); }
 if (good.length) { console.error("good.css should be clean, got:", good); process.exit(1); }

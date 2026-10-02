@@ -672,3 +672,33 @@ export const tableClipping = (page: Page) =>
     }
     return out;
   });
+
+/**
+ * DOM sniper (1.15 / 6.5): every element carrying a `style` attribute whose declarations are not all CSS
+ * custom properties (--x). Reads the attribute as rendered, so it catches styles injected by any route —
+ * JSX, spreads, imported props, document.write, dangerouslySetInnerHTML, scripts.
+ */
+/** Framework/library internals that write style attributes the page author never writes. */
+export const SNIPER_SKIP = ["script", "style", "noscript", "template", "next-route-announcer", "nextjs-portal", "[data-nextjs-toast]", "img[data-nimg]", "[data-radix-popper-content-wrapper]", "[data-floating-ui-portal]", "[data-sonner-toaster]"];
+/** Written every frame by animation libraries (framer-motion, motion, GSAP): runtime state, not design tokens. */
+export const SNIPER_MOTION_PROPS = ["transform", "opacity", "translate", "scale", "rotate", "will-change", "transform-origin", "visibility"];
+
+export const inlineStyles = (page: Page, allowProps: string[] = [], skip: string[] = [], strict = false) =>
+  page.evaluate(({ allowProps, skip, strict }) => {
+    const W = window as any;
+    const out: { what: string; where: string; tag: string; props: string[] }[] = [];
+    for (const el of Array.from(document.querySelectorAll("[style]"))) {
+      if (skip.some((sel) => { try { return el.closest(sel); } catch { return false; } })) continue;
+      // visually-hidden helpers (a11y inputs of Select/Checkbox primitives): ≤1×1, absolutely positioned
+      const r = (el as HTMLElement).getBoundingClientRect();
+      const pos = getComputedStyle(el).position;
+      if (!strict && (pos === "absolute" || pos === "fixed") && r.width <= 1 && r.height <= 1) continue;
+      const decl = (el.getAttribute("style") || "").split(";").map((d) => d.trim()).filter(Boolean);
+      const props = [...new Set(decl.map((d) => d.split(":")[0].trim().toLowerCase()).filter((p) => p && !p.startsWith("--") && !allowProps.includes(p)))];
+      if (!props.length) continue;
+      const tag = el.tagName.toLowerCase();
+      out.push({ tag, props, what: `<${tag}> has inline ${props.join(", ")}`, where: W.__uiDescribe ? W.__uiDescribe(el) : tag });
+      if (out.length > 30) break;
+    }
+    return out;
+  }, { allowProps: strict ? allowProps : [...SNIPER_MOTION_PROPS, ...allowProps], skip: strict ? skip : [...SNIPER_SKIP, ...skip], strict });

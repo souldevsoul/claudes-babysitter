@@ -169,6 +169,9 @@ t("registry: a theme ≥80% like a registered product is a warning, not a block"
     <div class="card"><h3>C</h3><div class="price">$29</div><a href="#" style="display:inline-block;padding:10px">Buy</a></div>
   </div><p class="muted">fine print nobody can read</p>
   <button role="combobox" style="border:1px solid #eee;background:#fff;padding:6px 10px">Week</button>
+  <div style="--offset: 4px" class="vars-only">vars only</div>
+  <p><span style="color:#bada55;padding:12px" class="injected">injected</span></p>
+  <script>window.__x = 1</script>
   <div style="overflow-x:auto"><table style="width:900px"><tr><th>ID</th><th>Client</th><th>Date</th><th>Status</th><th>Amount</th></tr><tr><td>1</td><td>A</td><td>today</td><td>ok</td><td>$1</td></tr></table></div>
   </main></body></html>`;
   const srv = spawn(process.execPath, ["-e", `const h=${JSON.stringify(html)};require("node:http").createServer((q,r)=>{r.writeHead(200,{"content-type":"text/html"});r.end(h)}).listen(0,function(){console.log(this.address().port)})`]);
@@ -184,6 +187,13 @@ t("registry: a theme ≥80% like a registered product is a warning, not a block"
     assert.ok([...checks].some((c) => /horizontal overflow/.test(c)), m.stdout);
     assert.ok([...checks].some((c) => /mobile table/.test(c)), m.stdout);
     assert.ok([...checks].some((c) => /control boundary/.test(c)), m.stdout);
+    // DOM sniper: hard-coded inline styles are caught (incl. ones no static check can see), CSS variables are not
+    const dom = list.filter((p) => p.check === "inline style [DOM]");
+    assert.ok(dom.some((p) => /injected/.test(p.where) && p.props.includes("color") && p.props.includes("padding")), JSON.stringify(dom));
+    assert.ok(!dom.some((p) => /vars-only/.test(p.where)), "a style of only CSS custom properties is allowed");
+    const human = spawnSync(process.execPath, [join(dirname(CHECK), "micro-check.mjs"), "--repo", d, "--url", url, "--routes", "/"], { encoding: "utf8", timeout: 120000 });
+    assert.equal(human.status, 1);
+    assert.match(human.stdout, /❌ \[Playwright\] Нарушение архитектуры! Обнаружены хардкодные inline-стили в DOM: <span> содержит запрещенные свойства color, padding/);
   });
   t("micro-check: no dev server → skipped, exit 0", (mk) => {
     const d = mk({ "package.json": "{}" });

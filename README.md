@@ -46,6 +46,20 @@ Or install it as a dev dependency: `npm i -D github:souldevsoul/claudes-babysitt
 | `docs/` | The guidelines the rules enforce |
 | `test/`, `fixtures/` | `npm test`: RuleTester, Stylelint fixtures, end-to-end cases |
 
+## What changed in 3.3 (strict styles + DOM sniper)
+
+- **`ui/no-inline-style` rewritten** (`rules/eslint/rules/ui-no-inline-style.js`). The `style` prop is forbidden on every element, DOM or component. Spreads inside `style` are forbidden, and so are references and conditionals.
+  - The only exception is an object literal whose keys are **all** CSS custom properties: `style={{ "--progress": value }}`.
+  - Style objects written in other modules are judged where they are written.
+  - UI-kit primitives stay exempt.
+- **Strict scale in CSS**: `stylelint-declaration-strict-value` on `/color/`, `margin`, `padding`, `gap`, `width`, `height`, `border-radius`, `border`.
+  - Allowed values: `0, auto, inherit, transparent, currentColor, 100%, none, 1px, var(…), calc(…)`, plus the border-style keywords `solid`, `dashed` and `dotted`, so `border: 1px solid var(--border)` works.
+  - Token definitions (custom properties in `:root` / `@theme`) are not checked.
+  - The plugin is a runtime **dependency** imported by the config, so it resolves inside any project.
+- **DOM sniper in `micro-check`**: every rendered `[style]` whose declarations are not all `--custom-properties` fails with `❌ [Playwright] Нарушение архитектуры! Обнаружены хардкодные inline-стили в DOM: <tag> содержит запрещенные свойства …`. It sees styles no static check can, such as `dangerouslySetInnerHTML`, scripts and imported props.
+  - Built-in exceptions: framework internals (Next.js scripts and route announcer, `next/image`, Radix/Floating-UI popper wrappers, toasters), visually-hidden a11y helpers (≤ 1×1, absolutely positioned) and motion properties written by animation libraries (`transform`, `opacity`…).
+  - Configure with `domSniper.allowProps` and `domSniper.skip`; `domSniper.strict: true` removes all exceptions.
+
 ## What changed in 3.2 (red-team pass)
 
 A chaos agent tried seven forbidden patterns, each with one disguise after the first block. Five disguises got through 3.1; all five are blocked in 3.2, with a regression test each.

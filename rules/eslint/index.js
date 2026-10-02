@@ -4,7 +4,8 @@ import {
   noVisualClassnameOverride, noTransitionAll, noArbitrarySpacing, noIllegibleText, noScrollRail,
   noArbitraryValues, noThinKitWrapper, noRawPalette, noStylesOutsideKit,
 } from "./rules/classes.js";
-import { noEmoji, imgDimensions, noInlineStyle } from "./rules/content.js";
+import { noEmoji, imgDimensions } from "./rules/content.js";
+import { uiNoInlineStyle } from "./rules/ui-no-inline-style.js";
 import { noDynamicClasses, noCssInJsLiterals } from "./rules/ast.js";
 import { DEFAULT_KIT, DEFAULT_THEME_PATHS } from "./util.js";
 
@@ -15,7 +16,7 @@ const rules = {
   "no-adhoc-button": noAdhocButton,
   "no-visual-classname-override": noVisualClassnameOverride,
   "no-thin-kit-wrapper": noThinKitWrapper,
-  "no-inline-style": noInlineStyle,
+  "no-inline-style": uiNoInlineStyle,
   "no-arbitrary-values": noArbitraryValues,
   "no-raw-palette": noRawPalette,
   "no-styles-outside-kit": noStylesOutsideKit,
@@ -29,7 +30,7 @@ const rules = {
   "img-dimensions": imgDimensions,
 };
 
-const plugin = { meta: { name: "eslint-plugin-babysitter", version: "3.0.0" }, rules, configs: {} };
+const plugin = { meta: { name: "eslint-plugin-babysitter", version: "3.3.0" }, rules, configs: {} };
 
 /**
  * Build the config from a project's babysitter.config.json:
