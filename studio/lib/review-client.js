@@ -22,7 +22,9 @@ export function requestReview({ url = "http://localhost:3001", title = "UI revie
     ws.on("open", () => {
       // every finding goes out with its plain-language explanation (what, why, how to fix) and a group key
       const explained = problems.map(explain);
-      ws.send(JSON.stringify({ type: "REVIEW_REQUIRED", reviewId, title, problems: explained, diff: onToggle ? diff : null, diffNote: onToggle ? null : diffNote || "no-repo" }));
+      // diff: { repo, base, files, live } — repo/base let Studio capture Before/After; live = files can also be swapped
+      const d = diff ? { ...diff, live: !!onToggle } : null;
+      ws.send(JSON.stringify({ type: "REVIEW_REQUIRED", reviewId, title, problems: explained, diff: d && d.repo ? d : onToggle ? d : null, diffNote: d ? null : diffNote || "no-repo" }));
       onWaiting({ reviewId, url });
     });
     ws.on("message", (raw) => {

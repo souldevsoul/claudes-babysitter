@@ -17,7 +17,8 @@ const cmd = args[0] && !args[0].startsWith("--") ? args[0] : "start";
 if (cmd === "start") {
   const s = await startStudio({ port: Number(opt("port", 3001)), target: opt("target", "http://localhost:3000") });
   console.log(`Open http://localhost:${s.port} instead of the dev server — the review panel lives there.`);
-  process.on("SIGINT", async () => { await s.close(); process.exit(0); });
+  // close cleanly on Ctrl-C and on kill: stops the base sites (Before/After) and removes their worktrees
+  for (const sig of ["SIGINT", "SIGTERM", "SIGHUP"]) process.on(sig, async () => { await s.close(); process.exit(0); });
 } else if (cmd === "review") {
   let problems = [];
   try { problems = JSON.parse(readFileSync(0, "utf8") || "[]"); } catch { console.error("review: stdin must be a JSON array of problems"); process.exit(2); }
@@ -34,7 +35,7 @@ if (cmd === "start") {
   const { applyStaged } = tt ? await import("../../lib/time-travel.js") : {};
   const r = await requestReview({
     url, problems, title: opt("title", "UI review"), timeoutMs: Number(opt("timeout", 900)) * 1000,
-    diff: tt && { files: tt.journal.files.length, skipped: tt.journal.skipped.length, base: opt("base", "HEAD") },
+    diff: repo ? { repo: (await import("node:path")).resolve(repo), base: opt("base", "HEAD"), files: tt ? tt.journal.files.length : 0, skipped: tt ? tt.journal.skipped.length : 0 } : null,
     onToggle: tt && ((side) => applyStaged(tt, side)),
     diffNote: repo ? "nothing" : "no-repo",
     onWaiting: () => console.error(`⏳ Visual Review required. Open ${url} — ${problems.length} problem(s)`),

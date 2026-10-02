@@ -64,6 +64,16 @@ Or install it as a dev dependency: `npm i -D github:souldevsoul/claudes-babysitt
 | `docs/` | The guidelines the rules enforce |
 | `test/`, `fixtures/` | `npm test`: RuleTester, Stylelint fixtures, end-to-end cases |
 
+## What changed in 3.14 (Before/After without a reload: snapshots at your view)
+
+- **The Before/After switch no longer touches your files or reloads your page.** Swapping files under a dev server makes Next reload the page (twice per switch, scroll lost), and no staging avoids that. Studio now starts the base ref on a **second dev server in a git worktree** (node_modules linked, `.env*` copied; Next runs with `--webpack` there because Turbopack refuses a linked node_modules). It captures **both sides at your window's size, pixel ratio and scroll position**, with your localStorage and cookies (a closed cookie banner stays closed), and lays them over the page.
+  - Before ↔ After flips instantly (B, or И on a Russian layout); Esc returns to the live page.
+  - Scrolling shows the live page and re-captures where you stop.
+  - **⇆ Slider**: a draggable divider with BEFORE on the left and AFTER on the right. **◫ Differences** tints the changed areas and counts them, and says plainly when a screen has none.
+  - On Orbit the first switch takes ~13 s (starting the base server), then each one is instant: 0 reloads, scroll unchanged, your files untouched.
+- The old file swap stays as **↻ Live**, for clicking around in the old version.
+- Studio stops the base servers and removes their worktrees on Ctrl-C / SIGTERM. A capture can only open a path on the two dev servers.
+
 ## What changed in 3.13 (Before/After that the page really shows)
 
 - **The dev server now follows the swap.** On Orbit (Next 16, Turbopack) the switch changed the files but the page kept the old look: the theme CSS was one step behind and Tailwind missed the classes of re-created files. Swaps are now staged (`applyStaged`): stylesheets first, a pause, the components, then one more real write of the stylesheets on a settled tree. The page is then reloaded with its scroll position and comment draft kept, so it shows the rebuilt CSS. Verified on Orbit: page, theme and Tailwind classes match the chosen side every time, within about 5 s.

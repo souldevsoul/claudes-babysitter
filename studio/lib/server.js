@@ -6,6 +6,8 @@ import { join, dirname } from "node:path";
 import { fileURLToPath } from "node:url";
 import httpProxy from "http-proxy";
 import { createBus } from "./bus.js";
+import { baseSite, stopBaseSites } from "./basesite.js";
+import { capture, closeCapture } from "./capture.js";
 import { PATH, INJECTOR_PATH, INJECT_TAG } from "./protocol.js";
 
 const INJECTOR = join(dirname(fileURLToPath(import.meta.url)), "..", "client", "injector.js");
@@ -19,7 +21,15 @@ export function injectHtml(html) {
 
 export function startStudio({ port = 3001, target = "http://localhost:3000", host = "127.0.0.1", log = console.log } = {}) {
   const proxy = httpProxy.createProxyServer({ target, ws: true, changeOrigin: true, selfHandleResponse: true });
-  const bus = createBus({ log });
+  // Before/After: BEFORE from a dev server of the base ref (a worktree), AFTER from the developer's own server
+  const onCompare = async ({ repo, base, path, view, progress }) => {
+    progress("base-site");
+    const site = await baseSite({ repo, ref: base, log });
+    progress("capture");
+    const [before, after] = await Promise.all([capture(site.url + path, view), capture(target.replace(/\/$/, "") + path, view)]);
+    return { before, after };
+  };
+  const bus = createBus({ log, onCompare });
 
   // ask for an uncompressed body so the HTML can be edited without a decompress/recompress round-trip
   proxy.on("proxyReq", (proxyReq) => proxyReq.setHeader("accept-encoding", "identity"));
@@ -77,7 +87,7 @@ export function startStudio({ port = 3001, target = "http://localhost:3000", hos
     server.listen(port, host, () => {
       const actual = server.address().port;
       log(`Babysitter Studio on http://localhost:${actual} → ${target}`);
-      resolve({ port: actual, bus, close: () => new Promise((r) => { bus.close(); proxy.close(); server.close(() => r()); }) });
+      resolve({ port: actual, bus, close: () => new Promise((r) => { bus.close(); proxy.close(); stopBaseSites(); closeCapture().finally(() => server.close(() => r())); }) });
     });
   });
 }

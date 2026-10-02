@@ -74,7 +74,8 @@ try {
   // a Before/After switch reloads the page once the swap is done: click, then wait for that reload
   const clickSide = async (side, opts = {}) => {
     const nav = page.waitForEvent("framenavigated", { predicate: (f) => f === page.mainFrame(), timeout: 30000 });
-    await page.locator(`#__babysitter-studio .seg button[data-side=${side}]`).click(opts);
+    // the live switch (files swapped under the dev server) is the ↻ button; the segmented switch compares snapshots
+    await page.locator("#__babysitter-studio #live").click(opts);
     await nav;
   };
 
@@ -267,6 +268,96 @@ try {
   r4.proc.kill("SIGKILL");
   await page.locator("#__babysitter-studio .min").filter({ hasText: "stopped waiting" }).waitFor({ timeout: 5000 });
   ok("an abandoned review is taken off the panel");
+
+  // ── Before/After by snapshots: a base-ref dev server (worktree) + captures at the reviewer's view ──
+  {
+    const { requestReview } = await import("../lib/review-client.js");
+    const proj = mkdtempSync(join(tmpdir(), "studio-cmp-"));
+    const server = `const http=require("http"),fs=require("fs");const i=process.argv.indexOf("--port");const port=+(i>0?process.argv[i+1]:process.env.PORT);http.createServer((q,r)=>{r.writeHead(200,{"content-type":"text/html; charset=utf-8"});r.end(fs.readFileSync(__dirname+"/index.html"))}).listen(port,"127.0.0.1",()=>console.log("up "+port));`;
+    const html = (color) => `<!doctype html><html><head><style>body{margin:0;font:16px sans-serif;background:#fff}h1{margin:0;padding:40px;font-size:48px}.tall{height:2600px}.low{padding:40px;font-size:32px}</style></head><body><h1 id="t" style="color:${color}">Title</h1><p>same text</p><div class="tall"></div><p class="low" style="color:${color}">low line</p></body></html>`;
+    writeFileSync(join(proj, "server.js"), server);
+    writeFileSync(join(proj, "package.json"), JSON.stringify({ name: "cmp", scripts: { dev: "node server.js" } }));
+    writeFileSync(join(proj, "index.html"), html("#ff0000"));
+    execSync("git init -q && git add -A && git -c user.email=t@t -c user.name=t commit -qm v1", { cwd: proj });
+    writeFileSync(join(proj, "index.html"), html("#0000ff")); // the reviewer's change, uncommitted
+    const afterSrv = spawn(process.execPath, [join(proj, "server.js"), "--port", "0"], { cwd: proj });
+    // port 0 is not printed back by the fixture: pick one
+    afterSrv.kill();
+    const { createServer } = await import("node:net");
+    const freePort = () => new Promise((r) => { const s2 = createServer(); s2.listen(0, "127.0.0.1", () => { const { port } = s2.address(); s2.close(() => r(port)); }); });
+    const ap = await freePort();
+    const after = spawn(process.execPath, [join(proj, "server.js"), "--port", String(ap)], { cwd: proj });
+    await new Promise((r) => after.stdout.once("data", r));
+    const studio2 = await startStudio({ port: 0, target: `http://127.0.0.1:${ap}`, log: () => {} });
+    const base2 = `http://localhost:${studio2.port}`;
+    try {
+      const rv = requestReview({ url: base2, title: "Compare", timeoutMs: 120000, problems: [{ selector: "#t", message: "demo" }], diff: { repo: proj, base: "HEAD", files: 1 } });
+      const p2 = await browser.newPage({ viewport: { width: 900, height: 600 } });
+      let navs = 0; p2.on("framenavigated", (f) => { if (f === p2.mainFrame()) navs++; });
+      await p2.goto(base2 + "/");
+      const ps = "#__babysitter-studio";
+      await p2.locator(`${ps} .seg button[data-side=BEFORE]:not([disabled])`).waitFor({ timeout: 20000 });
+      navs = 0;
+      const pixel = (sel, x, y) => p2.evaluate(async ([sel, x, y]) => {
+        const img = document.getElementById("__babysitter-studio").shadowRoot.querySelector(sel);
+        await img.decode(); const c = document.createElement("canvas"); c.width = img.naturalWidth; c.height = img.naturalHeight;
+        const g = c.getContext("2d"); g.drawImage(img, 0, 0); const d = g.getImageData(Math.round(x * devicePixelRatio), Math.round(y * devicePixelRatio), 1, 1).data; return [d[0], d[1], d[2]];
+      }, [sel, x, y]);
+      const tb = await p2.locator("#t").boundingBox();
+      const glyph = async (sel) => { // the darkest pixel along the heading's text row: its colour
+        for (let x = tb.x + 40; x < tb.x + 200; x += 2) { const c = await pixel(sel, x, tb.y + tb.height / 2); if (Math.min(...c) < 200) return c; } return null;
+      };
+      await p2.locator(`${ps} .seg button[data-side=BEFORE]`).click();
+      await p2.locator(`${ps} .cmp.on`).waitFor({ timeout: 90000 });
+      const red = await glyph(".cmp img.b"), blue = await glyph(".cmp img.a");
+      assert.ok(red && red[0] > 180 && red[2] < 80, `BEFORE heading is red: ${red}`);
+      assert.ok(blue && blue[2] > 180 && blue[0] < 80, `AFTER heading is blue: ${blue}`);
+      assert.equal(navs, 0, "no reload");
+      assert.equal(execSync("git status --porcelain", { cwd: proj, encoding: "utf8" }).trim(), "M index.html", "the reviewer's files are not touched");
+      ok("Before shows a snapshot of the base ref from its own dev server, at the reviewer's view — no reload, files untouched");
+
+      // flip instantly with B, slider, differences
+      await p2.keyboard.press("b");
+      assert.equal(await p2.locator(`${ps} .seg button[aria-pressed=true]`).getAttribute("data-side"), "AFTER");
+      assert.ok(await p2.locator(`${ps} .cmp img.a`).isVisible() && !(await p2.locator(`${ps} .cmp img.b`).isVisible()), "B flips to the AFTER snapshot");
+      await p2.keyboard.press("b");
+      assert.ok(await p2.locator(`${ps} .cmp img.b`).isVisible());
+      await p2.locator(`${ps} #cmp-slider`).click();
+      assert.ok(await p2.locator(`${ps} .cmp .handle`).isVisible() && await p2.locator(`${ps} .cmp img.a`).isVisible() && await p2.locator(`${ps} .cmp img.b`).isVisible(), "slider shows both");
+      await p2.locator(`${ps} #cmp-diff`).click();
+      await p2.locator(`${ps} .tt .info`).filter({ hasText: /changed area/ }).waitFor({ timeout: 10000 });
+      assert.match(await p2.locator(`${ps} .tt .info`).textContent(), /^[1-9]\d* changed area\(s\) highlighted$/);
+      await p2.locator(`${ps} #cmp-diff`).click(); await p2.locator(`${ps} #cmp-slider`).click();
+      ok("B flips instantly; the slider shows both sides; Differences counts the changed areas");
+
+      // scrolling re-captures where the reader stops
+      await p2.evaluate(() => scrollTo(0, 2500));
+      await p2.locator(`${ps} .cmp.on`).waitFor({ state: "hidden", timeout: 5000 });
+      await p2.locator(`${ps} .cmp.on`).waitFor({ timeout: 60000 });
+      const low = await p2.locator(".low").boundingBox();
+      const lowRed = await (async () => { for (let x = low.x + 40; x < low.x + 200; x += 2) { const c = await pixel(".cmp img.b", x, low.y + low.height / 2); if (Math.min(...c) < 200) return c; } })();
+      assert.ok(lowRed && lowRed[0] > 180 && lowRed[2] < 80, `re-captured at the new scroll position: ${lowRed}`);
+      await p2.keyboard.press("Escape");
+      await p2.locator(`${ps} .cmp.on`).waitFor({ state: "hidden", timeout: 5000 });
+      assert.equal(navs, 0);
+      ok("scrolling re-captures at the new position; Esc returns to the live page; still no reload");
+
+      // the bus refuses a path that would leave the dev server
+      const rid = (await p2.locator(`${ps} .status`).textContent()).replace(/^review /, "");
+      const bad = await p2.evaluate((rid) => new Promise((r) => { const w = new WebSocket(`ws://${location.host}/__babysitter/ws?role=studio`); w.onmessage = (e) => { const m = JSON.parse(e.data); if (m.type === "COMPARE_FAILED" && m.reqId === "evil") { w.close(); r(m.error); } }; w.onopen = () => w.send(JSON.stringify({ type: "COMPARE", reviewId: rid, reqId: "evil", path: "//evil.example/" })); }), rid);
+      assert.equal(bad, "bad path", "a capture can only open a path on the dev servers, never another host");
+      await p2.locator(`${ps} #approve`).click();
+      assert.equal((await rv).decision, "approve");
+      await p2.close();
+    } finally {
+      await studio2.close();
+      after.kill();
+    }
+    const wt = execSync("git worktree list", { cwd: proj, encoding: "utf8" }).trim().split("\n");
+    assert.equal(wt.length, 1, `the base worktree is removed on close: ${wt.join(" | ")}`);
+    rmSync(proj, { recursive: true, force: true });
+    ok("closing Studio stops the base dev server and removes its worktree");
+  }
 
   // ── what a reviewer reads: plain-language findings, grouped; a movable panel; Before/After always present ──
   {

@@ -1,7 +1,7 @@
 // WebSocket bus between the CLI (role=cli) and the browser panel(s) (role=studio).
 import { WebSocketServer } from "ws";
 
-export function createBus({ log = () => {} } = {}) {
+export function createBus({ log = () => {}, onCompare = null } = {}) {
   const wss = new WebSocketServer({ noServer: true });
   const studios = new Set();
   const reviews = new Map(); // reviewId -> { msg, cli }
@@ -52,6 +52,27 @@ export function createBus({ log = () => {} } = {}) {
         const n = m.note;
         notes.push({ id: ++seq, selector: clip(n.selector, 500), comment: clip(n.comment.trim(), 2000), route: clip(n.route, 300), tag: clip(n.tag, 40), text: clip(n.text, 120), classes: clip(n.classes, 200), size: clip(n.size, 20) });
         notesChanged(); log(`note M${notes.length} on ${n.selector}`);
+        return;
+      }
+      // Before/After by screenshots: both sides captured at the reviewer's viewport and scroll (server-side), one
+      // request at a time per review; the reply goes to the panel that asked
+      if (role === "studio" && m.type === "COMPARE") {
+        const r = reviews.get(m.reviewId), reqId = String(m.reqId || "").slice(0, 40);
+        const fail = (error) => send(ws, { type: "COMPARE_FAILED", reviewId: m.reviewId, reqId, error });
+        const path = String(m.path || "");
+        if (!r) return fail("no such review");
+        if (!onCompare || !r.msg.diff?.repo) return fail("no-repo");
+        if (!/^\/(?!\/)/.test(path) || path.length > 2000) return fail("bad path");
+        const num = (v, lo, hi, d) => (Number.isFinite(+v) ? Math.min(hi, Math.max(lo, +v)) : d);
+        const view = { width: num(m.width, 320, 3840, 1280), height: num(m.height, 240, 2400, 800), dpr: num(m.dpr, 1, 3, 1), scrollY: num(m.scrollY, 0, 1e6, 0),
+          storage: Object.fromEntries(Object.entries(m.storage && typeof m.storage === "object" ? m.storage : {}).filter(([k, v]) => typeof k === "string" && typeof v === "string").slice(0, 100).map(([k, v]) => [k.slice(0, 200), v.slice(0, 5000)])),
+          cookies: typeof m.cookies === "string" ? m.cookies.slice(0, 4000) : "" };
+        r.compareQ = (r.compareQ || Promise.resolve()).then(async () => {
+          try {
+            const { before, after } = await onCompare({ repo: r.msg.diff.repo, base: r.msg.diff.base || "HEAD", path, view, progress: (stage) => send(ws, { type: "COMPARE_PROGRESS", reviewId: m.reviewId, reqId, stage }) });
+            send(ws, { type: "COMPARE_READY", reviewId: m.reviewId, reqId, before: `data:image/png;base64,${before.toString("base64")}`, after: `data:image/png;base64,${after.toString("base64")}` });
+          } catch (e) { fail(String(e.message || e).slice(0, 300)); }
+        });
         return;
       }
       if (role === "studio" && m.type === "NOTE_REMOVE") { notes = notes.filter((n) => n.id !== m.id); notesChanged(); return; }
