@@ -345,7 +345,7 @@ try {
       // flip instantly with B, slider, differences
       await p2.keyboard.press("b");
       assert.equal(await p2.locator(`${ps} .seg button[aria-pressed=true]`).getAttribute("data-side"), "AFTER");
-      assert.ok(await p2.locator(`${ps} .cmp img.a`).isVisible() && !(await p2.locator(`${ps} .cmp img.b`).isVisible()), "B flips to the AFTER snapshot");
+      assert.equal(await p2.locator(`${ps} .cmp.on`).count(), 0, "B flips back to After — the live page itself (one state: After is the work)");
       assert.ok(await p2.locator(`${ps} .box`).first().isVisible(), "frames are back on the AFTER side");
       await p2.keyboard.press("b");
       assert.ok(await p2.locator(`${ps} .cmp img.b`).isVisible());
@@ -722,7 +722,7 @@ try {
       assert.ok(blue, "After: the title is blue (the fix)");
       assert.equal(await p3.locator(`${ps} .box[data-g="0"] .ba button[data-ba=AFTER]`).getAttribute("aria-pressed"), "true");
       assert.ok(await p3.locator(`${ps} .box[data-g="0"]`).isVisible(), "the frame stays above the snapshot");
-      assert.match(await p3.locator(`${ps} .tt .info`).textContent(), /After inside the element's frame: [\d.]+% changed/, "says how much the fix changes in this frame");
+      assert.match(await p3.locator(`${ps} .tt .info`).textContent(), /After for element №\d+ only: [\d.]+% of its frame changes/, "says how much the fix changes in this frame");
       await p3.locator(`${ps} .box[data-g="0"] .ba button[data-ba=BEFORE]`).click();
       assert.equal(await p3.locator(`${ps} .cmp.on`).count(), 0, "Before = the live page");
       // the same from the entry itself: "Before/After on the page" goes to the element and shows its After
@@ -744,6 +744,42 @@ try {
       assert.equal(await p3.locator(`${ps} .cmp.on`).count(), 0, "Before (now) = the live page, not a snapshot");
       assert.equal(readFileSync(join(proj, "index.html"), "utf8"), page0("#ff9999", "#cccccc"), "nothing applied yet");
       ok("proposals: only visible findings, each with its fix; Before/After on a frame shows the fix inside that frame; the original untouched");
+
+      // ONE comparison state, many controls: any sequence of presses leaves them all telling the same story
+      {
+        let seed = 11; const rnd = (n) => { seed = (seed * 1103515245 + 12345) & 0x7fffffff; return seed % n; };
+        const read = () => p3.evaluate(() => {
+          const r = document.getElementById("__babysitter-studio").shadowRoot;
+          const seg = [...r.querySelectorAll(".seg button")].find((b) => b.getAttribute("aria-pressed") === "true");
+          const sc = r.querySelector("#cmp-scope");
+          return { side: seg?.dataset.side, n: (seg?.textContent.match(/№(\d+)/) || [])[1], on: !!r.querySelector(".cmp.on"), clip: r.querySelector(".cmp img.a").style.clipPath, slider: !!r.querySelector(".cmp.slider"),
+            pills: [...r.querySelectorAll(".box .ba button[data-ba=AFTER][aria-pressed=true]")].map((x) => Number(x.closest(".box").dataset.g)),
+            shows: [...r.querySelectorAll(".prop button[data-pa=show][aria-pressed=true]")].map((x) => Number(x.closest("li").dataset.g)),
+            scope: !!sc && !sc.closest("[hidden]"), busy: !!r.querySelector(".tt .info.busy") };
+        });
+        const settle = async () => { for (let i = 0; i < 200; i++) { const s = await read(); if (!s.busy) return s; await p3.waitForTimeout(100); } return read(); };
+        const acts = [
+          () => p3.locator(`${ps} .seg button[data-side=BEFORE]`).click(),
+          () => p3.locator(`${ps} .seg button[data-side=AFTER]`).click(),
+          async () => { await p3.locator(`${ps} .prop button[data-pa=show]`).nth(rnd(2)).click(); await p3.waitForTimeout(1100); },
+          () => p3.locator(`${ps} .box .ba button[data-ba=AFTER]`).first().evaluate((e) => e.click()),
+          () => p3.locator(`${ps} .box .ba button[data-ba=BEFORE]`).first().evaluate((e) => e.click()),
+          () => p3.keyboard.press("b"), () => p3.keyboard.press("Escape"),
+          async () => { if (await p3.locator(`${ps} #cmp-scope`).isVisible()) await p3.locator(`${ps} #cmp-scope`).click(); },
+          async () => { if (await p3.locator(`${ps} #cmp-slider`).isVisible()) await p3.locator(`${ps} #cmp-slider`).click(); },
+          async () => { if (await p3.locator(`${ps} #cmp-diff`).isVisible()) await p3.locator(`${ps} #cmp-diff`).click(); },
+          async () => { await p3.locator(`${ps} .prop button[data-pa=show]`).first().click(); await p3.locator(`${ps} .seg button[data-side=BEFORE]`).click(); await p3.waitForTimeout(1300); },
+        ];
+        for (let step = 1; step <= 30; step++) {
+          const k = rnd(acts.length); await acts[k]();
+          const st = await settle(), at = `step ${step} (action ${k}): ${JSON.stringify(st)}`;
+          if (st.side === "BEFORE") assert.ok(!st.on && !st.pills.length && !st.shows.length && !st.scope, `Before = the live page, nothing else lit: ${at}`);
+          else if (st.n) assert.ok(st.on && st.clip && st.scope && st.pills.every((g) => g === st.n - 1) && st.shows.every((g) => g === st.n - 1), `After · №n = that element only, everywhere: ${at}`);
+          else assert.ok(st.on && (!st.clip || st.slider) && !st.pills.length && !st.shows.length && !st.scope, `After for the whole screen: ${at}`);
+        }
+        await p3.keyboard.press("Escape");
+        ok("Before/After has one state: 30 random presses of the switch, entries, frame pills, B, Esc, Whole screen, Slider, Differences — every control always agrees");
+      }
 
       // Comment → the agent gets it; a revised fix shows up by itself
       const second = p3.locator(`${ps} .list li[data-g]`).nth(1);
