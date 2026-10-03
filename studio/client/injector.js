@@ -71,11 +71,15 @@
   @keyframes spin { to { transform: rotate(360deg); } }
 
   /* ── the panel ── */
-  .panel { z-index: 3; position: fixed; left: 50%; bottom: 16px; transform: translateX(-50%); width: min(560px, calc(100vw - 32px)); max-height: calc(100vh - 16px); pointer-events: auto;
+  /* in the corner, not over the middle of the page: the page is what is being reviewed */
+  .panel { z-index: 3; position: fixed; right: 16px; bottom: 16px; width: min(520px, calc(100vw - 32px)); max-height: calc(100vh - 16px); pointer-events: auto;
     display: flex; flex-direction: column; overflow: hidden; color: var(--text); font-size: 13px;
     background: linear-gradient(180deg, rgb(28 32 39 / .97), rgb(14 16 20 / .97)); backdrop-filter: blur(14px) saturate(1.2);
     border: 1px solid var(--line-2); border-radius: var(--r-lg);
     box-shadow: 0 1px 0 rgb(255 255 255 / .06) inset, 0 24px 60px rgb(0 0 0 / .5), 0 2px 8px rgb(0 0 0 / .3); animation: rise .2s var(--ease); }
+  .panel { transition: opacity .15s ease; }
+  .panel.yield { opacity: 0; visibility: hidden; pointer-events: none; transition: opacity .12s ease, visibility 0s linear .12s; } /* the site's own dropdown / dialog is open: out of its way */
+  .layer.yield { display: none; }
   .panel.dragging { transition: none; box-shadow: 0 30px 70px rgb(0 0 0 / .6); }
   .panel.before { border-color: #a16207; background: linear-gradient(180deg, #2a220c, #1a1607); }
   .head { flex: none; display: flex; align-items: center; gap: 8px; padding: 10px 10px 10px 12px; border-bottom: 1px solid var(--line); cursor: grab; user-select: none; touch-action: none; }
@@ -98,6 +102,8 @@
   .body > * { flex: none; }
   .body > .list { flex: 0 1 auto; min-height: 48px; }
   .panel.collapsed .body { display: none; }
+  .panel.collapsed { width: auto; max-width: calc(100vw - 32px); cursor: pointer; }
+  .panel.collapsed .title { flex: 0 1 auto; }
 
   /* header line of a review */
   .min { padding: 10px 14px 0; font-size: 12px; display: flex; align-items: baseline; gap: 6px; color: var(--muted); }
@@ -719,7 +725,25 @@
     if (!current || resync || !stale()) return;
     resync = setTimeout(() => { resync = 0; if (current && stale()) { const was = framesPath; syncFrames(); if (was !== location.pathname) renderReview(current); } }, 250);
   };
-  new MutationObserver(() => { schedule(); maybeResync(); }).observe(document.documentElement, { subtree: true, childList: true, attributes: true, characterData: true });
+  // The page's own overlays come first: while a select list, menu, popover or dialog of the site is open, the panel
+  // fades out and lets clicks through, and the frames step back — they must never sit on top of what the reviewer
+  // is trying to use. Everything comes back when it closes.
+  const OVERLAY = '[role=listbox],[role=menu],[role=dialog],[role=alertdialog],[data-radix-popper-content-wrapper],[data-side][data-state=open],[popover]:popover-open,dialog[open]';
+  let yielding = false, yieldRaf = 0;
+  const pageOverlayOpen = () => [...document.querySelectorAll(OVERLAY)].some((el) => {
+    if (host.contains(el)) return false;
+    const r = el.getBoundingClientRect(); if (r.width < 8 || r.height < 8) return false;
+    const cs = getComputedStyle(el); return cs.visibility !== "hidden" && cs.display !== "none" && Number(cs.opacity) > 0.05;
+  });
+  const checkYield = () => {
+    yieldRaf = 0;
+    let open = false; try { open = pageOverlayOpen(); } catch {}
+    if (open === yielding) return;
+    yielding = open;
+    panel.classList.toggle("yield", open); layer.classList.toggle("yield", open);
+  };
+  const scheduleYield = () => { if (!yieldRaf) yieldRaf = requestAnimationFrame(checkYield); };
+  new MutationObserver(() => { schedule(); maybeResync(); scheduleYield(); }).observe(document.documentElement, { subtree: true, childList: true, attributes: true, characterData: true });
   addEventListener("popstate", maybeResync);
   addEventListener("resize", maybeResync, { passive: true });
 
@@ -990,20 +1014,35 @@
     const w = panel.offsetWidth, h = panel.offsetHeight;
     x = Math.max(8, Math.min(innerWidth - w - 8, x)); y = Math.max(8, Math.min(innerHeight - Math.min(h, 120) - 8, y));
     // placed by its top: it may never reach past the bottom edge, however the list grows later
-    Object.assign(panel.style, { left: `${x}px`, top: `${y}px`, bottom: "auto", transform: "none", maxHeight: `${Math.max(160, innerHeight - y - 8)}px` });
+    Object.assign(panel.style, { left: `${x}px`, top: `${y}px`, right: "auto", bottom: "auto", transform: "none", maxHeight: `${Math.max(160, innerHeight - y - 8)}px` });
     return { x, y };
   }
-  function resetPlace() { Object.assign(panel.style, { left: "", top: "", bottom: "", transform: "", maxHeight: "" }); store.set({ x: null, y: null }); }
+  function resetPlace() { Object.assign(panel.style, { left: "", top: "", right: "", bottom: "", transform: "", maxHeight: "" }); store.set({ x: null, y: null }); }
   head.addEventListener("pointerdown", (e) => {
     if (e.button !== 0 || e.target.closest("button")) return;
     const r = panel.getBoundingClientRect(), dx = e.clientX - r.left, dy = e.clientY - r.top;
     panel.classList.add("dragging"); head.setPointerCapture(e.pointerId);
-    const move = (ev) => placeAt(ev.clientX - dx, ev.clientY - dy);
-    const up = (ev) => { head.removeEventListener("pointermove", move); head.removeEventListener("pointerup", up); panel.classList.remove("dragging"); store.set(placeAt(ev.clientX - dx, ev.clientY - dy)); };
+    // a drag is a drag only once the pointer really moves: a click (e.g. on the folded bar to open it) leaves the
+    // panel where it is, anchored as it was
+    const x0 = e.clientX, y0 = e.clientY; let moved = false;
+    const move = (ev) => { if (!moved && Math.hypot(ev.clientX - x0, ev.clientY - y0) < 4) return; moved = true; placeAt(ev.clientX - dx, ev.clientY - dy); };
+    const up = (ev) => { head.removeEventListener("pointermove", move); head.removeEventListener("pointerup", up); panel.classList.remove("dragging"); if (moved) store.set(placeAt(ev.clientX - dx, ev.clientY - dy)); };
     head.addEventListener("pointermove", move); head.addEventListener("pointerup", up);
   });
   head.addEventListener("dblclick", (e) => { if (!e.target.closest("button")) resetPlace(); });
   addEventListener("resize", () => { const s0 = store.get(); if (s0.x != null) placeAt(s0.x, s0.y); });
+  // working with the page itself folds the panel to a small bar in its corner (nothing of the page stays under it);
+  // a click on the bar opens it again. Not while pointing at elements with Inspect, not with a review just arrived.
+  document.addEventListener("pointerdown", (e) => {
+    if (e.composedPath().includes(host) || picking || panel.classList.contains("collapsed") || !e.isTrusted) return;
+    setCollapsed(true, { auto: true });
+  }, true);
+  panel.addEventListener("click", (e) => { if (panel.classList.contains("collapsed") && !e.target.closest("button")) setCollapsed(false); });
+  // scrolling the page with the wheel / a finger is working with the page too (the panel's own list does not count)
+  for (const type of ["wheel", "touchmove"]) document.addEventListener(type, (e) => {
+    if (e.composedPath().includes(host) || picking || panel.classList.contains("collapsed") || !e.isTrusted || cmp.want) return;
+    setCollapsed(true, { auto: true });
+  }, { capture: true, passive: true });
   function setCollapsed(c) { panel.classList.toggle("collapsed", c); collapseBtn.setAttribute("aria-expanded", String(!c)); store.set({ collapsed: c }); }
   collapseBtn.onclick = () => setCollapsed(!panel.classList.contains("collapsed"));
   { const s0 = store.get(); if (s0.x != null) requestAnimationFrame(() => placeAt(s0.x, s0.y)); if (s0.collapsed) setCollapsed(true); }

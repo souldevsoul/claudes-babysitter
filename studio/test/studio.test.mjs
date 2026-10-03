@@ -110,6 +110,8 @@ try {
   assert.ok(await frameOn("#country"), "frame moved with the DOM change");
   await page.mouse.wheel(0, 900);
   assert.ok(await frameOn("#country"), "frame follows the scroll");
+  assert.ok(await page.locator("#__babysitter-studio .panel.collapsed").count(), "scrolling the page folds the panel out of the way");
+  await page.locator("#__babysitter-studio .panel .title").click(); // open it again from its bar
   await page.locator("#__babysitter-studio .list li").first().click();
   await page.waitForFunction(() => { const r = document.querySelector("#country").getBoundingClientRect(); return r.top > 0 && r.bottom < innerHeight; }, null, { timeout: 5000 });
   assert.ok(await frameOn("#country"), "frame still on it after scrollIntoView");
@@ -134,6 +136,26 @@ try {
   await page.waitForFunction(() => scrollY > 0, null, { timeout: 5000 });
   await page.evaluate(() => { window.removeEventListener("wheel", window.__smooth); document.querySelector("#__babysitter-studio").shadowRoot.getElementById("short-list").remove(); scrollTo(0, 0); });
   ok("the problem list scrolls under a smooth-scroll library (Lenis) that takes the wheel; the page still scrolls outside the panel");
+
+  // the site's own dropdown / dialog comes first: while it is open the panel and the frames step out of its way
+  await page.evaluate(() => { const l = document.createElement("div"); l.id = "fake-list"; l.setAttribute("role", "listbox"); l.style.cssText = "position:fixed;left:100px;top:100px;width:300px;height:200px;background:#fff"; document.body.append(l); });
+  await page.waitForFunction(() => document.getElementById("__babysitter-studio").shadowRoot.querySelector(".panel.yield"), null, { timeout: 3000 });
+  await page.waitForTimeout(250); // its 0.12 s fade
+  assert.equal(await page.locator("#__babysitter-studio .panel").isVisible(), false, "the panel is out of the way");
+  assert.equal(await page.locator("#__babysitter-studio .box").first().isVisible(), false, "no frames on top of the open list");
+  await page.evaluate(() => document.getElementById("fake-list").remove());
+  await page.waitForFunction(() => !document.getElementById("__babysitter-studio").shadowRoot.querySelector(".panel.yield"), null, { timeout: 3000 });
+  assert.ok(await page.locator("#__babysitter-studio .box").first().isVisible(), "frames back once it closes");
+  ok("an open dropdown / menu / dialog of the site hides the panel and the frames (clicks reach it); they come back when it closes");
+
+  // working with the page folds the panel into a small bar in its corner; a click on the bar opens it again
+  await page.mouse.click(20, 20);
+  assert.ok(await page.locator("#__babysitter-studio .panel.collapsed").count(), "a click on the page folds the panel");
+  const bar = await page.locator("#__babysitter-studio .panel").boundingBox();
+  assert.ok(bar.height < 70 && bar.x + bar.width > 1000, `a small bar in the bottom-right corner: ${JSON.stringify(bar)}`);
+  await page.locator("#__babysitter-studio .panel .title").click();
+  assert.equal(await page.locator("#__babysitter-studio .panel.collapsed").count(), 0, "a click on the bar opens it");
+  ok("a click on the page folds the panel into a bar in its corner (nothing of the page under it); a click on the bar opens it");
 
   assert.ok(!(await page.locator("#__babysitter-studio #comment-send").isVisible()), "Send Comment is not shown until there is something to send");
   await page.locator("#__babysitter-studio #comment-text").fill("Use the kit Select here, please");
@@ -706,7 +728,9 @@ try {
       assert.equal(await p3.locator(`${ps} #approve`).textContent(), "Approve all (3)", "says how many fixes it applies");
       assert.equal(await p3.locator(`${ps} #cmp-slider`).isVisible(), false, "Slider only while comparing");
       assert.deepEqual(await p3.locator(`${ps} .seg button`).allInnerTexts(), ["Before (now)", "After (with fixes)"]);
-      // Before/After on the frame: After shows the fixed title inside this frame only
+      // Before/After on the frame: After shows the fixed title inside this frame only (the panel folded first, as a
+      // person would when it sits over the element)
+      await p3.locator(`${ps} #collapse`).click();
       await p3.locator(`${ps} .box[data-g="0"] .ba button[data-ba=AFTER]`).click();
       await p3.locator(`${ps} .cmp.on`).waitFor({ timeout: 90000 });
       const clip = await p3.locator(`${ps} .cmp img.a`).evaluate((e) => e.style.clipPath);
@@ -725,6 +749,7 @@ try {
       assert.match(await p3.locator(`${ps} .tt .info`).textContent(), /After for element №\d+ only: [\d.]+% of its frame changes/, "says how much the fix changes in this frame");
       await p3.locator(`${ps} .box[data-g="0"] .ba button[data-ba=BEFORE]`).click();
       assert.equal(await p3.locator(`${ps} .cmp.on`).count(), 0, "Before = the live page");
+      await p3.locator(`${ps} #collapse`).click();
       // the same from the entry itself: "Before/After on the page" goes to the element and shows its After
       await p3.locator(`${ps} .prop[data-prop="darker-title"] button[data-pa=show]`).click();
       await p3.locator(`${ps} .cmp.on`).waitFor({ timeout: 30000 });

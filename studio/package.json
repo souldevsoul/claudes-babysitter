@@ -1,6 +1,6 @@
 {
   "name": "@babysitter/studio",
-  "version": "4.2.1",
+  "version": "4.2.2",
   "private": true,
   "description": "Babysitter Studio — a visual review sandbox: a local proxy that injects a Shadow-DOM review panel into your dev site, and a WebSocket bus that lets a human approve or reject what the Babysitter CLI flagged.",
   "type": "module",
