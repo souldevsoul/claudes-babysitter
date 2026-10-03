@@ -112,6 +112,7 @@ export function createBus({ log = () => {}, onCompare = null } = {}) {
   return {
     handleUpgrade: (req, socket, head) => wss.handleUpgrade(req, socket, head, (ws) => wss.emit("connection", ws, req)),
     pending: () => [...reviews.keys()],
+    diffOf: (id) => reviews.get(id)?.msg.diff || null,
     notes: () => notes,
     close: () => { for (const c of wss.clients) c.terminate(); wss.close(); },
   };

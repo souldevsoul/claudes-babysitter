@@ -226,4 +226,35 @@ tester.run("no-inline-style (3.3 strict)", R["no-inline-style"], {
   ],
 });
 
+
+// 6.12 — overlays animate in and out; animation classes need their plugin
+{
+  const { mkdtempSync, writeFileSync } = await import("node:fs");
+  const { tmpdir } = await import("node:os");
+  const { join } = await import("node:path");
+  const noPlugin = mkdtempSync(join(tmpdir(), "motion-")); writeFileSync(join(noPlugin, "package.json"), JSON.stringify({ dependencies: { "@radix-ui/react-select": "2" } }));
+  const withPlugin = mkdtempSync(join(tmpdir(), "motion-")); writeFileSync(join(withPlugin, "package.json"), JSON.stringify({ dependencies: { "tw-animate-css": "1" } }));
+  const imp = 'import * as SelectPrimitive from "@radix-ui/react-select";\n';
+  const ok = 'className="data-[state=open]:animate-in data-[state=closed]:animate-out data-[state=open]:fade-in-0 data-[state=closed]:fade-out-0 data-[state=open]:zoom-in-95 data-[state=closed]:zoom-out-95 motion-reduce:animate-none"';
+  tester.run("overlay-motion", R["overlay-motion"], {
+    valid: [
+      { code: imp + `<SelectPrimitive.Content ${ok} />`, filename: join(withPlugin, "select.tsx") },
+      // Base UI: CSS transitions with starting / ending styles
+      { code: 'import { Popover } from "@base-ui-components/react/popover";\n<Popover.Popup className="transition-[opacity,scale] duration-150 data-[starting-style]:opacity-0 data-[ending-style]:opacity-0" />', filename: join(noPlugin, "p.tsx") },
+      // not an overlay part, not a headless-UI import
+      { code: imp + '<SelectPrimitive.Trigger className="border" />', filename: join(noPlugin, "s.tsx") },
+      '<Content className="x" />',
+      // classes from a cva() variants helper count
+      { code: 'import * as D from "@radix-ui/react-dialog";\nconst v = cva("fixed data-[state=open]:animate-in data-[state=closed]:animate-out", { variants: { side: { right: "data-[state=open]:slide-in-from-right data-[state=closed]:slide-out-to-right" } } });\n<D.Content className={cn(v({ side }), className)} />', filename: join(withPlugin, "drawer.tsx") },
+    ],
+    invalid: [
+      { code: imp + '<SelectPrimitive.Content className="relative z-50 rounded-lg border" />', filename: join(withPlugin, "s.tsx"), ...err("none") },
+      { code: imp + '<SelectPrimitive.Content className="data-[state=open]:animate-in data-[state=open]:fade-in-0" />', filename: join(withPlugin, "s.tsx"), ...err("exit") },
+      { code: 'import * as D from "@radix-ui/react-dialog";\n<D.Content className={cn("fixed", "data-[state=closed]:animate-out")} />', filename: join(withPlugin, "d.tsx"), ...err("enter") },
+      // the classes are there but nothing makes them move
+      { code: imp + `<SelectPrimitive.Content ${ok} />`, filename: join(noPlugin, "select.tsx"), ...err("plugin") },
+    ],
+  });
+}
+
 console.log(`eslint-plugin-babysitter: ${Object.keys(R).length} rules, all RuleTester cases passed`);

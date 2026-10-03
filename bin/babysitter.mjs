@@ -64,7 +64,7 @@ switch (cmd) {
     try {
       if (sub === "start") { P.start(repo); console.log("Baseline set: the files as they are now are the original. Edit, then `babysitter propose save --title … --for …`."); }
       else if (sub === "save") {
-        const p = P.save(repo, { title: opt("title"), for: opt("for") || "", id: opt("id"), requires: (opt("requires") || "").split(",").filter(Boolean), kind: opt("kind") });
+        const p = P.save(repo, { title: opt("title"), for: opt("for") || "", id: opt("id"), requires: (opt("requires") || "").split(",").filter(Boolean), kind: opt("kind"), route: opt("route"), selector: opt("selector"), why: opt("why") });
         console.log(`Proposal "${p.id}" saved (${p.files.length} file(s)); the files are back to the original.`);
       } else if (sub === "list") {
         for (const p of P.list(repo)) console.log(`${p.status.padEnd(9)} ${p.id.padEnd(28)} ${p.title}${p.for ? `  [for /${p.for}/]` : ""}${p.comments?.length ? `\n          ↳ ${p.comments.at(-1).text}` : ""}`);
@@ -90,7 +90,7 @@ switch (cmd) {
         const p = P.edit(repo, id);
         console.log(`"${p.id}" is on disk now (${p.files.length} file(s)); edit, then \`babysitter propose save --id ${p.id}\`.`);
       } else if (sub === "drop") { P.drop(repo, args.find((a) => !a.startsWith("--"))); }
-      else { console.error("usage: babysitter propose start | save --title T --for REGEX [--id X] [--requires a,b] [--kind code] | edit <id> | auto --routes /,/x [--widths 1280,390] | list | drop <id>"); process.exit(2); }
+      else { console.error("usage: babysitter propose start | save --title T --for REGEX [--id X] [--requires a,b] [--kind code] [--route /x --selector css --why text] | edit <id> | auto --routes /,/x [--widths 1280,390] | list | drop <id>"); process.exit(2); }
     } catch (e) { console.error(`babysitter propose: ${e.message}`); process.exit(1); }
     break;
   }

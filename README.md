@@ -316,6 +316,7 @@ Some rules encode design choices rather than bugs. A project can opt out explici
 |---|---|---|
 | `no-native-controls`: `<select>`, date/time/file/checkbox/radio inputs, raw `<button>` outside the kit | 1.1 | P01 P03 P04 P20 P50 |
 | `no-native-dialogs`: `confirm`/`alert`/`prompt` | 1.1 | P20 |
+| `overlay-motion`: select lists, menus, popovers, dialogs, drawers animate in **and** out; `animate-in`/`fade-in-0` classes without `tw-animate-css` are flagged (they compile to nothing) | 6.12 | P59 |
 | `no-auth-library-pages` | 1.14 | P20 |
 | `no-adhoc-button`: *clickable* element with fill/border + padding + radius | 1.3 / 1.5 | P04 P05 |
 | `no-visual-classname-override`: visual/state classes, `style`, or variable `className` on kit components | 1.3 / 1.4 / 1.15 | P04 P06 P46 |

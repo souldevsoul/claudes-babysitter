@@ -669,6 +669,8 @@ try {
     P.start(proj);
     writeFileSync(join(proj, "index.html"), page0("#0000ff", "#cccccc")); P.save(proj, { title: "Darker title", for: "Title" });
     writeFileSync(join(proj, "index.html"), page0("#ff9999", "#555555")); P.save(proj, { title: "Darker note", for: "note" });
+    // a change asked for in words, with no finding behind it: it still gets an entry (where to look + why)
+    writeFileSync(join(proj, "index.html"), page0("#ff9999", "#cccccc").replace("</body>", "<p id=\"hello\">hello</p>\n</body>")); P.save(proj, { id: "greeting", title: "Add a greeting", route: "/", selector: "#t", why: "You asked for a greeting under the page." });
     assert.equal(readFileSync(join(proj, "index.html"), "utf8"), page0("#ff9999", "#cccccc"));
     const { createServer } = await import("node:net");
     const ap = await new Promise((r) => { const s2 = createServer(); s2.listen(0, "127.0.0.1", () => { const { port } = s2.address(); s2.close(() => r(port)); }); });
@@ -691,9 +693,17 @@ try {
       await p3.goto(base3 + "/");
       const ps = "#__babysitter-studio";
       await p3.locator(`${ps} #approve`).waitFor({ timeout: 15000 });
-      assert.equal(await p3.locator(`${ps} .list li[data-g]`).count(), 2, "the two visible findings; the code-only one is not listed");
+      assert.equal(await p3.locator(`${ps} .list li[data-g]`).count(), 3, "the two visible findings + the requested change; the code-only one is not listed");
+      const asked = p3.locator(`${ps} .list li[data-g]`).filter({ has: p3.locator('.prop[data-prop="greeting"]') });
+      assert.match(await asked.innerText(), /Add a greeting[\s\S]*You asked for a greeting under the page/);
+      // "Try it live": the version with the fixes on its own server, for what a snapshot cannot show
+      const href = await asked.locator("a.try").getAttribute("href");
+      const res = await fetch(base3 + href, { redirect: "manual" });
+      assert.equal(res.status, 302); assert.match(res.headers.get("location"), /^http:\/\/127\.0\.0\.1:\d+\/$/);
+      assert.match(await (await fetch(res.headers.get("location"))).text(), /id="hello"/, "the live version has the fixes");
+      assert.equal((await fetch(base3 + "/__babysitter/after?review=nope&path=/", { redirect: "manual" })).status, 404);
       assert.match(await p3.locator(`${ps} .list li[data-g]`).first().innerText(), /Fix\s*Darker title[\s\S]*waiting for your decision[\s\S]*Accept[\s\S]*Reject[\s\S]*Comment/);
-      assert.equal(await p3.locator(`${ps} #approve`).textContent(), "Approve all (2)", "says how many fixes it applies");
+      assert.equal(await p3.locator(`${ps} #approve`).textContent(), "Approve all (3)", "says how many fixes it applies");
       assert.equal(await p3.locator(`${ps} #cmp-slider`).isVisible(), false, "Slider only while comparing");
       assert.deepEqual(await p3.locator(`${ps} .seg button`).allInnerTexts(), ["Before (now)", "After (with fixes)"]);
       // Before/After on the frame: After shows the fixed title inside this frame only
@@ -753,10 +763,12 @@ try {
       await p3.locator(`${ps} .list li[data-g].k-fixed`).waitFor({ timeout: 10000 });
       assert.match(await p3.locator(`${ps} .list li[data-g].k-fixed .t`).getAttribute("data-done"), /applied/);
       // Reject → dropped, the file stays as it is
-      await p3.locator(`${ps} .list li[data-g].k-red button[data-pa=reject]`).click();
+      await p3.locator(`${ps} .prop[data-prop="darker-note"] button[data-pa=reject]`).click();
       await p3.locator(`${ps} .prop.s-rejected`).waitFor({ timeout: 10000 });
       assert.equal(readFileSync(join(proj, "index.html"), "utf8"), page0("#0000ff", "#cccccc"));
       assert.equal(P.get(proj, "darker-note").status, "rejected");
+      await asked.locator("button[data-pa=reject]").click();
+      await p3.locator(`${ps} .prop[data-prop="greeting"].s-rejected`).waitFor({ timeout: 10000 });
       // nothing waits any more: no Reject all, and Approve says what it does now
       assert.equal(await p3.locator(`${ps} #reject`).isVisible(), false);
       assert.equal(await p3.locator(`${ps} #approve`).textContent(), "Finish review");

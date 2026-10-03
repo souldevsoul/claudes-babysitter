@@ -83,12 +83,21 @@ async function reviewProposals({ url, problems, fixed }) {
     const list = P.list(repo).filter((p) => p.kind !== "code"); // code-only fixes never wait for a person
     open = P.assign(open.map(({ proposal, ...f }) => f), list);
     const { sha, applied, failed } = P.proposalCommit(repo);
-    const proposals = list.map((p) => ({ id: p.id, title: p.title, status: failed.some((f) => f.id === p.id) ? "conflict" : p.status, error: failed.find((f) => f.id === p.id)?.error || p.error, files: p.files, requires: p.requires, comment: p.comments?.at(-1)?.text, findings: open.filter((f) => f.proposal === p.id).length }));
-    return { problems: open, fixed: done, proposals, diff: { repo, mode: "proposals", ref: sha, files: applied.length } };
+    // a fix asked for in words (not from a finding) still gets its entry: "Change you asked for" + where to look
+    const asked = list.filter((p) => p.status !== "approved" && !open.some((f) => f.proposal === p.id))
+      .map((p) => ({ check: "requested change", what: p.title, why: p.why || "", route: p.route || "/", selector: p.selector || undefined, proposal: p.id, visual: true, viewport: "1280" }));
+    const shown = open.concat(asked);
+    const proposals = list.map((p) => ({ id: p.id, title: p.title, status: failed.some((f) => f.id === p.id) ? "conflict" : p.status, error: failed.find((f) => f.id === p.id)?.error || p.error, files: p.files, requires: p.requires, comment: p.comments?.at(-1)?.text, findings: shown.filter((f) => f.proposal === p.id).length }));
+    return { problems: shown, fixed: done, proposals, diff: { repo, mode: "proposals", ref: sha, files: applied.length } };
   };
   let seen = signature();
   const s0 = state();
-  const moveFixed = (ids) => { const now = open.filter((f) => ids.includes(f.proposal)); open = open.filter((f) => !ids.includes(f.proposal)); done = done.concat(now.map((f) => ({ ...f, applied: true }))); };
+  const moveFixed = (ids) => {
+    const now = open.filter((f) => ids.includes(f.proposal)); open = open.filter((f) => !ids.includes(f.proposal));
+    // a fix asked for in words has no finding: its entry moves to fixed under its own title
+    for (const id of ids) if (!now.some((f) => f.proposal === id)) { const p = P.get(repo, id); if (p) now.push({ check: "requested change", what: p.title, route: p.route || "/", selector: p.selector, proposal: id, visual: true }); }
+    done = done.concat(now.map((f) => ({ ...f, applied: true })));
+  };
   const onProposal = async ({ id, decision, text }, api) => {
     try {
       if (decision === "approve") { const ids = P.approve(repo, id); moveFixed(ids); event({ event: "approved", id, applied: ids }); }

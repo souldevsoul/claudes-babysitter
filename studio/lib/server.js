@@ -75,6 +75,18 @@ export function startStudio({ port = 3001, target = "http://localhost:3000", hos
   });
 
   const server = http.createServer((req, res) => {
+    // "Try it live": the version with the pending fixes, on its own dev server, in a tab of its own — for what a
+    // snapshot cannot show (an animation, a hover, a dropdown that opens). Loopback only, like the whole proxy.
+    if (req.url.startsWith("/__babysitter/after?")) {
+      const q = new URL(req.url, "http://x").searchParams;
+      const d = bus.diffOf(String(q.get("review") || ""));
+      const path = String(q.get("path") || "/");
+      if (!d || d.mode !== "proposals" || !d.repo || !/^\/(?!\/)/.test(path)) { res.writeHead(404, { "content-type": "text/plain" }); return res.end("no proposals for this review"); }
+      baseSite({ repo: d.repo, ref: d.ref, log })
+        .then((site) => { res.writeHead(302, { location: site.url + path, "cache-control": "no-store" }); res.end(); })
+        .catch((e) => { res.writeHead(502, { "content-type": "text/plain; charset=utf-8" }); res.end(`the version with the fixes did not start: ${e.message}`); });
+      return;
+    }
     if (req.url === INJECTOR_PATH) {
       res.writeHead(200, { "content-type": "text/javascript; charset=utf-8", "cache-control": "no-store" });
       return res.end(readFileSync(INJECTOR));
