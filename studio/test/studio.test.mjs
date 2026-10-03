@@ -803,6 +803,15 @@ try {
           else assert.ok(st.on && (!st.clip || st.slider) && !st.pills.length && !st.shows.length && !st.scope, `After for the whole screen: ${at}`);
         }
         await p3.keyboard.press("Escape");
+        // After is a picture: a click on the page goes to the live page underneath — the picture steps aside and says so
+        await p3.locator(`${ps} .seg button[data-side=AFTER]`).click();
+        await p3.locator(`${ps} .cmp.on`).waitFor({ timeout: 30000 });
+        assert.match(await p3.locator(`${ps} .cmp .badge.a, ${ps} .cmp .badge.b`).filter({ hasText: /snapshot/ }).first().textContent(), /snapshot/, "the badge says it is a snapshot");
+        await p3.mouse.click(30, 300);
+        assert.equal(await p3.locator(`${ps} .cmp.on`).count(), 0, "a click on the page brings the live page back");
+        assert.match(await p3.locator(`${ps} .tt .info`).textContent(), /After is a picture — it cannot be clicked/);
+        assert.equal(await p3.locator(`${ps} .panel.collapsed`).count(), 0, "the panel stays open to say why");
+        assert.ok(await p3.locator(`${ps} #try-live`).isVisible(), "and Try it live is right there");
         ok("Before/After has one state: 30 random presses of the switch, entries, frame pills, B, Esc, Whole screen, Slider, Differences — every control always agrees");
       }
 
