@@ -64,6 +64,12 @@ Or install it as a dev dependency: `npm i -D github:souldevsoul/claudes-babysitt
 | `docs/` | The guidelines the rules enforce |
 | `test/`, `fixtures/` | `npm test`: RuleTester, Stylelint fixtures, end-to-end cases |
 
+## What changed in 4.3 (overlay motion is measured, not assumed)
+
+- **Rendered check "overlay motion" [6.12]** (micro-check → Studio, and the Playwright suite): every trigger on the page — anything with `aria-haspopup` / `aria-expanded` / `aria-controls` / `role=combobox`, and buttons that look like one (a short label + a trailing chevron) — is opened and closed (Escape, then the trigger again). The page records the layer that appears and how it leaves, frame by frame: a CSS animation, a transition, a Web Animation or a per-frame change of opacity / transform / size counts as motion. A list that appears or vanishes in one frame is a red finding framed on its trigger, explained in plain words.
+- **`ui/overlay-motion` sees hand-made overlays**: `{open && <div className="absolute … z-… shadow…">}` (or `open ? … : null`) is flagged — unmounting means no exit animation, ever. Components and framer-motion (`motion.*`, anything under `AnimatePresence`) are left alone.
+- **Exit classes that cannot play**: Radix Select before 2.3.0 unmounts the list at once, so `data-[state=closed]:animate-out` never runs; the rule names the installed version and the fix (update to ^2.3.0).
+
 ## What changed in 4.0 (fixes wait next to the original; only what a person sees asks for approval)
 
 The agent no longer edits the original to show you a fix. It scans, prepares each fix as a **proposal** next to the
@@ -316,7 +322,7 @@ Some rules encode design choices rather than bugs. A project can opt out explici
 |---|---|---|
 | `no-native-controls`: `<select>`, date/time/file/checkbox/radio inputs, raw `<button>` outside the kit | 1.1 | P01 P03 P04 P20 P50 |
 | `no-native-dialogs`: `confirm`/`alert`/`prompt` | 1.1 | P20 |
-| `overlay-motion`: select lists, menus, popovers, dialogs, drawers animate in **and** out; `animate-in`/`fade-in-0` classes without `tw-animate-css` are flagged (they compile to nothing) | 6.12 | P59 |
+| `overlay-motion`: select lists, menus, popovers, dialogs, drawers animate in **and** out; `animate-in`/`fade-in-0` classes without `tw-animate-css` are flagged (they compile to nothing); hand-made overlays mounted with `{open && <div className="absolute z-… shadow…">}` are flagged (they can never animate out); Radix Select below 2.3.0 is flagged (its exit classes never play) | 6.12 | P59 |
 | `no-auth-library-pages` | 1.14 | P20 |
 | `no-adhoc-button`: *clickable* element with fill/border + padding + radius | 1.3 / 1.5 | P04 P05 |
 | `no-visual-classname-override`: visual/state classes, `style`, or variable `className` on kit components | 1.3 / 1.4 / 1.15 | P04 P06 P46 |

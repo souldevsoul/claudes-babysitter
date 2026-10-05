@@ -70,6 +70,7 @@ for (const route of ROUTES) {
     test("1.9 inputs visible at rest [P09]", async ({ page }) => { await open(page, r); hard(await c.inputVisibility(page)); });
     test("1.4 button label stays readable on hover [P06]", async ({ page }) => { await open(page, r); hard(await c.hoverContrast(page)); });
     test("1.2/5.2 dropdowns, menus and dialogs open on-screen without moving the header [P02 P18 P22]", async ({ page }) => { await open(page, r); hard(await c.interactiveStates(page)); });
+    test("6.12 dropdowns, menus, popovers and dialogs open and close with motion [P59]", async ({ page }) => { await open(page, r); hard(await c.overlayMotion(page)); });
     test("2.5 header nav items do not wrap [P35]", async ({ page }) => { await open(page, r); soft(await c.wrappedNavItems(page), "nav items wrap"); });
     test("2.11 text is not covered by other elements [P49]", async ({ page }) => { await open(page, r); soft(await c.overlappingText(page), "overlapping text"); });
     test("6.9 underline only on links [P54]", async ({ page }) => { await open(page, r); soft(await c.fakeLinks(page), "fake link affordance"); });

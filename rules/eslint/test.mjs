@@ -234,6 +234,8 @@ tester.run("no-inline-style (3.3 strict)", R["no-inline-style"], {
   const { join } = await import("node:path");
   const noPlugin = mkdtempSync(join(tmpdir(), "motion-")); writeFileSync(join(noPlugin, "package.json"), JSON.stringify({ dependencies: { "@radix-ui/react-select": "2" } }));
   const withPlugin = mkdtempSync(join(tmpdir(), "motion-")); writeFileSync(join(withPlugin, "package.json"), JSON.stringify({ dependencies: { "tw-animate-css": "1" } }));
+  const oldSelect = mkdtempSync(join(tmpdir(), "motion-")); writeFileSync(join(oldSelect, "package.json"), JSON.stringify({ dependencies: { "tw-animate-css": "1", "@radix-ui/react-select": "^2.2.6" } }));
+  const newSelect = mkdtempSync(join(tmpdir(), "motion-")); writeFileSync(join(newSelect, "package.json"), JSON.stringify({ dependencies: { "tw-animate-css": "1", "@radix-ui/react-select": "^2.3.7" } }));
   const imp = 'import * as SelectPrimitive from "@radix-ui/react-select";\n';
   const ok = 'className="data-[state=open]:animate-in data-[state=closed]:animate-out data-[state=open]:fade-in-0 data-[state=closed]:fade-out-0 data-[state=open]:zoom-in-95 data-[state=closed]:zoom-out-95 motion-reduce:animate-none"';
   tester.run("overlay-motion", R["overlay-motion"], {
@@ -249,6 +251,14 @@ tester.run("no-inline-style (3.3 strict)", R["no-inline-style"], {
       { code: 'import { Tabs } from "radix-ui";\n<Tabs.Content className="mt-2" />', filename: join(noPlugin, "tabs2.tsx") },
       // classes from a cva() variants helper count
       { code: 'import * as D from "@radix-ui/react-dialog";\nconst v = cva("fixed data-[state=open]:animate-in data-[state=closed]:animate-out", { variants: { side: { right: "data-[state=open]:slide-in-from-right data-[state=closed]:slide-out-to-right" } } });\n<D.Content className={cn(v({ side }), className)} />', filename: join(withPlugin, "drawer.tsx") },
+      // Radix Select that can play its exit (≥ 2.3.0)
+      { code: imp + `<SelectPrimitive.Content ${ok} />`, filename: join(newSelect, "select.tsx") },
+      // conditional, but not an overlay (not positioned / not layered) or a component / framer-motion
+      { code: '<div>{open && <div className="mt-2 rounded border p-2">x</div>}</div>', filename: join(noPlugin, "a.tsx") },
+      { code: '<div>{open && <Menu className="absolute z-50 shadow" />}</div>', filename: join(noPlugin, "a.tsx") },
+      { code: '<AnimatePresence>{open && <motion.div className="absolute z-50 shadow-lg" exit={{ opacity: 0 }} />}</AnimatePresence>', filename: join(noPlugin, "a.tsx") },
+      { code: '<div>{user && <div className="absolute z-50 shadow">x</div>}</div>', filename: join(noPlugin, "a.tsx") },
+      { code: '<AnimatePresence>{open && (<div className="fixed inset-0 z-50"><motion.div exit={{ opacity: 0 }} /></div>)}</AnimatePresence>', filename: join(noPlugin, "a.tsx") },
     ],
     invalid: [
       { code: imp + '<SelectPrimitive.Content className="relative z-50 rounded-lg border" />', filename: join(withPlugin, "s.tsx"), ...err("none") },
@@ -257,6 +267,11 @@ tester.run("no-inline-style (3.3 strict)", R["no-inline-style"], {
       { code: 'import * as D from "@radix-ui/react-dialog";\n<D.Content className={cn("fixed", "data-[state=closed]:animate-out")} />', filename: join(withPlugin, "d.tsx"), ...err("enter") },
       // the classes are there but nothing makes them move
       { code: imp + `<SelectPrimitive.Content ${ok} />`, filename: join(noPlugin, "select.tsx"), ...err("plugin") },
+      // Radix Select before 2.3 unmounts at once: the exit classes never play
+      { code: imp + `<SelectPrimitive.Content ${ok} />`, filename: join(oldSelect, "select.tsx"), ...err("selectExit") },
+      // a hand-made dropdown mounted with {isOpen && …} (the Wordbench currency switcher before the fix)
+      { code: '<div className="relative">{isOpen && (<div className="absolute right-0 top-full z-1000 mt-2 rounded-xl border shadow-cur-menu">x</div>)}</div>', filename: join(noPlugin, "c.tsx"), ...err("mount") },
+      { code: '<div>{showMenu ? <ul className="fixed inset-x-0 z-40 shadow-lg animate-in fade-in-0">x</ul> : null}</div>', filename: join(noPlugin, "c.tsx"), ...err("mount") },
     ],
   });
 }

@@ -11,6 +11,7 @@
  *   • fields/selects visible at rest: border ≥ 3:1 or a distinct fill                       [1.9]
  *   • no native select/date/file/checkbox/radio in the rendered page                        [1.1]
  *   • DOM sniper: no [style] attribute with anything but CSS custom properties (--x)         [6.5]
+ *   • every dropdown / menu / popover / dialog opens and closes with motion (measured)       [6.12]
  */
 import { chromium } from "@playwright/test";
 import { existsSync, readFileSync } from "node:fs";
@@ -84,6 +85,8 @@ for (const route of routes) {
     if (!v.mobile) for (const o of await c.nativeControls(page)) problems.push({ route, viewport: v.name, check: "native control [1.1]", ...o });
     // DOM sniper: rendered style attributes may only carry CSS custom properties
     if (!v.mobile) for (const o of await c.inlineStyles(page, sniper.allowProps, sniper.skip, sniper.strict)) problems.push({ route, viewport: v.name, check: "inline style [DOM]", ...o });
+    // last: it opens and closes things. Every dropdown / menu / popover / dialog must move both ways — measured
+    for (const o of await c.overlayMotion(page)) problems.push({ route, viewport: v.name, check: "overlay motion [6.12]", ...o });
     await ctx.close();
   }
 }

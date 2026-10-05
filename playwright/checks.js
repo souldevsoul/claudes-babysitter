@@ -715,6 +715,136 @@ export async function interactiveStates(page, max = 8) {
     }
     return out;
 }
+/* ───────────────────────── overlay motion: 6.12 P59 ───────────────────────── */
+/**
+ * 6.12 — every overlay (dropdown, menu, popover, dialog, sheet) opens AND closes with motion, however it is built:
+ * a headless-UI part, or a hand-made `{open && <div className="absolute …">}`. Measured, not guessed: the page
+ * records the layers that appear on click and disappear on Escape / outside click, frame by frame, and any CSS
+ * animation, transition, Web Animation or per-frame opacity/transform/size change on the layer counts as motion.
+ * Triggers: anything that says it opens something (aria-haspopup / aria-expanded / combobox / data-state) and
+ * buttons that look like one (a short label + a trailing chevron icon). Submit buttons are never clicked.
+ */
+export async function overlayMotion(page, max = 10) {
+    const out = [];
+    await page.evaluate(() => {
+        const W = window;
+        if (W.__bsOverlayProbe)
+            return;
+        // positioned (absolute/fixed) visible boxes of some size — a popup is always one of these
+        const positioned = () => {
+            const set = new Set();
+            for (const el of document.body.querySelectorAll("*")) {
+                if (el.closest("[data-babysitter], babysitter-studio"))
+                    continue;
+                const cs = getComputedStyle(el);
+                if ((cs.position !== "absolute" && cs.position !== "fixed") || cs.display === "none" || cs.visibility === "hidden")
+                    continue;
+                const r = el.getBoundingClientRect();
+                if (r.width * r.height < 1500 || r.bottom < 0 || r.top > innerHeight)
+                    continue;
+                set.add(el);
+            }
+            return set;
+        };
+        const look = (el) => { const cs = getComputedStyle(el); const r = el.getBoundingClientRect(); return [cs.opacity, cs.transform, cs.scale, cs.translate, cs.clipPath, Math.round(r.height), Math.round(r.width)].join("|"); };
+        const animated = (el) => { try { return el.getAnimations({ subtree: true }).some((a) => a.playState === "running" || a.playState === "pending"); } catch { return false; } };
+        const alive = (el) => { if (!el.isConnected) return false; const cs = getComputedStyle(el); const r = el.getBoundingClientRect(); return cs.display !== "none" && cs.visibility !== "hidden" && r.width * r.height > 0; };
+        const P = (W.__bsOverlayProbe = { events: [], run: null, last: null });
+        for (const t of ["animationstart", "transitionstart", "transitionrun"])
+            document.addEventListener(t, (e) => P.events.push({ t: performance.now(), el: e.target }), true);
+        /** Watch what appears (phase "open": positioned boxes that were not there before the click — the outermost
+         *  of them) or how the opened one leaves (phase "close") over the next ~500 ms, frame by frame. */
+        P.arm = (phase) => {
+            const before = phase === "open" ? positioned() : null;
+            const t0 = performance.now();
+            const run = (P.run = { phase, done: false, gone: [], seen: [] });
+            const watched = new Map(); // layer → looks per frame
+            if (phase === "close" && P.last)
+                watched.set(P.last, [look(P.last)]);
+            const step = () => {
+                if (phase === "open") {
+                    const fresh = [...positioned()].filter((el) => !before.has(el));
+                    for (const l of fresh.filter((el) => !fresh.some((o) => o !== el && o.contains(el))))
+                        if (![...watched.keys()].some((w) => w.contains(l)))
+                            watched.set(l, []);
+                }
+                for (const [l, looks] of watched)
+                    looks.push(alive(l) ? look(l) + (animated(l) ? "|anim" : "") : "gone");
+                if (performance.now() - t0 < 520)
+                    return requestAnimationFrame(step);
+                run.done = true;
+                for (const [l, looks] of watched) {
+                    const moved = looks.some((x) => x.endsWith("|anim")) || new Set(looks.filter((x) => x !== "gone").map((x) => x.replace(/\|anim$/, ""))).size > 1
+                        || P.events.some((e) => e.t >= t0 && e.el instanceof Node && (l.contains(e.el) || e.el.contains(l)));
+                    const ended = looks[looks.length - 1];
+                    const entry = { moved, where: W.__uiDescribe(l), selector: W.__uiSelector(l), human: W.__uiHuman(l) };
+                    if (phase === "open" && ended !== "gone") {
+                        run.seen.push(entry);
+                        if (!P.last) P.last = l;
+                    }
+                    if (phase === "close" && ended === "gone")
+                        run.gone.push(entry);
+                }
+            };
+            requestAnimationFrame(step);
+        };
+    });
+    const handles = await page.$$('[aria-haspopup]:not([aria-haspopup=false]), [aria-expanded], [aria-controls], [role=combobox], button[data-state], button:has(> svg:last-child), [role=button]:has(> svg:last-child), button[aria-label]:has(svg)');
+    const done = new Set();
+    let n = 0;
+    const wait = () => page.waitForFunction(() => window.__bsOverlayProbe.run && window.__bsOverlayProbe.run.done, null, { timeout: 4000 }).catch(() => { });
+    for (const h of handles) {
+        if (n >= max)
+            break;
+        const info = await h.evaluate((el) => {
+            const W = window;
+            const text = (el.textContent || "").trim();
+            const says = el.matches('[aria-haspopup]:not([aria-haspopup=false]), [aria-expanded], [aria-controls], [role=combobox], [data-state]')
+                || /menu|navigation|options|more|filter|sort|currency|language|меню|ещё|фильтр|сорт|валют|язык/i.test(el.getAttribute("aria-label") || "");
+            const ok = el.getRootNode() === document && W.__uiVisible(el) && !el.matches("a[href], [type=submit], [disabled], [aria-disabled=true], [data-next-mark], #next-logo") && !el.closest("nextjs-portal, [data-nextjs-toast], [data-babysitter]") && !el.closest("form button[type=submit]")
+                && (says || (text.length > 0 && text.length <= 24)) && !/delete|remove|sign ?out|log ?out|удал|выйти|accept|allow|agree|reject|essential/i.test(text)
+                && el.getBoundingClientRect().top < innerHeight * 2;
+            return ok ? { selector: W.__uiSelector(el), where: W.__uiDescribe(el), human: W.__uiHuman(el), expanded: el.getAttribute("aria-expanded") } : null;
+        }).catch(() => null);
+        if (!info || done.has(info.selector) || info.expanded === "true")
+            continue;
+        done.add(info.selector);
+        const url = page.url();
+        await h.scrollIntoViewIfNeeded().catch(() => { });
+        await page.evaluate(() => { window.__bsOverlayProbe.last = null; window.__bsOverlayProbe.arm("open"); });
+        await h.click({ timeout: 2000 }).catch(() => { });
+        await wait();
+        if (page.url() !== url) {
+            await page.goBack().catch(() => { });
+            continue;
+        }
+        const opened = await page.evaluate(() => window.__bsOverlayProbe.run.seen);
+        if (!opened.length)
+            continue;
+        n++;
+        const layer = opened[0];
+        if (!layer.moved)
+            out.push({ what: `opens without motion — it appears in one frame (give it an enter animation: opacity + a small scale/slide, 120–200 ms) [6.12, P59]`, where: `${layer.where} (trigger: ${info.where})`, selector: info.selector, human: info.human, layer: layer.selector });
+        // close it the way people do: Escape, then (if it is still open) a click on the trigger again
+        await page.evaluate(() => window.__bsOverlayProbe.arm("close"));
+        await page.keyboard.press("Escape").catch(() => { });
+        await wait();
+        let gone = await page.evaluate(() => window.__bsOverlayProbe.run.gone);
+        if (!gone.length) {
+            await page.evaluate(() => window.__bsOverlayProbe.arm("close"));
+            await h.click({ timeout: 2000 }).catch(() => { });
+            await wait();
+            gone = await page.evaluate(() => window.__bsOverlayProbe.run.gone);
+        }
+        const g = gone.find((x) => x.selector === layer.selector) || gone[0];
+        if (g && !g.moved)
+            out.push({ what: `closes without motion — it vanishes in one frame (give it an exit animation that mirrors the enter one) [6.12, P59]`, where: `${layer.where} (trigger: ${info.where})`, selector: info.selector, human: info.human, layer: layer.selector });
+        if (!gone.length)
+            await page.mouse.click(2, 2).catch(() => { });
+        await page.waitForTimeout(150);
+    }
+    return out;
+}
 /** 4.6 — cookie settings replace the banner (never two "Accept" buttons), the panel fits and scrolls (P19 P18). */
 export async function cookieFlow(page) {
     const out = [];

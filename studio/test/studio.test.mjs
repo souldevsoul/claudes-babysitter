@@ -915,6 +915,41 @@ try {
   ok("Before/After: superseded capture requests are skipped (scrolling on never queues minutes of captures)");
 }
 
+// 6.12 measured: a dropdown that blinks in and out is caught however it is built; one that moves both ways is not
+{
+  const c = await import("../../playwright/checks.js");
+  const { explain } = await import("../../lib/explain.js");
+  const b3 = await chromium.launch({ channel: process.env.PW_CHANNEL || "chrome" }).catch(() => chromium.launch());
+  const page = async (body) => { const pg = await b3.newPage({ viewport: { width: 1280, height: 800 } }); await c.install(pg); await pg.goto("data:text/html," + encodeURIComponent(`<!doctype html><html><head><style>body{margin:40px;font:16px sans-serif} .wrap{position:relative;display:inline-block} .menu{position:absolute;top:100%;right:0;width:240px;height:120px;background:#fff;border:1px solid #ccc;box-shadow:0 10px 40px rgba(0,0,0,.2)} @keyframes in{from{opacity:0;transform:scale(.95)}} @keyframes out{to{opacity:0;transform:scale(.95)}}</style></head><body>${body}</body></html>`)); return pg; };
+  const chevron = '<svg width="12" height="12" viewBox="0 0 12 12"><path d="M3 4.5L6 7.5L9 4.5" stroke="currentColor"/></svg>';
+  // 1. hand-made, mounted with {open && …}: no aria at all, just a label + chevron (the Wordbench currency switcher)
+  const bad = await page(`<div class="wrap"><button id="t">€ EUR ${chevron}</button></div><script>
+    const t = document.getElementById("t"); let m = null;
+    t.onclick = () => { if (m) { m.remove(); m = null; } else { m = document.createElement("div"); m.className = "menu"; m.textContent = "Euro / US dollar"; t.parentElement.append(m); } };
+    addEventListener("keydown", (e) => { if (e.key === "Escape" && m) { m.remove(); m = null; } });</script>`);
+  const found = await c.overlayMotion(bad);
+  assert.deepEqual(found.map((f) => f.what.split(" — ")[0]), ["opens without motion", "closes without motion"], JSON.stringify(found));
+  assert.equal(found[0].selector, "#t", "the frame goes on the trigger (the list is closed at rest)");
+  const ex = explain({ check: "overlay motion [6.12]", ...found[1] });
+  assert.equal(ex.visual, true); assert.match(ex.explain.ru.title, /Закрывается за один кадр/);
+  // 2. keyframes in, keyframes out before unmount (what Radix + tw-animate-css does)
+  const good = await page(`<div class="wrap"><button id="t" aria-haspopup="menu" aria-expanded="false">Menu ${chevron}</button></div><script>
+    const t = document.getElementById("t"); let m = null;
+    const close = () => { const x = m; m = null; t.setAttribute("aria-expanded", "false"); x.style.animation = "out .15s ease-in forwards"; x.addEventListener("animationend", () => x.remove(), { once: true }); };
+    t.onclick = () => { if (m) return close(); m = document.createElement("div"); m.className = "menu"; m.setAttribute("role", "menu"); m.style.animation = "in .15s ease-out"; t.parentElement.append(m); t.setAttribute("aria-expanded", "true"); };
+    addEventListener("keydown", (e) => { if (e.key === "Escape" && m) close(); });</script>`);
+  assert.deepEqual(await c.overlayMotion(good), [], "keyframes both ways pass");
+  // 3. kept mounted, opacity + scale transition both ways
+  const trans = await page(`<style>.menu{transition:opacity .15s,transform .15s;opacity:0;transform:scale(.95);visibility:hidden} .menu.on{opacity:1;transform:none;visibility:visible} .menu:not(.on){transition:opacity .15s,transform .15s,visibility 0s .15s}</style>
+    <div class="wrap"><button id="t" aria-expanded="false">Sort ${chevron}</button><div class="menu" id="m">a</div></div><script>
+    const t = document.getElementById("t"), m = document.getElementById("m");
+    t.onclick = () => { const on = m.classList.toggle("on"); t.setAttribute("aria-expanded", String(on)); };
+    addEventListener("keydown", (e) => { if (e.key === "Escape") { m.classList.remove("on"); t.setAttribute("aria-expanded", "false"); } });</script>`);
+  assert.deepEqual(await c.overlayMotion(trans), [], "a transition both ways passes");
+  await b3.close();
+  ok("overlay motion is measured: a hand-made dropdown that blinks in and out is caught (frame on its trigger, red, explained); keyframes or transitions both ways pass");
+}
+
 // a faint field edge: the finding names the lightest edge that passes, so the fix does not overshoot into a harsh one
 {
   const c = await import("../../playwright/checks.js");
