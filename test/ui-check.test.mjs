@@ -260,10 +260,12 @@ t("registry: a theme ≥80% like a registered product is a warning, not a block"
     assert.equal(human.status, 1);
     assert.match(human.stdout, /❌ \[Playwright\] Нарушение архитектуры! Обнаружены хардкодные inline-стили в DOM: <span> содержит запрещенные свойства color, padding/);
   });
-  t("micro-check: no dev server → skipped, exit 0", (mk) => {
+  t("micro-check: no dev server → skipped (exit 0) for the Stop hook; asked for routes → failure (exit 2), never an empty clean result", (mk) => {
     const d = mk({ "package.json": "{}" });
-    const m = spawnSync(process.execPath, [join(dirname(CHECK), "micro-check.mjs"), "--repo", d, "--url", "http://localhost:9", "--routes", "/"], { encoding: "utf8" });
+    const m = spawnSync(process.execPath, [join(dirname(CHECK), "micro-check.mjs"), "--repo", d, "--url", "http://localhost:9"], { encoding: "utf8" });
     assert.equal(m.status, 0); assert.match(m.stdout, /skipped/);
+    const r = spawnSync(process.execPath, [join(dirname(CHECK), "micro-check.mjs"), "--repo", d, "--url", "http://localhost:9", "--routes", "/", "--format", "json"], { encoding: "utf8" });
+    assert.equal(r.status, 2); assert.equal(r.stdout, "", "no [] that reads as clean"); assert.match(r.stderr, /did not run/);
   });
   srv.kill();
 }

@@ -30,7 +30,16 @@ const out = (s) => process.stdout.write(s + "\n");
 if (!url) { if (format === "json") out("[]"); process.exit(0); }
 
 // optional step: skip silently when nothing is listening
-try { await fetch(url, { signal: AbortSignal.timeout(1500) }); } catch { if (format !== "json") out(`micro-check: no dev server at ${url} — skipped`); else out("[]"); process.exit(0); }
+// (a dev server compiling its first page can take many seconds: wait for it rather than call the page clean).
+// Asked for explicit routes and nothing answers → that is a failure (exit 2), never an empty "clean" result.
+{
+  let up = false;
+  for (const ms of [1500, 30000, 60000]) { try { await fetch(url, { signal: AbortSignal.timeout(ms) }); up = true; break; } catch {} }
+  if (!up) {
+    if (opt("routes")) { process.stderr.write(`micro-check: no dev server answered at ${url} — the rendered check did not run\n`); process.exit(2); }
+    if (format !== "json") out(`micro-check: no dev server at ${url} — skipped`); else out("[]"); process.exit(0);
+  }
+}
 
 /** Changed page files → routes (Next app router and pages router). */
 function routesFromChanges() {
