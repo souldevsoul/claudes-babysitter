@@ -96,6 +96,22 @@ try {
   assert.equal(read(repo, "src/b.css"), null);
   ok("a proposal whose requirement was rejected cannot be approved");
 
+  // 8. the After side carries a code-only proposal that a visual one stands on (a shared hook), and only then
+  {
+    const r = makeRepo(); P.start(r);
+    write(r, "src/usePresence.ts", "export const usePresence = () => 1;\n");
+    P.save(r, { id: "hook", title: "hook", kind: "code" });
+    write(r, "src/form.tsx", "import { usePresence } from './usePresence';\n<input className=\"border border-gray-300\" />\n<select id=\"c\" />\n");
+    P.save(r, { id: "uses", title: "uses the hook", requires: ["hook"] });
+    write(r, "src/other.css", "a{}\n");
+    P.save(r, { id: "lone-code", title: "unrelated code-only", kind: "code" });
+    const c = P.proposalCommit(r);
+    assert.deepEqual(c.applied.sort(), ["hook", "uses"], "the required code-only fix comes along; an unrelated one does not");
+    assert.ok(show(r, c.sha, "src/usePresence.ts"));
+    assert.equal(show(r, c.sha, "src/other.css"), null);
+    ok("proposalCommit: a visual fix brings the code-only fix it requires (the After site builds), unrelated code-only fixes stay out");
+  }
+
   // 7. save without start / without edits
   const fresh = makeRepo();
   assert.throws(() => P.save(fresh, { title: "x" }), /no baseline/);

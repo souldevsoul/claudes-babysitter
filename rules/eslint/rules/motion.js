@@ -129,6 +129,8 @@ export const overlayMotion = {
         if (/^motion\./.test(name) || /^m\./.test(name)) return; // framer-motion: AnimatePresence handles the exit
         if (/^[A-Z]/.test(name)) return; // a component: its own markup decides
         for (let a = node.parent; a; a = a.parent) if (a.type === "JSXElement" && /(^|\.)AnimatePresence$/.test(elementName(a.openingElement))) return; // framer-motion keeps it until its exits finish
+        // kept on the page while it leaves (a presence hook) and animated on data-state: the right pattern
+        if (getAttr(el.openingElement, "data-state")) return;
         const tokens = classTokens(getAttr(el.openingElement, "className"), context);
         if (!tokens.some((t) => POSITIONED.test(t)) || !tokens.some((t) => LAYERED.test(t))) return;
         context.report({ node: el.openingElement, messageId: "mount", data: { name, cond: condText.replace(/\s+/g, " ") } });

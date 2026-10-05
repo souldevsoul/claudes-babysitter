@@ -258,6 +258,8 @@ tester.run("no-inline-style (3.3 strict)", R["no-inline-style"], {
       { code: '<div>{open && <Menu className="absolute z-50 shadow" />}</div>', filename: join(noPlugin, "a.tsx") },
       { code: '<AnimatePresence>{open && <motion.div className="absolute z-50 shadow-lg" exit={{ opacity: 0 }} />}</AnimatePresence>', filename: join(noPlugin, "a.tsx") },
       { code: '<div>{user && <div className="absolute z-50 shadow">x</div>}</div>', filename: join(noPlugin, "a.tsx") },
+      // a presence hook keeps it mounted while it leaves and it animates on data-state
+      { code: '<div>{list.mounted && <ul data-state={list.state} className="wb-menu absolute z-50 shadow-lg">x</ul>}</div>', filename: join(noPlugin, "a.tsx") },
       { code: '<AnimatePresence>{open && (<div className="fixed inset-0 z-50"><motion.div exit={{ opacity: 0 }} /></div>)}</AnimatePresence>', filename: join(noPlugin, "a.tsx") },
     ],
     invalid: [
