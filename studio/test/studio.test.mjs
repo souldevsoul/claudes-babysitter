@@ -915,7 +915,7 @@ try {
 {
   const c = await import("../../playwright/checks.js");
   const { explain } = await import("../../lib/explain.js");
-  const b2 = await chromium.launch(); const pg = await b2.newPage();
+  const b2 = await chromium.launch({ channel: process.env.PW_CHANNEL || "chrome" }).catch(() => chromium.launch()); const pg = await b2.newPage();
   await c.install(pg);
   await pg.goto("data:text/html,<body style='background:%23fff;margin:40px'><input id=f style='border:1px solid %23d1d5dc;background:%23fff;width:300px;height:40px'></body>");
   const [f] = (await c.inputVisibility(pg)).filter(Boolean);

@@ -5,6 +5,8 @@ import { meta, elementName, getAttr, classTokens, classStrings, resolveConst } f
 
 // headless UI libraries whose Content / Popup parts are overlays (a select list, a menu, a popover, a dialog…)
 const LIBS = /^(@radix-ui\/|radix-ui$|@base-ui-components\/|@base-ui\/|@headlessui\/|@ariakit\/)/;
+// only parts that float over the page count — tabs, accordions and collapsibles are content, not overlays
+const OVERLAY = /(select|dialog|alert-?dialog|popover|dropdown-?menu|context-?menu|menubar|hover-?card|tooltip|navigation-?menu|menu|combobox|listbox|sheet|drawer|preview-?card|toast)/i;
 const PARTS = /^(Content|Popup|SubContent|Overlay|Backdrop)$/;
 // what counts as motion: animation utilities (tw-animate-css / tailwindcss-animate), CSS transitions with Base UI's
 // starting/ending styles, or a project's own animate-* utility
@@ -45,8 +47,13 @@ export const overlayMotion = {
     const locals = new Set(); // names bound to a headless-UI import (namespace or named)
     return {
       ImportDeclaration(node) {
-        if (!LIBS.test(String(node.source.value))) return;
-        for (const s of node.specifiers) locals.add(s.local.name);
+        const src = String(node.source.value);
+        if (!LIBS.test(src)) return;
+        // the package says what it is (@radix-ui/react-select), or — for an umbrella package — the imported name does
+        for (const sp of node.specifiers) {
+          const imported = sp.imported ? (sp.imported.name || sp.imported.value) : "";
+          if (OVERLAY.test(src.replace(/^.*\//, "")) || OVERLAY.test(imported) || OVERLAY.test(sp.local.name)) locals.add(sp.local.name);
+        }
       },
       JSXOpeningElement(node) {
         const name = elementName(node);

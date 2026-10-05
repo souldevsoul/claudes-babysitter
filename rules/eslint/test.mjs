@@ -244,11 +244,15 @@ tester.run("no-inline-style (3.3 strict)", R["no-inline-style"], {
       // not an overlay part, not a headless-UI import
       { code: imp + '<SelectPrimitive.Trigger className="border" />', filename: join(noPlugin, "s.tsx") },
       '<Content className="x" />',
+      // tabs are content, not an overlay
+      { code: 'import * as TabsPrimitive from "@radix-ui/react-tabs";\n<TabsPrimitive.Content className="mt-2" />', filename: join(noPlugin, "tabs.tsx") },
+      { code: 'import { Tabs } from "radix-ui";\n<Tabs.Content className="mt-2" />', filename: join(noPlugin, "tabs2.tsx") },
       // classes from a cva() variants helper count
       { code: 'import * as D from "@radix-ui/react-dialog";\nconst v = cva("fixed data-[state=open]:animate-in data-[state=closed]:animate-out", { variants: { side: { right: "data-[state=open]:slide-in-from-right data-[state=closed]:slide-out-to-right" } } });\n<D.Content className={cn(v({ side }), className)} />', filename: join(withPlugin, "drawer.tsx") },
     ],
     invalid: [
       { code: imp + '<SelectPrimitive.Content className="relative z-50 rounded-lg border" />', filename: join(withPlugin, "s.tsx"), ...err("none") },
+      { code: 'import { Popover } from "radix-ui";\n<Popover.Content className="rounded border" />', filename: join(withPlugin, "p.tsx"), ...err("none") },
       { code: imp + '<SelectPrimitive.Content className="data-[state=open]:animate-in data-[state=open]:fade-in-0" />', filename: join(withPlugin, "s.tsx"), ...err("exit") },
       { code: 'import * as D from "@radix-ui/react-dialog";\n<D.Content className={cn("fixed", "data-[state=closed]:animate-out")} />', filename: join(withPlugin, "d.tsx"), ...err("enter") },
       // the classes are there but nothing makes them move

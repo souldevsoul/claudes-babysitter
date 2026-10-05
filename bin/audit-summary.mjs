@@ -8,7 +8,10 @@ import { projectMode } from "../lib/mode.js";
 
 const args = process.argv.slice(2);
 const repo = resolve(args.find((a) => !a.startsWith("--")) || ".");
-const { problems, counted, topFiles, topRules } = auditRepo(repo);
+let audit;
+try { audit = auditRepo(repo); }
+catch (e) { console.error(`\n✗ Claude's Babysitter — audit of ${repo} FAILED: ${e.message}\n  This is a fault of the tool, not a clean repository. Report it.`); process.exit(2); }
+const { problems, counted, topFiles, topRules } = audit;
 if (args.includes("--json")) { console.log(JSON.stringify({ total: problems.length, groups: Object.fromEntries(counted.map(([l, list]) => [l, list.length])), topFiles, topRules }, null, 2)); process.exit(0); }
 
 const pad = (s, n) => String(s).padEnd(n);

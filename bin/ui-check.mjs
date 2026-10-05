@@ -24,6 +24,7 @@ const here = dirname(fileURLToPath(import.meta.url));
 const args = process.argv.slice(2);
 const opt = (n, d = null) => { const i = args.indexOf(`--${n}`); if (i < 0) return d; const v = args[i + 1]; return v && !v.startsWith("--") ? v : true; };
 const repo = resolve(opt("repo", ".") === true ? "." : opt("repo", "."));
+if (!existsSync(repo)) { console.error(`ui-check: no such repository: ${repo}`); process.exit(2); }
 const format = opt("format", "text");
 const changed = opt("changed");
 const cfgPath = join(repo, "babysitter.config.json");

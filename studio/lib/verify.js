@@ -11,7 +11,8 @@ import { capture, closeCapture } from "./capture.js";
  * A real change sits at the same pixels each time; noise (a late font, a lazy image) does not.
  */
 async function stableDiff(pairs) {
-  const browser = await chromium.launch();
+  // the installed Chrome first (like capture.js), Playwright's own build as the fallback — either may be missing
+  const browser = await chromium.launch({ channel: "chrome" }).catch(() => chromium.launch());
   try {
     const page = await browser.newPage();
     return await page.evaluate(async (pairs) => {
