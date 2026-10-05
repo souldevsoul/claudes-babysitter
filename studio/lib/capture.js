@@ -52,7 +52,9 @@ export async function capture(url, { width = 1280, height = 800, dpr = 1, scroll
     // (the limit is a Node timer: the page's own clock is frozen, its timers never fire; lazy images off screen never
     // load, so only eager ones are awaited)
     await Promise.race([
-      page.evaluate(() => Promise.all([document.fonts?.ready, ...Array.from(document.images).filter((i) => !i.complete && i.loading !== "lazy").map((i) => new Promise((r) => { i.addEventListener("load", r); i.addEventListener("error", r); }))])).catch(() => {}),
+      // every font face the page declares is loaded first: a face the text needs is otherwise fetched only when that
+      // text is painted, and one side could be caught in the fallback font (seen on Wordbench's wordmark)
+      page.evaluate(() => Promise.all([...Array.from(document.fonts || []).filter((f) => f.status !== "loaded").map((f) => f.load().catch(() => {})), ...Array.from(document.images).filter((i) => !i.complete && i.loading !== "lazy").map((i) => new Promise((r) => { i.addEventListener("load", r); i.addEventListener("error", r); }))]).then(() => document.fonts?.ready)).catch(() => {}),
       new Promise((r) => setTimeout(r, 8000)),
     ]);
     await page.evaluate((y) => window.scrollTo(0, y), scrollY);

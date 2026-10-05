@@ -118,12 +118,13 @@ async function reviewProposals({ url, problems, fixed }) {
   clearInterval(watch);
   if (r.decision === "approve") {
     // Approve all: every fix still pending goes into the original files
-    for (const p of P.list(repo).filter((x) => x.status === "pending" || x.status === "revising")) {
+    // code-only fixes are not the reviewer's to approve: only `propose auto` applies them, after the pixel check
+    for (const p of P.list(repo).filter((x) => (x.status === "pending" || x.status === "revising") && x.kind !== "code")) {
       try { const ids = P.approve(repo, p.id); event({ event: "approved", id: p.id, applied: ids }); } catch (e) { event({ event: "error", id: p.id, decision: "approve", error: e.message }); }
     }
     console.error(`✅ Approved in Studio${r.text ? `: ${r.text}` : ""}.`); process.exit(0);
   }
-  if (r.decision === "reject") { for (const p of P.list(repo).filter((x) => x.status === "pending" || x.status === "revising")) P.setStatus(repo, p.id, "rejected"); console.error(`❌ Rejected in Studio${r.text ? `: ${r.text}` : ""}. The original files were not changed.`); process.exit(1); }
+  if (r.decision === "reject") { for (const p of P.list(repo).filter((x) => (x.status === "pending" || x.status === "revising") && x.kind !== "code")) P.setStatus(repo, p.id, "rejected"); console.error(`❌ Rejected in Studio${r.text ? `: ${r.text}` : ""}. The original files were not changed.`); process.exit(1); }
   const manual = (r.manual || []).map((n) => `- Element: \`${n.selector}\`\n- Instruction: ${JSON.stringify(n.comment)}`).join("\n\n");
   if (manual) console.log(`Manual QA Feedback:\n${manual}`);
   if (r.decision === "comment") { if (r.text) console.log(`Reviewer comment: ${r.text}`); process.exit(1); }

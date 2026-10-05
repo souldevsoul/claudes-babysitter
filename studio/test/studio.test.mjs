@@ -690,6 +690,8 @@ try {
     // the agent prepares two fixes; the original stays on disk
     P.start(proj);
     writeFileSync(join(proj, "index.html"), page0("#0000ff", "#cccccc")); P.save(proj, { title: "Darker title", for: "Title" });
+    // a code-only fix waiting for its pixel check: Approve all must leave it alone
+    writeFileSync(join(proj, "server.js"), server + "\n// refactor\n"); P.save(proj, { id: "code-refactor", title: "refactor", for: "nothing", kind: "code" });
     writeFileSync(join(proj, "index.html"), page0("#ff9999", "#555555")); P.save(proj, { title: "Darker note", for: "note" });
     // a change asked for in words, with no finding behind it: it still gets an entry (where to look + why)
     writeFileSync(join(proj, "index.html"), page0("#ff9999", "#cccccc").replace("</body>", "<p id=\"hello\">hello</p>\n</body>")); P.save(proj, { id: "greeting", title: "Add a greeting", route: "/", selector: "#t", why: "You asked for a greeting under the page." });
@@ -846,6 +848,8 @@ try {
       await p3.locator(`${ps} #approve`).click();
       assert.equal(await new Promise((r) => cli.on("exit", r)), 0);
       assert.equal(readFileSync(join(proj, "index.html"), "utf8"), page0("#0000ff", "#cccccc"), "Approve all leaves a rejected fix out");
+      assert.equal(P.get(proj, "code-refactor").status, "pending", "Approve all does not apply a code-only fix — only propose auto does, after the pixel check");
+      assert.doesNotMatch(readFileSync(join(proj, "server.js"), "utf8"), /refactor/);
       ok("Accept applies one fix to the original file (the entry moves to fixed); Reject drops it; the controls follow the state (Approve all (n) → Finish review, no Reject all with nothing waiting, comparison tools only while comparing)");
       await p3.close();
     } finally {

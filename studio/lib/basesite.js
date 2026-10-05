@@ -8,7 +8,7 @@
 //              Vite → `vite --port`, anything else → `npm run dev -- --port` with PORT set
 //   lifetime   one server per (repo, sha) per Studio process; stopped and the worktree removed on exit
 import { spawn, execFileSync } from "node:child_process";
-import { existsSync, readFileSync, readdirSync, copyFileSync, symlinkSync, rmSync, openSync, closeSync } from "node:fs";
+import { existsSync, readFileSync, writeFileSync, readdirSync, copyFileSync, symlinkSync, rmSync, openSync, closeSync } from "node:fs";
 import { createServer } from "node:net";
 import { tmpdir } from "node:os";
 import { basename, join } from "node:path";
@@ -43,6 +43,24 @@ function clearWorktree(repo, dir) {
   try { git(repo, "worktree", "prune"); } catch {}
 }
 
+/**
+ * The version being started may need packages the shared node_modules lacks — a fix that adds a dependency, or
+ * an install since then that pruned it. Install what is missing into the repo's node_modules without touching
+ * its package.json or lock files (npm rewrites them even with --no-save: they are put back byte for byte).
+ */
+function ensureDeps(repo, dir, log) {
+  let pkg; try { pkg = JSON.parse(readFileSync(join(dir, "package.json"), "utf8")); } catch { return; }
+  const want = { ...(pkg.dependencies || {}), ...(pkg.devDependencies || {}) };
+  const missing = Object.entries(want).filter(([name, range]) => !/^(file|link|workspace):/.test(String(range)) && !existsSync(join(repo, "node_modules", name, "package.json")));
+  if (!missing.length || !existsSync(join(repo, "node_modules"))) return;
+  const locks = ["package.json", "package-lock.json", "yarn.lock", "pnpm-lock.yaml", "npm-shrinkwrap.json"].map((f) => [f, existsSync(join(repo, f)) ? readFileSync(join(repo, f)) : null]);
+  log(`base site needs ${missing.map(([n]) => n).join(", ")} — installing into node_modules (package.json and locks untouched)`);
+  try {
+    execFileSync("npm", ["install", "--no-save", "--no-audit", "--no-fund", "--legacy-peer-deps", "--ignore-scripts", ...missing.map(([n, r]) => `${n}@${r}`)], { cwd: repo, stdio: "ignore", timeout: 300000 });
+  } catch (e) { log(`could not install ${missing.map(([n]) => n).join(", ")}: ${e.message.split("\n")[0]}`); }
+  finally { for (const [f, buf] of locks) { try { if (buf === null) { if (existsSync(join(repo, f))) rmSync(join(repo, f)); } else if (!readFileSync(join(repo, f)).equals(buf)) writeFileSync(join(repo, f), buf); } catch {} } }
+}
+
 /** Start (or reuse) the dev server of `ref` for `repo`. Resolves to { url, sha, dir, stop }. */
 export function baseSite({ repo, ref = "HEAD", log = () => {}, timeoutMs = 180000 }) {
   const sha = git(repo, "rev-parse", "--verify", `${ref}^{commit}`);
@@ -55,6 +73,7 @@ export function baseSite({ repo, ref = "HEAD", log = () => {}, timeoutMs = 18000
     clearWorktree(repo, dir);
     git(repo, "worktree", "add", "--detach", "-f", "-f", dir, sha);
     if (!existsSync(join(dir, "node_modules")) && existsSync(join(repo, "node_modules"))) symlinkSync(join(repo, "node_modules"), join(dir, "node_modules"), "dir");
+    ensureDeps(repo, dir, log);
     for (const f of readdirSync(repo)) if (/^\.env(\..+)?$/.test(f) && !existsSync(join(dir, f))) copyFileSync(join(repo, f), join(dir, f));
     const port = await freePort();
     const [cmd, args] = devCommand(dir, port);
