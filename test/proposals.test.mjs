@@ -112,6 +112,23 @@ try {
     ok("proposalCommit: a visual fix brings the code-only fix it requires (the After site builds), unrelated code-only fixes stay out");
   }
 
+  // 9. a tracked file that matches .gitignore stays in the trees (baseline, After): it is part of the site
+  {
+    const r = makeRepo();
+    write(r, "public/hero.png", "PNG");
+    write(r, ".gitignore", "public/*.png\n");
+    execSync("git add -f public/hero.png .gitignore && git -c user.email=t@t -c user.name=t commit -qm img", { cwd: r });
+    P.start(r);
+    write(r, "src/styles.css", ":root{--edge:#8a919e}\n");
+    P.save(r, { id: "edge", title: "edge" });
+    const c = P.proposalCommit(r);
+    assert.equal(show(r, c.sha, "public/hero.png"), "PNG", "the tracked-but-ignored image is on the After side");
+    assert.equal(show(r, P.baseline(r), "public/hero.png"), "PNG", "and in the baseline");
+    write(r, "public/new.png", "x"); // untracked + ignored: still out
+    assert.equal(show(r, P.workingTree(r), "public/new.png"), null);
+    ok("tracked files that match .gitignore stay in the baseline and the After site; untracked ignored files stay out");
+  }
+
   // 7. save without start / without edits
   const fresh = makeRepo();
   assert.throws(() => P.save(fresh, { title: "x" }), /no baseline/);

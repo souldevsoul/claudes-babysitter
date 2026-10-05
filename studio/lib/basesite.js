@@ -4,7 +4,7 @@
 //
 //   worktree   <tmp>/babysitter-base-<repo>-<sha12>, detached at the base commit, checked out fresh (leftovers of a killed Studio are cleared)
 //   deps       node_modules is linked from the repo (no reinstall); .env* files are copied (they are untracked)
-//   server     Next → `next dev --webpack` (Turbopack refuses a node_modules link that points outside its root),
+//   server     Next → `next dev` (Next 16: `--webpack`, Turbopack refuses a node_modules link that points outside its root),
 //              Vite → `vite --port`, anything else → `npm run dev -- --port` with PORT set
 //   lifetime   one server per (repo, sha) per Studio process; stopped and the worktree removed on exit
 import { spawn, execFileSync } from "node:child_process";
@@ -17,11 +17,16 @@ const sites = new Map(); // `${repo}@${sha}` -> Promise<{ url, stop }>
 const git = (repo, ...args) => execFileSync("git", args, { cwd: repo, encoding: "utf8", stdio: ["ignore", "pipe", "pipe"] }).trim();
 const freePort = () => new Promise((resolve, reject) => { const s = createServer(); s.unref(); s.on("error", reject); s.listen(0, "127.0.0.1", () => { const { port } = s.address(); s.close(() => resolve(port)); }); });
 
-function devCommand(dir, port) {
+export function devCommand(dir, port) {
   const pkg = (() => { try { return JSON.parse(readFileSync(join(dir, "package.json"), "utf8")); } catch { return {}; } })();
   const dev = String(pkg.scripts?.dev || "");
   const bin = (n) => join(dir, "node_modules", ".bin", n);
-  if (/\bnext\s+dev\b/.test(dev) && existsSync(bin("next"))) return [bin("next"), ["dev", "--webpack", "-p", String(port)]];
+  if (/\bnext\s+dev\b/.test(dev) && existsSync(bin("next"))) {
+    // Next 16 defaults to Turbopack, which refuses the linked node_modules → ask for webpack. Next ≤ 15 already uses
+    // webpack by default and does not know the flag (it exits: "unknown option '--webpack'").
+    let major = 0; try { major = parseInt(JSON.parse(readFileSync(join(dir, "node_modules", "next", "package.json"), "utf8")).version, 10) || 0; } catch {}
+    return [bin("next"), ["dev", ...(major >= 16 ? ["--webpack"] : []), "-p", String(port)]];
+  }
   if (/\bvite\b/.test(dev) && existsSync(bin("vite"))) return [bin("vite"), ["--port", String(port), "--strictPort"]];
   return ["npm", ["run", "dev", "--", "--port", String(port)]];
 }
@@ -41,6 +46,18 @@ function clearWorktree(repo, dir) {
   try { git(repo, "worktree", "remove", "--force", "--force", dir); } catch {}
   rmSync(dir, { recursive: true, force: true });
   try { git(repo, "worktree", "prune"); } catch {}
+}
+
+/**
+ * Code generated into the source tree and ignored by git (Prisma 7 writes its client to e.g. lib/generated/prisma)
+ * is not in a fresh worktree: generate it there, or the version with the fixes cannot even import it.
+ */
+function generateClients(dir, log) {
+  const prisma = join(dir, "node_modules", ".bin", "prisma");
+  const schema = ["prisma/schema.prisma", "prisma/schema"].map((f) => join(dir, f)).find(existsSync);
+  if (!schema || !existsSync(prisma)) return;
+  try { execFileSync(prisma, ["generate"], { cwd: dir, stdio: "ignore", timeout: 180000, env: process.env }); log(`generated the Prisma client in ${basename(dir)}`); }
+  catch (e) { log(`prisma generate failed in ${basename(dir)}: ${String(e.message).split("\n")[0]}`); }
 }
 
 /**
@@ -74,6 +91,7 @@ export function baseSite({ repo, ref = "HEAD", log = () => {}, timeoutMs = 18000
     git(repo, "worktree", "add", "--detach", "-f", "-f", dir, sha);
     if (!existsSync(join(dir, "node_modules")) && existsSync(join(repo, "node_modules"))) symlinkSync(join(repo, "node_modules"), join(dir, "node_modules"), "dir");
     ensureDeps(repo, dir, log);
+    generateClients(dir, log);
     for (const f of readdirSync(repo)) if (/^\.env(\..+)?$/.test(f) && !existsSync(join(dir, f))) copyFileSync(join(repo, f), join(dir, f));
     const port = await freePort();
     const [cmd, args] = devCommand(dir, port);

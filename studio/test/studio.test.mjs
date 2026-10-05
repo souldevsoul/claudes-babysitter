@@ -915,6 +915,18 @@ try {
   ok("Before/After: superseded capture requests are skipped (scrolling on never queues minutes of captures)");
 }
 
+// the After site starts on any Next: --webpack only where Turbopack is the default (16+); Next 14/15 reject the flag
+{
+  const { devCommand } = await import("../lib/basesite.js");
+  const { mkdtempSync, mkdirSync, writeFileSync } = await import("node:fs");
+  const { tmpdir } = await import("node:os");
+  const site = (version) => { const d = mkdtempSync(join(tmpdir(), "next-")); mkdirSync(join(d, "node_modules", ".bin"), { recursive: true }); mkdirSync(join(d, "node_modules", "next"), { recursive: true }); writeFileSync(join(d, "node_modules", ".bin", "next"), ""); writeFileSync(join(d, "node_modules", "next", "package.json"), JSON.stringify({ version })); writeFileSync(join(d, "package.json"), JSON.stringify({ scripts: { dev: "next dev -p 3000" } })); return d; };
+  assert.deepEqual(devCommand(site("14.2.35"), 5000)[1], ["dev", "-p", "5000"]);
+  assert.deepEqual(devCommand(site("15.5.15"), 5000)[1], ["dev", "-p", "5000"]);
+  assert.deepEqual(devCommand(site("16.1.6"), 5000)[1], ["dev", "--webpack", "-p", "5000"]);
+  ok("the After site starts on Next 14/15 (no --webpack: they exit on it) and on Next 16 (--webpack: Turbopack refuses the linked node_modules)");
+}
+
 // 6.12 measured: a dropdown that blinks in and out is caught however it is built; one that moves both ways is not
 {
   const c = await import("../../playwright/checks.js");
