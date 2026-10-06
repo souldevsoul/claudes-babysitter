@@ -112,8 +112,11 @@ window.__uiHuman = (el) => {
 window.__uiVisible = (el) => {
   const r = el.getBoundingClientRect();
   if (r.width < 1 || r.height < 1) return false;
+  // the visually-hidden pattern (sr-only, react-dropzone, Radix's form <select>): a 1px box, clipped away
+  if (r.width <= 1 && r.height <= 1) return false;
   const cs = getComputedStyle(el);
   if (cs.visibility === 'hidden' || cs.display === 'none' || Number(cs.opacity) === 0) return false;
+  if (/rect\\(0(px)?,? 0(px)?,? 0(px)?,? 0(px)?\\)/.test(cs.clip) || /inset\\(50%\\)|circle\\(0/.test(cs.clipPath)) return false;
   if (el.closest('[aria-hidden="true"], .sr-only, [hidden]')) return false;
   return true;
 };`;
