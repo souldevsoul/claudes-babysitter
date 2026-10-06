@@ -101,6 +101,7 @@ Or install it as a dev dependency: `npm i -D github:souldevsoul/claudes-babysitt
 - **`ui/kit-interactive` counts every role, not only the select**: dropdown (select, action/user menu, multi-pick filter, combobox — one component), modal (dialog, confirm, sheet, drawer — one component), button, input, textarea, checkbox, radio, switch, toast, tooltip, popover, disclosure, tabs. A role is recognised by the headless part a kit file builds on or by the kit file's name; a second implementation anywhere (kit included: `dropdown-menu.tsx` next to `select.tsx`, `pill-button.tsx` next to `button.tsx`) is an error naming the first one.
 - **Raw fields in page code** (`<input>` text/email/password/search/tel/url/number, `<textarea>`) are flagged: use the kit Input / Textarea (raw `<button>` and links dressed as buttons were already `no-native-controls` / `no-adhoc-button`).
 - Toast libraries (sonner, react-hot-toast…) count as the toast role; pages may still call `toast()`.
+- Also caught (4.6.2): `{open && createPortal(<div>…)}` overlays whatever the state is called; links dressed as buttons through the project's own classes (`btn btn-primary`, `bl-btn`, `rx-btn`); `type={show ? "text" : "password"}` fields; `<input type="range">` (kit Slider); hand-drawn ARIA roles in page code (`role="radio|radiogroup|dialog|menu|listbox|tab|switch|slider|tooltip"`, `aria-modal`).
 
 ## What changed in 4.4 (interactive elements are reusable, animated kit components)
 

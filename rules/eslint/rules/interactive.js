@@ -89,6 +89,7 @@ export const kitInteractive = {
       handmade: "<{{name}}> is a hand-built interactive element ({{cond}}). Use the kit component for it (Select / DropdownMenu / Popover / Dialog / Sheet / Accordion / Collapsible / Tabs): one reusable, animated component per role, not a copy per page. [1.18, 6.12]",
       native: "<{{name}}{{attr}}> is the browser's own {{what}}: it cannot be themed consistently and opens/closes without motion. Use the kit {{kit}}. [1.18, 6.12]",
       secondImpl: "Two {{role}} implementations on this site: {{first}} and this one ({{what}}). A site has exactly one {{role}} component, in components/ui — merge this one into it as a variant (sizes, tones, a menu/multi-pick mode for the dropdown, a sheet/confirm mode for the modal…) and use it everywhere. Never add a second one. [1.18]",
+      handRole: "<{{name}} role=\"{{role}}\"> is an interactive element drawn by hand in page/feature code. That role is a kit component: use the kit {{kit}} (one per site, animated, with its keyboard and focus behaviour). [1.18]",
       nativeField: "<{{name}}{{type}}> drawn in page/feature code. Fields are kit components too: use the kit {{kit}} (one per site, themed, with its states) — never a raw element with its own classes. [1.18, 1.1]",
     },
   }),
@@ -144,9 +145,19 @@ export const kitInteractive = {
         if (name === "textarea") return context.report({ node, messageId: "nativeField", data: { name, type: "", kit: "Textarea" } });
         if (name === "input") {
           const t = getAttr(node, "type");
-          const tv = !t ? "text" : t.value && t.value.type === "Literal" ? String(t.value.value) : null;
-          if (tv && /^(text|email|password|search|tel|url|number)$/.test(tv)) return context.report({ node, messageId: "nativeField", data: { name, type: t ? ` type="${tv}"` : "", kit: "Input" } });
+          // type="…" or type={show ? "text" : "password"}: every static value it can take
+          const vals = (e) => !e ? null : e.type === "Literal" ? [String(e.value)] : e.type === "JSXExpressionContainer" ? vals(e.expression)
+            : e.type === "ConditionalExpression" ? ((a, b) => (a && b ? [...a, ...b] : null))(vals(e.consequent), vals(e.alternate))
+            : e.type === "TemplateLiteral" && !e.expressions.length ? [e.quasis[0].value.cooked] : null;
+          const tv = !t ? ["text"] : vals(t.value);
+          if (tv && tv.every((v) => /^(text|email|password|search|tel|url|number)$/.test(v))) return context.report({ node, messageId: "nativeField", data: { name, type: t ? ` type="${tv.join("|")}"` : "", kit: "Input" } });
+          if (tv && tv.includes("range")) return context.report({ node, messageId: "nativeField", data: { name, type: ' type="range"', kit: "Slider" } });
         }
+        // ARIA roles drawn by hand in page code: the role belongs to the kit component
+        const rv = role && role.value && role.value.type === "Literal" ? String(role.value.value) : null;
+        const ROLE_KIT = { radio: "RadioGroup", radiogroup: "RadioGroup", dialog: "Dialog (the one modal)", alertdialog: "Dialog (the one modal, confirm variant)", menu: "Dropdown (menu mode)", menuitem: "Dropdown (menu mode)", listbox: "Dropdown (select mode)", option: "Dropdown (select mode)", tablist: "Tabs", tab: "Tabs", switch: "Switch", slider: "Slider", tooltip: "Tooltip", checkbox: "Checkbox" };
+        const aria = getAttr(node, "aria-modal");
+        if (/^[a-z]/.test(name) && (rv && ROLE_KIT[rv] || aria)) return context.report({ node, messageId: "handRole", data: { name, role: rv || "dialog", kit: ROLE_KIT[rv] || "Dialog (the one modal)" } });
         if (name === "details") return context.report({ node, messageId: "native", data: { name, attr: "", what: "disclosure", kit: "Accordion / Collapsible" } });
         if (name === "dialog") return context.report({ node, messageId: "native", data: { name, attr: "", what: "dialog", kit: "Dialog / Sheet" } });
         if (/^[a-z]/.test(name) && getAttr(node, "popover")) return context.report({ node, messageId: "native", data: { name, attr: " popover", what: "popover", kit: "Popover / DropdownMenu / Select" } });
@@ -159,15 +170,18 @@ export const kitInteractive = {
       },
       "LogicalExpression, ConditionalExpression"(node) {
         if (inKit) return;
-        let cond, el;
+        let cond, el, portal = false;
         if (node.type === "LogicalExpression" && node.operator === "&&" && node.right.type === "JSXElement") { cond = node.left; el = node.right; }
+        // {payOpen && createPortal(<div …>…</div>, document.body)} — a modal/overlay built by hand,
+        // whatever the state is called (a conditional portal is an overlay by definition)
+        else if (node.type === "LogicalExpression" && node.operator === "&&" && node.right.type === "CallExpression" && /(^|\.)createPortal$/.test(context.sourceCode.getText(node.right.callee)) && node.right.arguments[0] && node.right.arguments[0].type === "JSXElement") { cond = node.left; el = node.right.arguments[0]; portal = true; }
         else if (node.type === "ConditionalExpression") {
           const nul = (n) => !n || (n.type === "Literal" && n.value === null) || (n.type === "Identifier" && n.name === "undefined");
           if (node.consequent.type === "JSXElement" && nul(node.alternate)) { cond = node.test; el = node.consequent; }
           else if (node.alternate.type === "JSXElement" && nul(node.consequent)) { cond = node.test; el = node.alternate; }
         }
         if (!el || !node.parent || node.parent.type !== "JSXExpressionContainer") return;
-        if (!opensSomething(cond)) return;
+        if (!portal && !opensSomething(cond)) return;
         const condText = context.sourceCode.getText(cond);
         const name = elementName(el.openingElement);
         if (/^[A-Z]/.test(name) || /\./.test(name)) return; // a component (kit or feature): its own markup decides
