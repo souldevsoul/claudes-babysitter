@@ -354,6 +354,7 @@ tester.run("no-inline-style (3.3 strict)", R["no-inline-style"], {
       { code: 'export const S = () => null;', filename: "/r6/components/ui/segmented.tsx", options: [KIT] },
       // pages call toast() — the Toaster is mounted once in the kit
       { code: 'import { toast } from "sonner";\ntoast("Saved");', filename: page, options: [KIT] },
+      { code: 'import { toast } from "sonner";\ntoast("Saved again");', filename: page.replace("contact", "pricing"), options: [KIT] },
       // checkbox/radio/hidden/file inputs are other rules' business
       { code: '<form><input type="hidden" name="a" /><input type="file" /></form>', filename: page, options: [KIT] },
     ],

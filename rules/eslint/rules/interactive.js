@@ -120,6 +120,8 @@ export const kitInteractive = {
         const roles = new Set();
         const r1 = roleOf(ROLE_BY_IMPORT, src); if (r1) roles.add(r1);
         if (UMBRELLA.test(src)) for (const sp of node.specifiers) { const n = sp.imported ? sp.imported.name || sp.imported.value : ""; const r = roleOf(ROLE_BY_NAME, n); if (r) roles.add(r); }
+        // toast libraries are imperative: pages call toast("Saved") — only the kit file that mounts the Toaster claims the role
+        if (!inKit) roles.delete("toast");
         for (const r of roles) claim(node, r, src);
         if (inKit) return;
         // toast libraries are called imperatively from pages (toast("Saved")) — only their mounting point is the kit's
