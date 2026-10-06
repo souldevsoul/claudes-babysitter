@@ -149,6 +149,10 @@ export const DEFAULT_KIT = [
   "Input", "Textarea", "Badge", "Dialog", "DialogContent", "AlertDialog", "AlertDialogContent", "Sheet", "SheetContent",
   "Popover", "PopoverContent", "DropdownMenuContent", "DropdownMenuItem", "Tabs", "TabsList", "TabsTrigger", "Checkbox",
   "Switch", "RadioGroup", "DatePicker", "Tooltip", "TooltipContent", "Table", "Label",
+  // the one-component-per-role kit (1.18): the dropdown's modes, disclosure, slider, upload, button presets
+  "Dropdown", "DropdownTrigger", "DropdownPanel", "DropdownItem", "DropdownMenu", "DropdownMenuTrigger", "DialogTrigger",
+  "Slider", "Accordion", "AccordionItem", "AccordionTrigger", "AccordionContent", "Collapsible", "CollapsibleTrigger",
+  "CollapsibleContent", "FileUpload", "LinkButton", "IconButton", "RadioGroupItem", "Toast",
 ];
 
 /** Paths where the kit and theme live: visual values are defined there, so visual rules are relaxed. */

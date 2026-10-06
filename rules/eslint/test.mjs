@@ -66,6 +66,9 @@ tester.run("no-adhoc-button", R["no-adhoc-button"], {
 tester.run("no-visual-classname-override", R["no-visual-classname-override"], {
   valid: ['<Button className="w-full mt-4">a</Button>', '<Card className="col-span-2 flex-1">a</Card>', '<div className="bg-red-500 p-4" />'],
   invalid: [
+      // a pass-through variant does not make a call site's own look legal (the "bare" loophole)
+      { code: '<Button variant="bare" className="h-14 rounded-full bg-primary px-8 text-white">Go</Button>', ...err("override") },
+      { code: '<Dropdown mode="menu" className="rounded-xl bg-zinc-900 p-2" />', ...err("override") },
     { code: '<Button className="bg-red-500 hover:bg-red-600">a</Button>', ...err("override") },
     { code: '<Card className={cn("w-full", active && "border-primary")}>a</Card>', ...err("override") },
     { code: '<SelectTrigger className="h-8 rounded-none" />', ...err("override") },
