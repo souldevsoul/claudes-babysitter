@@ -92,6 +92,14 @@ for (const route of routes) {
     if (v.mobile) for (const o of await c.tableClipping(page)) problems.push({ route, viewport: v.name, check: "mobile table [2.3]", ...o });
     for (const o of await c.inputVisibility(page)) problems.push({ route, viewport: v.name, check: "control boundary [1.9]", ...o });
     if (!v.mobile) for (const o of await c.nativeControls(page)) problems.push({ route, viewport: v.name, check: "native control [1.1]", ...o });
+    if (!v.mobile) for (const o of await c.nativeSkin(page)) problems.push({ route, viewport: v.name, check: "native parts [1.19]", ...o });
+    if (!v.mobile) {
+      // one shape language: the configured design.shape, or this page's own majority when it has enough pieces
+      const shapes = await c.collectShapes(page, route);
+      const shape = c.siteShape(shapes.length >= 8 || cfg.design?.shape ? shapes : [], cfg.design?.shape);
+      for (const o of c.shapeOutliers(shapes, shape)) problems.push({ route, viewport: v.name, check: "shape [1.17]", ...o });
+      if (!(cfg.allow && cfg.allow.palette)) { const pal = await c.offPalette(page); for (const o of pal.offenders) problems.push({ route, viewport: v.name, check: "palette [1.18]", ...o }); }
+    }
     // DOM sniper: rendered style attributes may only carry CSS custom properties
     if (!v.mobile) for (const o of await c.inlineStyles(page, sniper.allowProps, sniper.skip, sniper.strict)) problems.push({ route, viewport: v.name, check: "inline style [DOM]", ...o });
     // last: it opens and closes things. Every dropdown / menu / popover / dialog must move both ways — measured

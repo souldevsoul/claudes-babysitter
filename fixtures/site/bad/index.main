@@ -1,0 +1,8 @@
+<h1>Acme makes invoices simple</h1><p>Plans from ≈ $12 a month, VAT included, or €12000 a year.</p>
+<p>No mailbox is connected to this build, so we would rather say so plainly.</p>
+<div class="grid"><div class="card hov">Fast</div><div class="card">Safe</div><div class="card">Clear</div><div class="card">Fourth</div></div>
+<nav class="pagination"><a class="btn" href="/?page=2">Next</a></nav>
+<p><button class="btn" style="cursor:default">Start now</button> <button class="btn" style="border-radius:0">Square</button> <span style="color:#ff00aa">Hot deal</span></p>
+<p><img src="/pic.svg" width="200" height="120" alt="a"> <img src="/pic.svg" width="200" height="120" alt="b"></p>
+<p><input type="number" value="10"></p>
+<style>.hov{transition:none}.hov:hover{transform:translateY(-4px);box-shadow:0 4px 12px #0003}</style>

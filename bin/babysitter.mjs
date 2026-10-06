@@ -18,12 +18,24 @@
 //   micro-check      → rendered contrast / row / overflow check on a running dev server
 //   prepare          → playwright/prepare.mjs (login + crawl)
 //   test-ui [...]    → playwright test with the bundled config
+//   e2e [--skip-prepare] [--only ui|acceptance|product] [...playwright args]
+//                    → prepare (login + crawl) + the UI checks + business acceptance (playwright/acceptance.spec.ts)
+//                      + the product's own e2e/*.spec.ts, in one Playwright run
 import { spawnSync } from "node:child_process";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
+import { createRequire } from "node:module";
 
 const root = join(dirname(fileURLToPath(import.meta.url)), "..");
 const [cmd, ...rest] = process.argv.slice(2);
+// the Playwright CLI next to Claude's Babysitter — the same @playwright/test copy the checks import
+// (a bare `npx playwright` from the project could fetch a different version)
+function playwright(args, env = process.env) {
+  let cli;
+  try { cli = createRequire(join(root, "package.json")).resolve("@playwright/test/cli"); }
+  catch { console.error("babysitter: @playwright/test is not installed next to Claude's Babysitter (npm install)"); return 2; }
+  return spawnSync(process.execPath, [cli, "test", "-c", join(root, "playwright/playwright.config.ts"), ...args], { stdio: "inherit", cwd: process.cwd(), env }).status ?? 1;
+}
 const node = (file, args) => process.exit(spawnSync(process.execPath, [join(root, file), ...args], { stdio: "inherit" }).status ?? 1);
 switch (cmd) {
   case "init": node("bin/ui-init.mjs", rest); break;
@@ -96,8 +108,25 @@ switch (cmd) {
   }
   case "micro-check": node("bin/micro-check.mjs", rest); break;
   case "prepare": node("playwright/prepare.mjs", rest); break;
-  case "test-ui": process.exit(spawnSync("npx", ["playwright", "test", "-c", join(root, "playwright/playwright.config.ts"), ...rest], { stdio: "inherit", cwd: process.cwd() }).status ?? 1);
+  case "test-ui": process.exit(playwright(rest)); break;
+  case "e2e": {
+    const env = { ...process.env, BABYSITTER_ROOT: process.env.BABYSITTER_ROOT || process.cwd() };
+    const args = [...rest];
+    const take = (flag) => { const i = args.indexOf(flag); if (i < 0) return null; const v = args[i + 1]; args.splice(i, v && !v.startsWith("--") ? 2 : 1); return v || true; };
+    const skipPrepare = take("--skip-prepare");
+    const only = take("--only");
+    if (!skipPrepare) {
+      const st = spawnSync(process.execPath, [join(root, "playwright/prepare.mjs")], { stdio: "inherit", env }).status;
+      if (st !== 0) { console.error("babysitter e2e: prepare failed (set BASE_URL or baseURL in babysitter.config.json; LOGIN_EMAIL / LOGIN_PASSWORD for signed-in pages). --skip-prepare to run on the last crawl."); process.exit(st ?? 1); }
+    }
+    if (only === "ui") args.unshift("babysitter.spec");
+    else if (only === "acceptance") args.unshift("acceptance.spec");
+    else if (only === "product") args.unshift("--project=product");
+    else if (only) { console.error(`babysitter e2e: --only ui | acceptance | product (got "${only}")`); process.exit(2); }
+    process.exit(playwright(args, env));
+    break;
+  }
   default:
-    console.log("usage: babysitter <init|check|audit|prepare|test-ui> [...]\n  init [repo] [--new|--existing] [--link|--vendor] [--ci] [--url URL] [--dev-url URL] [--dry-run] [--no-install] [--yes] [--force]");
+    console.log("usage: babysitter <init|check|audit|prepare|test-ui|e2e> [...]\n  init [repo] [--new|--existing] [--link|--vendor] [--ci] [--url URL] [--dev-url URL] [--dry-run] [--no-install] [--yes] [--force]");
     process.exit(cmd ? 2 : 0);
 }

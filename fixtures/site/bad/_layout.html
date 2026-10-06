@@ -1,0 +1,39 @@
+<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>{{TITLE}}</title>
+<style>
+:root{--bg:#ffffff;--fg:#14141f;--muted:#55556a;--primary:#3346d3;--primary-fg:#ffffff;--border:#c9c9d6;--card:#f4f4f8;--radius:10px;color-scheme:light}
+*{box-sizing:border-box}body{margin:0;font-family:Georgia,serif;background:var(--bg);color:var(--fg)}
+header{position:sticky;top:0;background:var(--bg);border-bottom:1px solid var(--border);display:flex;gap:16px;align-items:center;padding:12px 24px;z-index:5}
+header a{color:var(--fg);text-decoration:none;cursor:pointer}
+main{max-width:960px;margin:0 auto;padding:32px 24px;min-height:120vh}
+.btn{display:inline-flex;align-items:center;height:40px;padding:0 16px;border-radius:var(--radius);background:var(--primary);color:var(--primary-fg);border:0;cursor:pointer;font:inherit;text-decoration:none}
+.card{background:var(--card);border:1px solid var(--border);border-radius:var(--radius);padding:16px;min-height:120px;width:260px}
+.grid{display:grid;grid-template-columns:repeat(3,260px);gap:16px}
+input{height:40px;border:1px solid var(--border);border-radius:var(--radius);padding:0 12px;font:inherit;color:var(--fg);background:var(--bg)}
+footer{border-top:1px solid var(--border);padding:24px;display:flex;flex-direction:column;gap:12px;color:var(--fg)}
+footer a{color:var(--fg);cursor:pointer}
+main a{color:var(--primary)}
+.legal{display:flex;gap:12px;flex-wrap:wrap}
+#cookie{position:fixed;bottom:16px;left:16px;right:16px;max-width:560px;background:var(--card);border:1px solid var(--border);border-radius:var(--radius);padding:16px;display:flex;gap:8px;flex-wrap:wrap;color:var(--fg)}
+#prefs{display:none;position:fixed;bottom:16px;left:16px;background:var(--card);border:1px solid var(--border);border-radius:var(--radius);padding:16px;color:var(--fg)}
+.sw{width:40px;height:22px;border-radius:var(--radius);border:1px solid var(--border);background:var(--bg);cursor:pointer}
+.toc{position:sticky;top:72px;border:1px solid var(--border);border-radius:var(--radius);padding:12px;background:var(--card)}
+.pol{display:grid;grid-template-columns:200px 1fr;gap:24px}
+.eye{border:0;background:var(--bg);color:var(--fg);cursor:pointer;height:32px;border-radius:var(--radius)}
+</style></head><body>
+<header><a href="/" aria-label="Acme home">Acme</a><a href="/pricing">Pricing</a><a href="/pricing">Plans</a><a href="/about">About</a><select id="cur" aria-label="Currency" style="height:36px;border:1px solid var(--border);border-radius:var(--radius);background:var(--bg);color:var(--fg);cursor:pointer"><option>EUR</option><option>USD</option></select><a class="btn" href="/register">Get started</a></header>
+<main>{{MAIN}}</main>
+<footer>
+<div class="legal"><a href="/privacy">Privacy Policy</a><a href="/terms">Terms of Service</a><a href="/cookies">Cookie Policy</a><a href="/refund">Refund Policy</a><a href="/missing">Careers</a></div>
+<p>Acme · ul. Prosta 1, 00-001 Warszawa, Poland · KRS 0000000001 · <a href="mailto:acme.help@gmail.com">acme.help@gmail.com</a></p>
+<p><svg width="24" height="24" class="logo"><circle cx="12" cy="12" r="10" fill="#3346d3"/></svg> © 2026 Acme All rights reserved.</p>
+</footer>
+<div id="cookie"><span>We use analytics and marketing cookies.</span><button class="btn" id="acc">Accept all</button><span id="rej"></span><span id="man"></span></div>
+<div id="prefs" role="dialog" aria-label="Cookie preferences"><button class="eye" aria-label="Close" id="x">×</button><p>Necessary <span role="switch" aria-checked="true" aria-disabled="true" class="sw"></span></p><p>Preferences <span role="switch" aria-checked="false" tabindex="0" class="sw"></span></p><button class="btn" id="save">Save</button></div>
+<script>
+const c=document.getElementById('cookie'),p=document.getElementById('prefs');
+const hide=()=>{c.style.display='none';p.style.display='none';};
+document.getElementById('acc').onclick=hide;document.getElementById('rej').onclick=hide;document.getElementById('save').onclick=hide;document.getElementById('x').onclick=hide;
+document.getElementById('man').onclick=()=>{c.style.display='none';p.style.display='block';};
+document.getElementById('manage-cookies').onclick=(e)=>{e.preventDefault();p.style.display='block';};
+document.addEventListener('keydown',(e)=>{if(e.key==='Escape')hide();});
+</script></body></html>

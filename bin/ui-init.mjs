@@ -65,6 +65,25 @@ const themeFile = gitFiles.find((f) => /\.css$/.test(f) && !/\.min\./.test(f) &&
 const hasEmojiBrand = false;
 const detected = { framework: deps.next ? `next ${deps.next}` : deps.vite ? "vite" : "unknown", tailwind, cssLayers: layered, shadcn, kitDir: kitDir || "(none yet)", kitComponents: exported.length, themeFile: themeFile || "(none)" };
 
+// routes of the app router pages, for the acceptance config (sign-in / sign-up / settings)
+const appRoutes = gitFiles.filter((f) => /(^|\/)app\/(.*\/)?page\.(t|j)sx?$/.test(f))
+  .map((f) => "/" + f.replace(/^(src\/)?app\//, "").replace(/(^|\/)\([^)]+\)/g, "").replace(/\/?page\.(t|j)sx?$/, "").replace(/^\/+|\/+$/g, "").replace(/\/+/g, "/"));
+const findRoute = (re) => appRoutes.find((p) => re.test(p)) || null;
+// owner decisions the acceptance suite asks about; written once, then the team's values are kept
+const ACCEPTANCE_DEFAULTS = {
+  $comment: "Business acceptance (npm run test:e2e). Each value is an owner decision; a check is turned off only via skip + skipReasons.",
+  twoFactor: "required",
+  accountDeletion: true,
+  footerManageCookies: true,
+  footerCurrencySelector: false,
+  paymentLogos: true,
+  currencies: ["EUR", "USD"],
+  noTax: true,
+  forbiddenPages: ["/gdpr", "/press", "/currency"],
+  skip: [],
+  skipReasons: {},
+};
+
 /* ───────── 1b. where are we installing? (strict for a new project, adoption for an existing one) ───────── */
 const pageCount = gitFiles.filter((f) => /(^|\/)page\.(t|j)sx$/.test(f)).length;
 const prevCfg = readJson(join(repo, "babysitter.config.json"), null);
@@ -153,6 +172,13 @@ const cfg = {
   themeFirst: installMode === "adoption" ? false : prev?.mode === "adoption" ? true : prev?.themeFirst ?? true,
   contrast: prev?.contrast ?? true,
   registry: opt("registry") || prev?.registry || "",
+  // business acceptance (playwright/acceptance.spec.ts): owner decisions, and where sign-in / sign-up / settings are
+  acceptance: {
+    ...ACCEPTANCE_DEFAULTS,
+    ...(prev?.acceptance || {}),
+    company: { name: "", supportEmail: "", ...(prev?.acceptance?.company || {}) },
+    auth: { signIn: findRoute(/^\/(login|log-in|sign-?in)$/i), signUp: findRoute(/^\/(register|sign-?up|join)$/i), settings: findRoute(/^\/(dashboard\/)?(settings|account)(\/security)?$/i), passwordless: false, ...(prev?.acceptance?.auth || {}) },
+  },
 };
 delete cfg.kitFiles; // replaced by the component heuristic (exported + used + no duplicate role)
 if (opt("url")) cfg.baseURL = opt("url");
@@ -242,6 +268,31 @@ const runCmd = mode === "package" ? "babysitter" : mode === "vendor" ? `node ${t
       say("added the `babysitter` script (npm run babysitter -- audit | enable-hooks | check)", join(repo, "package.json"));
     }
   }
+}
+
+/* ───────── 6d. end-to-end tests the project owns ───────── */
+// e2e/babysitter.ts re-exports the tool's fixtures (one @playwright/test copy for both); e2e/journeys.spec.ts is the
+// product's own file — created once, never overwritten. `npm run test:e2e` runs prepare + UI checks + business
+// acceptance + e2e/*.spec.ts.
+{
+  const e2eDir = join(repo, prevCfg?.e2eDir || "e2e");
+  const fixtures = mode === "package" ? `${PKG}/playwright/fixtures.js` : mode === "vendor" ? `../${toolRel}/playwright/fixtures.js` : join(TOOL, "playwright/fixtures.js");
+  const shim = `// Managed by \`babysitter init\`: the test helpers of Claude's Babysitter for this project's own e2e specs.\n// import { test, expect, open, acc, routes, checks, acceptance } from "./babysitter";\nexport * from "${fixtures}";\n`;
+  const shimPath = join(e2eDir, "babysitter.ts");
+  if (!existsSync(shimPath) || readFileSync(shimPath, "utf8") !== shim) { write(shimPath, shim); say("e2e helpers for the project's own tests", shimPath); }
+  // the tool's helpers are ES modules; this keeps e2e/ ESM even in a CommonJS project (Playwright would load
+  // the specs as CommonJS and fail on the first import)
+  const esm = join(e2eDir, "package.json");
+  if (!existsSync(esm)) { write(esm, '{ "type": "module" }\n'); say("e2e/ is an ES module folder (the specs import the tool's ESM helpers)", esm); }
+  const journeys = join(e2eDir, "journeys.spec.ts");
+  if (!existsSync(journeys)) { write(journeys, readFileSync(join(TOOL, "templates/e2e/journeys.spec.ts"), "utf8")); say("product journeys spec (yours to grow: one test per user-facing feature)", journeys); }
+  const pj = readJson(join(repo, "package.json"));
+  pj.scripts ||= {};
+  const e2eCmd = mode === "package" ? "babysitter e2e" : `${runCmd} e2e`;
+  // ours (any install mode) is rewritten when the mode changes; a team's own test:e2e is left alone
+  const ours = (v) => /claudes-babysitter|bin\/babysitter\.mjs e2e|^babysitter e2e$/.test(v || "");
+  if (!pj.scripts["test:e2e"] || ours(pj.scripts["test:e2e"]) && pj.scripts["test:e2e"] !== e2eCmd) { pj.scripts["test:e2e"] = e2eCmd; write(join(repo, "package.json"), JSON.stringify(pj, null, 2) + "\n"); say("added `npm run test:e2e` (UI checks + business acceptance + e2e/*.spec.ts)", join(repo, "package.json")); }
+  else if (!ours(pj.scripts["test:e2e"])) say(`"test:e2e" is taken ("${pj.scripts["test:e2e"]}") — add: && ${e2eCmd}`);
 }
 
 /* ───────── 7. CI (opt-in) ───────── */

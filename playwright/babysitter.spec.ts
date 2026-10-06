@@ -4,7 +4,7 @@
 //   STRICT=0 turns the heuristic checks into warnings.
 import { test, expect, type Page } from "@playwright/test";
 import * as c from "./checks.js";
-import { loadConfig, loadRoutes, STORAGE } from "./project";
+import { loadConfig, loadRoutes, STORAGE } from "./project.js";
 
 const cfg = loadConfig();
 const ROUTES = loadRoutes(cfg);

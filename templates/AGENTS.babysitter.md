@@ -10,6 +10,23 @@ Before you say a UI task is done:
    `node tools/claudes-babysitter/playwright/prepare.mjs && npx playwright test -c tools/claudes-babysitter/playwright/playwright.config.ts`
 4. For a human visual review, the user runs Babysitter Studio over the dev server: `{{RUN}} studio start --target http://localhost:3000`, then opens http://localhost:3001. Notes they pin on the page reach you as "Manual QA Feedback" — apply them.
 
+End-to-end tests (`npm run test:e2e`):
+- They cover three things in one run:
+  - the rendered UI checks;
+  - **business acceptance**: what the business side checks on every product;
+  - the product's own journeys in `e2e/*.spec.ts`.
+- **Every user-facing feature you build gets a journey test in `e2e/`, in the same change.** Import `test, expect, open` from `./babysitter`. The `user` fixture is a signed-in page. Assert what the user sees.
+- Before you say a feature is done, run `BASE_URL=http://localhost:3000 npm run test:e2e` (add `LOGIN_EMAIL` / `LOGIN_PASSWORD` for signed-in pages) until it is green.
+- Acceptance failures are business rules. Fix the product, do not skip the test:
+  - **Controls:** every control comes from the kit (no default `select`, checkbox or number spinners); one corner radius and one colour palette across the site; `color-scheme: dark` on dark sites; the hand cursor on everything clickable; no hover effect on cards that cannot be clicked.
+  - **Footer:** Terms, then Privacy; Cookie Policy then "Manage cookies" last; no logo on the © line; a company line; a support email on the site's domain; "We accept" Visa/Mastercard.
+  - **Cookies:** Accept / Reject / Manage with per-category toggles; Analytics or Marketing only if such scripts really load.
+  - **Money:** the chosen currency applies everywhere; no "≈"; no VAT/tax wording; thousands separators.
+  - **Sign-in:** a password eye that Tab skips; one consent checkbox linking Terms and Privacy; sign-in pages have the site footer; a signed-in user is never offered Sign in; Sign out works with one click; settings offer two-factor sign-in and Delete account.
+  - **Policies:** text spans its column; a sticky "On this page"; pages they name are links.
+  - **Pages and content:** no build notes or self-justifying copy; no dead links; no `/gdpr`, `/press` or `/currency` page; no duplicate links or images; paged grids end on a full row.
+- Owner decisions live in `babysitter.config.json` → `acceptance` (2FA, footer "Manage cookies", currencies, company line). Turning a check off needs `acceptance.skip` plus a reason in `acceptance.skipReasons`, approved by a human.
+
 Order of work on a new product:
 1. **Theme first.** Until the theme has its own primary colour, radius, fonts and button variants, every UI edit is blocked with "Сначала обнови тему (Theme First)".
 2. **Contrast lives in the tokens.** When you change the theme, text/background, muted text/background and button text/button must each be ≥ 4.5:1, or the edit is blocked. Fix the token, never individual components.

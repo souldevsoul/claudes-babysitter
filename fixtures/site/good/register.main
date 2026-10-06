@@ -1,0 +1,2 @@
+<h1>Create your account</h1><form><input type="email" name="email"><div><input type="password" name="password"><button type="button" class="eye" aria-label="Show password" tabindex="-1">eye</button></div>
+<label><span role="checkbox" aria-checked="false" tabindex="0" class="sw"></span> I agree to the <a href="/terms">Terms</a> and the <a href="/privacy">Privacy Policy</a></label><button class="btn" type="submit">Create account</button></form>

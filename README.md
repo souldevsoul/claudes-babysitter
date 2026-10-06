@@ -64,6 +64,31 @@ Or install it as a dev dependency: `npm i -D github:souldevsoul/claudes-babysitt
 | `docs/` | The guidelines the rules enforce |
 | `test/`, `fixtures/` | `npm test`: RuleTester, Stylelint fixtures, end-to-end cases |
 
+## What changed in 4.5 (end-to-end tests the project owns, business acceptance)
+
+- **`npm run test:e2e` in every project.** `babysitter init` now adds:
+  - `e2e/babysitter.ts`, the helpers: `test`, `expect`, `open`, and a signed-in `user` page;
+  - `e2e/journeys.spec.ts`, the product's own journeys, created once and then owned by the team;
+  - an `acceptance` block in `babysitter.config.json`;
+  - the `test:e2e` script.
+
+  The new `babysitter e2e` command runs prepare (login + crawl), then the UI checks, business acceptance and `e2e/*.spec.ts` in one Playwright run (`--only ui|acceptance|product`). The agent instructions require a journey test for every user-facing feature, written in the same change.
+- **Business acceptance** (`playwright/acceptance.spec.ts`, [docs/acceptance.md](docs/acceptance.md)) covers what the business side raised on product after product (about 960 business-QA cards).
+  - **Footer:** Terms, then Privacy; Cookie Policy and "Manage cookies" last; no logo on the © line; a company line; a support email on the site's domain; "We accept".
+  - **Cookies:** Accept, Reject and Manage, with per-category toggles; Analytics only if analytics actually loads.
+  - **Money:** the chosen currency on every page; no "≈"; no VAT; thousands separators.
+  - **Sign-in:** a password eye that Tab skips; one consent checkbox; the footer on sign-in; signed-in users are never offered Sign in; one-click Sign out; 2FA and Delete account in settings.
+  - **Policies:** text spans its column; a sticky "On this page"; pages they name are links.
+  - **Pages and copy:** no dead links; no `/gdpr`, `/press` or `/currency`; no build notes; no duplicate links or images; the hand cursor on everything clickable; no hover effect on cards that cannot be clicked.
+
+  Owner decisions are config keys: `twoFactor`, `footerManageCookies`, `currencies`, `company`. Skipping a check needs a written reason.
+- **Design coherence, measured in the browser** (micro-check and the suite):
+  - **1.17 one shape language:** on a rounded site nothing is square-cornered, and the reverse;
+  - **1.18 one palette:** colours come from the theme's tokens, and Tailwind's stock palette does not count;
+  - **1.19 native parts follow the theme:** `color-scheme: dark` on dark sites, no number spinners.
+- Reports and test results are written to the project's `.babysitter/`, not inside the tool. `playwright/project.ts` became `project.js`.
+- Self-test: `test/acceptance.test.mjs` serves a good and a bad fixture site and runs the real suite. The good one must pass every check; the bad one must fail the 20 checks it breaks.
+
 ## What changed in 4.4 (interactive elements are reusable, animated kit components)
 
 - **New rule `ui/kit-interactive` [1.18]**: every interactive element — the dropdown that replaces `<select>`, menus, popovers, tooltips, dialogs, sheets, accordions, collapsibles, tabs — is a reusable component from `components/ui`, one per role.

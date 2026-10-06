@@ -1,0 +1,1 @@
+<style>footer{display:none}</style><h1>Sign in</h1><form><input type="email" name="email"><input type="password" name="password"><button class="btn" type="submit">Sign in</button></form>

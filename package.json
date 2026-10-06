@@ -1,6 +1,6 @@
 {
   "name": "claudes-babysitter",
-  "version": "4.4.0",
+  "version": "4.5.0",
   "private": true,
   "description": "Claude's Babysitter \u2014 keeps AI code generators inside a product's UI system: AST lint rules, static WCAG contrast of theme tokens, component-reuse audit, Claude Code + git hooks and Playwright micro-checks. Enforces the UI Architecture & Consistency Guidelines (58 recurring UI bug patterns).",
   "type": "module",
@@ -11,7 +11,8 @@
   "exports": {
     "./eslint": "./rules/eslint/index.js",
     "./stylelint": "./rules/stylelint/config.js",
-    "./lib/*": "./lib/*"
+    "./lib/*": "./lib/*",
+    "./playwright/*": "./playwright/*"
   },
   "files": [
     "README.md",
@@ -27,7 +28,7 @@
     "node": ">=22.18"
   },
   "scripts": {
-    "test": "npm run test:eslint && npm run test:stylelint && npm run test:check && npm run test:tt && npm run test:team && npm run test:studio",
+    "test": "npm run test:eslint && npm run test:stylelint && npm run test:check && npm run test:tt && npm run test:team && npm run test:acceptance && npm run test:studio",
     "test:eslint": "node rules/eslint/test.mjs",
     "test:stylelint": "node rules/stylelint/test.mjs",
     "check": "node bin/ui-check.mjs",
@@ -39,7 +40,8 @@
     "test:tt": "node test/time-travel.test.mjs && node test/tool-failure.test.mjs && node test/proposals.test.mjs",
     "init": "node bin/ui-init.mjs",
     "test:studio": "npm test -w @babysitter/studio",
-    "test:team": "node test/team.test.mjs"
+    "test:team": "node test/team.test.mjs",
+    "test:acceptance": "node test/acceptance.test.mjs"
   },
   "dependencies": {
     "@clack/prompts": "^1.8.1",

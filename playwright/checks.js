@@ -1064,3 +1064,225 @@ export const revealLazy = async (page) => {
     });
     await page.waitForTimeout(700); // reveal transitions finish
 };
+/**
+ * 1.17 — one shape language. Rendered boxes that a person reads as UI pieces (buttons, fields, dropdown
+ * triggers, cards, badges, tabs) are measured; the site's shape is the median corner radius of them all
+ * (or babysitter.config.json → design.shape). On a rounded site a square-cornered piece is the odd one out
+ * (and a pill/rounded piece on a sharp site). Attached groups (some corners square, some round) are fine.
+ */
+export const collectShapes = (page, route = "") => page.evaluate((route) => {
+    const W = window;
+    const out = [];
+    const parentBg = (el) => { for (let p = el.parentElement; p; p = p.parentElement) {
+        const c = W.__uiRGBA(getComputedStyle(p).backgroundColor);
+        if (c[3] > 0.5)
+            return c.slice(0, 3).join();
+    } return "255,255,255"; };
+    const boxOf = (el, cs) => {
+        const bg = W.__uiRGBA(cs.backgroundColor);
+        const filled = bg[3] > 0.08 && bg.slice(0, 3).join() !== parentBg(el);
+        const bordered = ["Top", "Right", "Bottom", "Left"].filter((s) => parseFloat(cs[`border${s}Width`]) > 0 && W.__uiRGBA(cs[`border${s}Color`])[3] > 0.15).length >= 3;
+        const shadow = cs.boxShadow && cs.boxShadow !== "none";
+        return filled || bordered || shadow;
+    };
+    const seen = new Set();
+    const add = (el, kind) => {
+        if (seen.has(el) || !W.__uiVisible(el))
+            return;
+        seen.add(el);
+        const cs = getComputedStyle(el);
+        const r = el.getBoundingClientRect();
+        if (r.width >= innerWidth * 0.9 || !boxOf(el, cs))
+            return;
+        if (el.closest("td, th, [role=dialog] [role=tablist], [data-babysitter-ignore]"))
+            return;
+        const half = Math.min(r.width, r.height) / 2;
+        const corners = ["borderTopLeftRadius", "borderTopRightRadius", "borderBottomRightRadius", "borderBottomLeftRadius"].map((k) => Math.min(parseFloat(cs[k]) || 0, half));
+        const max = Math.max(...corners), min = Math.min(...corners);
+        out.push({ kind, radius: Math.round(max), attached: max >= 2 && min < 1, pill: max >= half - 1 && half > 0, route, where: W.__uiDescribe(el), selector: W.__uiSelector(el), human: W.__uiHuman(el) });
+    };
+    for (const el of Array.from(document.querySelectorAll('button, [role=button], input[type=submit], input[type=button]'))) {
+        const r = el.getBoundingClientRect();
+        if (r.height >= 24 && r.height <= 80 && r.width >= 24)
+            add(el, "button");
+    }
+    for (const el of Array.from(document.querySelectorAll("a"))) {
+        const cs = getComputedStyle(el), r = el.getBoundingClientRect();
+        if (r.height >= 28 && r.height <= 72 && parseFloat(cs.paddingLeft) >= 8 && (el.textContent || "").trim())
+            add(el, "button");
+    }
+    for (const el of Array.from(document.querySelectorAll('input:not([type=hidden]):not([type=checkbox]):not([type=radio]):not([type=range]), textarea, select, [role=combobox], [aria-haspopup=listbox]')))
+        add(el, "field");
+    for (const el of Array.from(document.querySelectorAll("[role=tab]")))
+        add(el, "tab");
+    for (const el of Array.from(document.querySelectorAll("main *, body > div *"))) {
+        const r = el.getBoundingClientRect();
+        if (r.width >= 180 && r.height >= 100 && r.width < innerWidth * 0.9) {
+            const cs = getComputedStyle(el);
+            if (parseFloat(cs.paddingTop) >= 12)
+                add(el, "card");
+        }
+        else if (r.height >= 16 && r.height <= 32 && r.width <= 160 && el.children.length <= 1 && (el.textContent || "").trim().length <= 24 && /^(span|div|p|small|strong)$/i.test(el.tagName)) {
+            const cs = getComputedStyle(el);
+            if (parseFloat(cs.paddingLeft) >= 4 && cs.display.includes("inline") || cs.display === "flex" && parseFloat(cs.paddingLeft) >= 4)
+                add(el, "badge");
+        }
+    }
+    return out;
+}, route);
+/** The site's shape: "rounded" when the median corner radius of its pieces is ≥ 3px, else "sharp". */
+export function siteShape(shapes, configured) {
+    if (configured === "rounded" || configured === "sharp")
+        return configured;
+    const r = shapes.map((s) => s.radius).sort((a, b) => a - b);
+    if (r.length < 4)
+        return null;
+    return r[Math.floor(r.length / 2)] >= 3 ? "rounded" : "sharp";
+}
+export function shapeOutliers(shapes, shape) {
+    if (!shape)
+        return [];
+    const KIND = { button: "button", field: "field", tab: "tab", card: "card", badge: "badge" };
+    return shapes
+        .filter((s) => !s.attached && (shape === "rounded" ? s.radius < 1 : s.radius >= 6 && s.kind !== "badge"))
+        .map((s) => ({ what: shape === "rounded"
+            ? `square-cornered ${KIND[s.kind]} on a rounded site — every piece shares the site's corner radius [1.17]`
+            : `${s.pill ? "pill-shaped" : `${s.radius}px-rounded`} ${KIND[s.kind]} on a square-cornered site [1.17]`, where: `${s.route} ${s.where}`.trim(), selector: s.selector, human: s.human }));
+}
+/**
+ * 1.18 — one colour scheme. The palette is every colour the theme declares as a CSS custom property
+ * (:root, .dark, [data-theme]); fills, borders and text of buttons, fields, cards, badges, links and headings
+ * must come from it (alpha tints of a token count as the token). Gradients and images are skipped.
+ * Not applicable when the theme declares fewer than 4 colours.
+ */
+export const offPalette = (page, extra = [], tolerance = 0.045) => page.evaluate(({ extra, tolerance }) => {
+    const W = window;
+    const toLin = (v) => { v /= 255; return v <= 0.04045 ? v / 12.92 : Math.pow((v + 0.055) / 1.055, 2.4); };
+    const oklab = ([r, g, b]) => {
+        const [R, G, B] = [r, g, b].map(toLin);
+        const l = Math.cbrt(0.4122214708 * R + 0.5363325363 * G + 0.0514459929 * B), m = Math.cbrt(0.2119034982 * R + 0.6806995451 * G + 0.1073969566 * B), s = Math.cbrt(0.0883024619 * R + 0.2817188376 * G + 0.6299787005 * B);
+        return [0.2104542553 * l + 0.793617785 * m - 0.0040720468 * s, 1.9779984951 * l - 2.428592205 * m + 0.4505937099 * s, 0.0259040371 * l + 0.7827717662 * m - 0.808675766 * s];
+    };
+    const dist = (a, b) => Math.hypot(a[0] - b[0], a[1] - b[1], a[2] - b[2]);
+    const STOCK_VAR = /^--(tw-|color-(slate|gray|zinc|neutral|stone|red|orange|amber|yellow|lime|green|emerald|teal|cyan|sky|blue|indigo|violet|purple|fuchsia|pink|rose|mauve|olive|mist|taupe)-\d+$|color-(black|white)$)/;
+    // collect token colours from every same-origin stylesheet rule that declares custom properties
+    const raw = new Set(extra);
+    const visit = (rules) => { for (const rule of Array.from(rules || [])) {
+        if (rule.cssRules && !rule.style)
+            visit(rule.cssRules);
+        if (!rule.style)
+            continue;
+        for (let i = 0; i < rule.style.length; i++) {
+            const p = rule.style[i];
+            // Tailwind 4 declares its whole stock palette (--color-red-500 …) and internals (--tw-*):
+            // those are what a theme is supposed to replace, so they are not the product's palette
+            if (p.startsWith("--") && !STOCK_VAR.test(p))
+                raw.add(rule.style.getPropertyValue(p).trim());
+        }
+        if (rule.cssRules)
+            visit(rule.cssRules);
+    } };
+    for (const sh of Array.from(document.styleSheets)) {
+        try {
+            visit(sh.cssRules);
+        }
+        catch { }
+    }
+    const probe = document.createElement("div");
+    document.body.appendChild(probe);
+    const palette = [];
+    for (const v of raw) {
+        if (!v || v.length > 80 || /var\(|url\(|gradient|calc\(/.test(v))
+            continue;
+        // bare HSL channels ("222 47% 11%") are shadcn's convention
+        const candidates = [v, /^\d/.test(v) && /%/.test(v) ? `hsl(${v})` : null, /^\d/.test(v) && !/%/.test(v) && v.split(/\s+/).length === 3 ? `rgb(${v})` : null].filter(Boolean);
+        for (const c of candidates) {
+            probe.style.color = "";
+            probe.style.color = c;
+            if (!probe.style.color)
+                continue;
+            const rgba = W.__uiRGBA(getComputedStyle(probe).color);
+            palette.push(oklab(rgba));
+            break;
+        }
+    }
+    probe.remove();
+    for (const c of [[255, 255, 255], [0, 0, 0]])
+        palette.push(oklab(c));
+    if (palette.length < 6)
+        return { applicable: false, offenders: [] };
+    const off = (css) => {
+        const c = W.__uiRGBA(css);
+        if (c[3] < 0.08)
+            return null;
+        const lab = oklab(c);
+        const d = Math.min(...palette.map((p) => dist(p, lab)));
+        return d > tolerance ? `rgb(${c.slice(0, 3).join(", ")})` : null;
+    };
+    const offenders = [];
+    const seen = new Set();
+    const els = Array.from(document.querySelectorAll('button, [role=button], a, input:not([type=hidden]), textarea, select, [role=combobox], [role=tab], h1, h2, h3, h4, label, p, li, span, td, th'));
+    for (const el of els) {
+        if (offenders.length >= 20)
+            break;
+        if (!W.__uiVisible(el) || el.closest("svg, picture, video, canvas, [data-babysitter-ignore], iframe"))
+            continue;
+        const cs = getComputedStyle(el);
+        const checks = [];
+        if ((el.textContent || "").trim() && Array.from(el.childNodes).some((n) => n.nodeType === 3 && n.textContent.trim()))
+            checks.push(["text", cs.color]);
+        if (cs.backgroundImage === "none")
+            checks.push(["fill", cs.backgroundColor]);
+        if (parseFloat(cs.borderTopWidth) > 0)
+            checks.push(["border", cs.borderTopColor]);
+        for (const [part, css] of checks) {
+            const bad = off(css);
+            if (!bad)
+                continue;
+            const key = `${part}:${bad}`;
+            if (seen.has(key))
+                continue;
+            seen.add(key);
+            offenders.push({ what: `${part} colour ${bad} is not in the theme palette — use a theme token [1.18]`, where: W.__uiDescribe(el), selector: W.__uiSelector(el), human: W.__uiHuman(el) });
+        }
+    }
+    return { applicable: true, offenders, paletteSize: palette.length };
+}, { extra, tolerance });
+/**
+ * 1.19 — native parts follow the theme. A dark site must declare color-scheme: dark (or the browser draws
+ * light scrollbars, autofill and picker popups on it), and number fields hide their spinner arrows.
+ */
+export const nativeSkin = (page) => page.evaluate(() => {
+    const W = window;
+    const out = [];
+    const bg = (() => { for (const el of [document.body, document.documentElement]) {
+        const c = W.__uiRGBA(getComputedStyle(el).backgroundColor);
+        if (c[3] > 0.5)
+            return c;
+    } return [255, 255, 255, 1]; })();
+    const lum = (0.2126 * bg[0] + 0.7152 * bg[1] + 0.0722 * bg[2]) / 255;
+    const scheme = getComputedStyle(document.documentElement).colorScheme || "normal";
+    if (lum < 0.35 && !/dark/.test(scheme))
+        out.push({ what: `dark page but color-scheme is "${scheme}" — scrollbars, autofill and native pickers render light; set color-scheme: dark on :root [1.19]`, where: "html" });
+    let spinnersHidden = false;
+    const visit = (rules) => { for (const rule of Array.from(rules || [])) {
+        if (rule.selectorText && /inner-spin-button|outer-spin-button/.test(rule.selectorText) && /none/.test(rule.style.cssText))
+            spinnersHidden = true;
+        if (rule.cssRules)
+            visit(rule.cssRules);
+    } };
+    for (const sh of Array.from(document.styleSheets)) {
+        try {
+            visit(sh.cssRules);
+        }
+        catch { }
+    }
+    for (const el of Array.from(document.querySelectorAll("input[type=number]"))) {
+        if (!W.__uiVisible(el))
+            continue;
+        const ap = getComputedStyle(el).appearance;
+        if (!spinnersHidden && !/textfield|none/.test(ap))
+            out.push({ what: "number field shows the browser's spinner arrows — hide them (appearance: textfield / ::-webkit-inner-spin-button { appearance: none }) [1.19]", where: W.__uiDescribe(el), selector: W.__uiSelector(el), human: W.__uiHuman(el) });
+    }
+    return out;
+});
