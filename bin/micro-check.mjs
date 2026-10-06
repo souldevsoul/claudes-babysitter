@@ -18,6 +18,7 @@ import { existsSync, readFileSync } from "node:fs";
 import { join, resolve } from "node:path";
 import { execSync } from "node:child_process";
 import * as c from "../playwright/checks.js";
+import * as RM from "../lib/route-map.js";
 
 const args = process.argv.slice(2);
 const opt = (n) => { const i = args.indexOf(`--${n}`); return i >= 0 && args[i + 1] && !args[i + 1].startsWith("--") ? args[i + 1] : null; };
@@ -41,38 +42,43 @@ if (!url) { if (format === "json") out("[]"); process.exit(0); }
   }
 }
 
-/** Changed page files → routes (Next app router and pages router). */
+/**
+ * Changed files → the pages they reach (a component is followed up the import graph to every page that
+ * renders it) → URLs (dynamic segments from sampleParams, then the crawl). Pages that cannot be opened are
+ * returned in `unreached` and reported: a page nobody looked at is not a clean page.
+ */
 function routesFromChanges() {
-  if (opt("routes")) return opt("routes").split(",").map((s) => s.trim()).filter(Boolean);
+  if (opt("routes")) return { routes: opt("routes").split(",").map((s) => s.trim()).filter(Boolean), unreached: [] };
   const git = (cmd) => { try { return execSync(`git ${cmd}`, { cwd: repo, encoding: "utf8", stdio: ["ignore", "pipe", "ignore"] }); } catch { return ""; } };
   const changed = [...new Set([git("diff --name-only HEAD"), git("ls-files --others --exclude-standard")].join("\n").split("\n").filter(Boolean))];
-  const sample = cfg.sampleParams || {};
-  const routes = [];
-  for (const f of changed) {
-    let m = f.match(/(?:^|\/)app\/(.*?)\/?page\.(t|j)sx?$/) || f.match(/(?:^|\/)pages\/(.*?)\.(t|j)sx?$/);
-    if (!m || /(^|\/)(api|_app|_document)(\/|$)/.test(m[1])) continue;
-    let ok = true;
-    const segs = m[1].split("/").filter((s) => s && !/^\(.*\)$/.test(s) && !s.startsWith("@") && s !== "index").map((s) => {
-      const d = s.match(/^\[\[?\.{0,3}(\w+)\]?\]$/);
-      if (!d) return s;
-      if (sample[d[1]] === undefined) { ok = false; return s; }
-      return String(sample[d[1]]);
-    });
-    if (ok) routes.push("/" + segs.join("/"));
-  }
   const uiChanged = changed.some((f) => /\.(jsx|tsx|s?css)$/.test(f));
-  const list = routes.length ? routes : uiChanged ? (cfg.routes || ["/"]).slice(0, 3) : [];
-  return [...new Set(list)].slice(0, 5);
+  if (!uiChanged) return { routes: [], unreached: [] };
+  const all = git("ls-files --cached --others --exclude-standard").split("\n").filter(Boolean);
+  const { templates, layoutWide } = RM.pagesReached(repo, changed, all);
+  const crawled = RM.crawledRoutes(repo);
+  const routes = [], unreached = [];
+  for (const t of templates) {
+    const r = RM.concreteRoute(t, { sampleParams: cfg.sampleParams || {}, crawled });
+    if (r) routes.push(r); else unreached.push(t);
+  }
+  // a layout, the theme or a stylesheet changed: every page is touched, open the configured ones
+  if (layoutWide || (!templates.length && changed.some((f) => /\.s?css$/.test(f))) || (!templates.length && !unreached.length)) routes.push(...(cfg.routes || ["/"]).slice(0, 3));
+  return { routes: [...new Set(routes)].slice(0, 8), unreached };
 }
 
 // DOM sniper settings (babysitter.config.json → domSniper): { "allowProps": [...], "skip": ["css selector"], "strict": false }
 // strict: true drops the built-in framework/motion exceptions (checks/SNIPER_SKIP, SNIPER_MOTION_PROPS)
 const sniper = { allowProps: [], skip: [], strict: false, ...(cfg.domSniper || {}) };
-const routes = routesFromChanges();
-if (!routes.length) { if (format === "json") out("[]"); process.exit(0); }
+const { routes, unreached } = routesFromChanges();
+if (!routes.length && !unreached.length) { if (format === "json") out("[]"); process.exit(0); }
 const storage = join(repo, ".babysitter/storage.json");
 const browser = await chromium.launch({ channel: process.env.PW_CHANNEL || "chrome" });
 const problems = [];
+// a changed page that cannot be opened was not checked — say so, with the fix
+for (const t of unreached) {
+  const seg = (t.match(/\[\[?(?:\.\.\.)?(\w+)\]?\]/) || [])[1] || "param";
+  problems.push({ route: t, viewport: "-", check: "not rendered [coverage]", what: `this change reaches ${t}, but no URL is known for [${seg}] — the page was not checked. Add "sampleParams": { "${seg}": "<a real value>" } to babysitter.config.json (or run \`babysitter prepare\` so the crawl knows one)`, where: t });
+}
 const VIEWPORTS = [{ name: "390", width: 390, height: 844, mobile: true }, { name: "1280", width: 1280, height: 800, mobile: false }];
 for (const route of routes) {
   for (const v of VIEWPORTS) {
@@ -81,6 +87,8 @@ for (const route of routes) {
     await c.install(page);
     const res = await page.goto(route, { waitUntil: "load", timeout: 30000 }).catch((e) => ({ err: e.message }));
     if (res && res.err) { problems.push({ route, viewport: v.name, check: "load", what: res.err.split("\n")[0] }); await ctx.close(); continue; }
+    // an error page is not the page: checking it would pass the real one unseen
+    if (res && typeof res.status === "function" && res.status() >= 400) { problems.push({ route, viewport: v.name, check: "load", what: `${route} answered ${res.status()} — the page itself was not checked`, where: route }); await ctx.close(); continue; }
     await page.waitForLoadState("networkidle", { timeout: 5000 }).catch(() => {});
     await page.waitForTimeout(400);
     if (await c.applyColorScheme(page)) await page.waitForTimeout(300);

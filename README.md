@@ -64,6 +64,13 @@ Or install it as a dev dependency: `npm i -D github:souldevsoul/claudes-babysitt
 | `docs/` | The guidelines the rules enforce |
 | `test/`, `fixtures/` | `npm test`: RuleTester, Stylelint fixtures, end-to-end cases |
 
+## What changed in 4.5.1 (a page nobody opened is not a clean page)
+
+- **micro-check follows a change to every page it reaches.** Editing a component (for example `components/gallery/controls.tsx`) now renders every page that imports it, through barrels and `import()`. Before, only changed page files were opened, and the configured routes stood in for everything else.
+- **Dynamic routes get a real URL:** `app/[game]/gallery` → `/tf2/gallery`, from `sampleParams` or from the crawl (`.babysitter/routes.json`). When neither knows a value, the result is a finding, "not rendered [coverage]", with the fix — not a silent skip.
+- **An error page is not the page.** A route answering 4xx/5xx is a finding, instead of its error page being checked and passing.
+- `lib/route-map.js` + `test/route-map.test.mjs`.
+
 ## What changed in 4.5 (end-to-end tests the project owns, business acceptance)
 
 - **`npm run test:e2e` in every project.** `babysitter init` now adds:
