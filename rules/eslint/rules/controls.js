@@ -10,6 +10,7 @@ export const noNativeControls = {
     messages: {
       select: "Native <select> is forbidden: its open list is drawn by the OS and cannot be themed. Use the UI-kit <Select> (Radix). [1.1, P01]",
       input: 'Native <input type="{{type}}"> is forbidden. Use the UI-kit <{{replacement}}>. [1.1, {{pattern}}]',
+      wrapped: '<{{name}} type="{{type}}"> renders the browser\'s native {{type}} picker through a plain input wrapper. Use the UI-kit <{{replacement}}>. [1.1, {{pattern}}]',
       button: "Raw <button> in page/feature code is forbidden. Use <Button variant size>. [1.1/1.3, P04]",
     },
   }),
@@ -20,6 +21,7 @@ export const noNativeControls = {
       date: ["DatePicker", "P03"],
       "datetime-local": ["DatePicker", "P03"],
       month: ["DatePicker", "P03"],
+      week: ["DatePicker", "P03"],
       time: ["TimePicker", "P03"],
       file: ["FileUpload", "P50"],
       checkbox: ["Checkbox", "P01"],
@@ -59,6 +61,14 @@ export const noNativeControls = {
         // const Field = "select"; <Field />
         if (/^[A-Z]/.test(name) && node.name.type === "JSXIdentifier") { const init = resolveConst(context, node.name); const v = init ? values(init) : null; if (v && v.length === 1 && /^[a-z]+$/.test(v[0])) name = v[0]; }
         if (name === "input") { const t = getAttr(node, "type"); return check(node, name, t ? values(t.value) : null); }
+        // <Input type="datetime-local"> / <TextField type="date">: a kit input that only forwards `type`
+        // to a native <input> still draws the browser's picker (kiln 2026-10). Components that ARE the
+        // replacement (DatePicker, Checkbox, RadioGroup, FileUpload …) are left alone.
+        if (/^[A-Z]/.test(name) && !/Picker|Checkbox|Radio|Switch|Toggle|Upload|Dropzone|Calendar|Select/.test(name)) {
+          const t = getAttr(node, "type");
+          for (const type of ((t && values(t.value)) || []).map((x) => x.toLowerCase()))
+            if (INPUTS[type]) { const [replacement, pattern] = INPUTS[type]; context.report({ node, messageId: "wrapped", data: { name, type, replacement, pattern } }); break; }
+        }
         if (name === "select" || name === "button") return check(node, name);
       },
     };
@@ -135,7 +145,9 @@ export const noAdhocButton = {
           toks.some((t) => /^border(-[0-9]|$)/.test(t));
         const hasPad = toks.some((t) => /^p[xy]?-/.test(t));
         const hasRadius = toks.some((t) => /^rounded/.test(t));
-        if (hasFill && hasPad && hasRadius) context.report({ node, messageId: "adhoc", data: { name } });
+        // a project's own button class on a link (bl-btn, rx-btn, btn-primary, .button) is a hand-made button too
+        const projectBtn = toks.some((t) => /^(?:[a-z0-9]+-)*(btn|button)(?:-[a-z0-9]+)*$/.test(t) && !/^(btn|button)-?(group|row|bar|list)$/.test(t));
+        if ((hasFill && hasPad && hasRadius) || projectBtn) context.report({ node, messageId: "adhoc", data: { name } });
       },
     };
   },

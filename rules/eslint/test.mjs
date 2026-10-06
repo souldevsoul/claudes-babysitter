@@ -14,6 +14,11 @@ tester.run("no-native-controls", R["no-native-controls"], {
     '<input type="text" />',
     '<Button variant="primary">Save</Button>',
     { code: "<select />", filename: "/app/src/components/ui/select.jsx" },
+    // kit inputs with a non-picker type, and components that are the replacement
+    '<Input type="email" />',
+    '<Button type="submit">Save</Button>',
+    '<DatePicker type="date" />',
+    '<Checkbox type="checkbox" />',
   ],
   invalid: [
     { code: "<select><option>a</option></select>", ...err("select") },
@@ -21,6 +26,10 @@ tester.run("no-native-controls", R["no-native-controls"], {
     { code: '<input type="file" />', ...err("input") },
     { code: '<input type="checkbox" />', ...err("input") },
     { code: '<button onClick={go}>Go</button>', filename: "/app/src/app/page.jsx", ...err("button") },
+    // a plain kit input forwarding a native picker type (kiln request-modal, 2026-10)
+    { code: '<Input type="datetime-local" value={v} />', ...err("wrapped") },
+    { code: '<TextField type={"da" + "te"} />', ...err("wrapped") },
+    { code: '<input type="week" />', ...err("input") },
   ],
 });
 
@@ -362,6 +371,12 @@ tester.run("no-inline-style (3.3 strict)", R["no-inline-style"], {
       { code: '<form><input className="border px-2" name="email" /></form>', filename: page, options: [KIT], errors: [{ messageId: "nativeField" }] },
       { code: '<form><input type="email" name="email" /></form>', filename: page, options: [KIT], errors: [{ messageId: "nativeField" }] },
       { code: '<textarea rows={4} />', filename: page, options: [KIT], errors: [{ messageId: "nativeField" }] },
+      { code: '<input type={show ? "text" : "password"} name="pw" />', filename: page, options: [KIT], errors: [{ messageId: "nativeField" }] },
+      { code: '<input type="range" min={1} max={9} />', filename: page, options: [KIT], errors: [{ messageId: "nativeField" }] },
+      { code: '<div>{payOpen && createPortal(<div className="fixed inset-0">pay</div>, document.body)}</div>', filename: page, options: [KIT], errors: [{ messageId: "handmade" }] },
+      { code: '<div role="dialog" aria-modal="true">x</div>', filename: page, options: [KIT], errors: [{ messageId: "handRole" }] },
+      { code: '<button role="radio" aria-checked={on}>EUR</button>', filename: page, options: [KIT], errors: [{ messageId: "handRole" }] },
+      { code: '<ul role="menu"><li role="menuitem">a</li></ul>', filename: page, options: [KIT], errors: [{ messageId: "handRole" }, { messageId: "handRole" }] },
     ],
   });
   _resetSelectImpls();
