@@ -1011,6 +1011,11 @@ try {
   const ratio = 1.05 / (lum(hex) + 0.05);
   assert.ok(ratio >= 3 && ratio < 3.2, `just enough, not darker: ${ratio.toFixed(2)}:1`);
   assert.match(explain({ check: "control boundary [1.9]", ...f }).explain.ru.fix, new RegExp(`${hex} здесь уже даёт 3:1`));
+  // a currency switcher in the nav is a nav pill, not a form field: no field edge asked; the same trigger in a form is
+  await pg.goto("data:text/html,<body style='background:%23111;margin:40px;color:%23aaa'><header><nav><a href='/m'>Machines</a> <button role=combobox aria-expanded=false style='background:transparent;border:0;width:80px;height:32px;color:%23aaa'>EUR</button></nav></header><form><button type=button role=combobox aria-expanded=false style='background:transparent;border:0;width:200px;height:40px;color:%23aaa'>Country</button></form></body>");
+  const nav = (await c.inputVisibility(pg)).filter(Boolean);
+  assert.equal(nav.length, 1, JSON.stringify(nav.map((x) => x.where)));
+  assert.match(nav[0].where, /Country/, "only the form's dropdown needs a field edge");
   await b2.close();
   ok("a faint field edge: the finding suggests the lightest edge that reaches 3:1 (no harsh overshoot), and the explanation says so");
 }

@@ -611,6 +611,9 @@ export const inputVisibility = (page) => page.evaluate(() => {
     const mix = (t, b) => [0, 1, 2].map((i) => t[i] * t[3] + b[i] * (1 - t[3]));
     return Array.from(document.querySelectorAll('input:not([type=hidden]):not([type=checkbox]):not([type=radio]):not([type=range]), textarea, [role=combobox]'))
         .filter((el) => W.__uiVisible(el) && el.getBoundingClientRect().width > 40)
+        // a dropdown trigger in the header / nav / footer outside any form is a nav control (currency, language),
+        // drawn like the links beside it — 1.9 is about form fields, it does not ask a nav pill for a field edge
+        .filter((el) => !(el.matches("[role=combobox]:not(input)") && !el.closest("form") && el.closest("header, nav, footer, [role=navigation], [role=banner], [role=contentinfo]")))
         .map((el) => {
         const cs = getComputedStyle(el);
         const bg = surface(el);
