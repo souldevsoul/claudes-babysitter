@@ -7,6 +7,7 @@ import {
 import { noEmoji, imgDimensions } from "./rules/content.js";
 import { uiNoInlineStyle } from "./rules/ui-no-inline-style.js";
 import { overlayMotion } from "./rules/motion.js";
+import { kitInteractive } from "./rules/interactive.js";
 import { noDynamicClasses, noCssInJsLiterals } from "./rules/ast.js";
 import { DEFAULT_KIT, DEFAULT_THEME_PATHS } from "./util.js";
 
@@ -30,6 +31,7 @@ const rules = {
   "no-emoji": noEmoji,
   "img-dimensions": imgDimensions,
   "overlay-motion": overlayMotion,
+  "kit-interactive": kitInteractive,
 };
 
 const plugin = { meta: { name: "eslint-plugin-babysitter", version: "3.3.0" }, rules, configs: {} };
@@ -70,6 +72,7 @@ plugin.configs.create = (project = {}) => {
         "ui/no-emoji": allow.emoji ? "off" : "error",
         "ui/img-dimensions": "error",
         "ui/overlay-motion": "error",
+        "ui/kit-interactive": ["error", { uiKitPaths }],
       },
     },
     {

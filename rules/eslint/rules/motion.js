@@ -8,6 +8,11 @@ const LIBS = /^(@radix-ui\/|radix-ui$|@base-ui-components\/|@base-ui\/|@headless
 // only parts that float over the page count — tabs, accordions and collapsibles are content, not overlays
 const OVERLAY = /(select|dialog|alert-?dialog|popover|dropdown-?menu|context-?menu|menubar|hover-?card|tooltip|navigation-?menu|menu|combobox|listbox|sheet|drawer|preview-?card|toast)/i;
 const PARTS = /^(Content|Popup|SubContent|Overlay|Backdrop)$/;
+// disclosures (accordion items, collapsibles) expand in place: their panel animates its height both ways
+const DISCLOSURE = /(accordion|collapsible|disclosure)/i;
+const DISCLOSURE_PARTS = /^(Content|Panel)$/;
+const D_ENTER = /(^|:)animate-(accordion|collapsible)-down|data-\[state=open\]:animate-|data-\[(starting-style|entering)\]:|data-(starting-style|open):|data-\[open\]:/;
+const D_EXIT = /(^|:)animate-(accordion|collapsible)-up|data-\[state=closed\]:animate-|data-\[(ending-style|exiting|closed)\]:|data-(ending-style|closed):/;
 // what counts as motion: animation utilities (tw-animate-css / tailwindcss-animate), CSS transitions with Base UI's
 // starting/ending styles, or a project's own animate-* utility
 const ENTER = /(^|:)(animate-in|animate-(?!out\b|none\b)|fade-in|zoom-in|slide-in)|data-\[(state=open|open|starting-style|entering)\]:|data-(starting-style|open):|motion-safe:animate-/;
@@ -65,6 +70,7 @@ export const overlayMotion = {
       enter: "<{{name}}> animates out but not in: add an enter animation (data-[state=open]:animate-in fade-in-0 zoom-in-95). [6.12]",
       exit: "<{{name}}> animates in but not out: add an exit animation (data-[state=closed]:animate-out fade-out-0 zoom-out-95) — closing must not blink away. [6.12]",
       mount: "<{{name}}> is a hand-made overlay mounted with {{{cond}} && …}: it pops in and vanishes in one frame, and unmounting means it can never animate out. Use the kit's DropdownMenu / Popover / Select (they open and close with motion, Escape and arrow keys included), or keep it mounted and animate it both ways (data-state + transition, or AnimatePresence). [6.12]",
+      disclosure: "<{{name}}> expands and collapses by jumping: animate its height both ways (data-[state=open]:animate-accordion-down data-[state=closed]:animate-accordion-up from tw-animate-css, or Base UI's height transition with starting/ending styles), motion-reduce:animate-none. [6.12]",
       selectExit: "<{{name}}> has exit classes, but @radix-ui/react-select {{version}} unmounts the list at once — they never play and the list blinks out. Update @radix-ui/react-select to ^2.3.0 (exit animations arrived there). [6.12]",
       plugin: "<{{name}}> uses animate-in / fade-in / zoom-in classes, but this project has no tw-animate-css (or tailwindcss-animate): they compile to nothing and it does not move. Install tw-animate-css and @import it next to tailwindcss. [6.12]",
     },
@@ -72,6 +78,7 @@ export const overlayMotion = {
   create(context) {
     const locals = new Set(); // names bound to a headless-UI import (namespace or named)
     const selects = new Set(); // names bound to Radix Select
+    const disclosures = new Set(); // names bound to an accordion / collapsible / disclosure import
     return {
       ImportDeclaration(node) {
         const src = String(node.source.value);
@@ -81,11 +88,17 @@ export const overlayMotion = {
           const imported = sp.imported ? (sp.imported.name || sp.imported.value) : "";
           if (OVERLAY.test(src.replace(/^.*\//, "")) || OVERLAY.test(imported) || OVERLAY.test(sp.local.name)) locals.add(sp.local.name);
           if (src === "@radix-ui/react-select" || (src === "radix-ui" && imported === "Select")) selects.add(sp.local.name);
+          if (DISCLOSURE.test(src.replace(/^.*\//, "")) || DISCLOSURE.test(imported) || DISCLOSURE.test(sp.local.name)) disclosures.add(sp.local.name);
         }
       },
       JSXOpeningElement(node) {
         const name = elementName(node);
         const [obj, part] = name.split(".");
+        if (part && disclosures.has(obj) && DISCLOSURE_PARTS.test(part)) {
+          const t = classTokens(getAttr(node, "className"), context);
+          if (!t.some((x) => D_ENTER.test(x)) || !t.some((x) => D_EXIT.test(x))) context.report({ node, messageId: "disclosure", data: { name } });
+          return;
+        }
         if (!part || !locals.has(obj) || !PARTS.test(part)) return;
         if (/^(Overlay|Backdrop)$/.test(part) && !getAttr(node, "className")) return; // an unstyled backdrop is invisible anyway
         const attr = getAttr(node, "className");

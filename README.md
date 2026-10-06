@@ -64,6 +64,14 @@ Or install it as a dev dependency: `npm i -D github:souldevsoul/claudes-babysitt
 | `docs/` | The guidelines the rules enforce |
 | `test/`, `fixtures/` | `npm test`: RuleTester, Stylelint fixtures, end-to-end cases |
 
+## What changed in 4.4 (interactive elements are reusable, animated kit components)
+
+- **New rule `ui/kit-interactive` [1.18]**: every interactive element — the dropdown that replaces `<select>`, menus, popovers, tooltips, dialogs, sheets, accordions, collapsibles, tabs — is a reusable component from `components/ui`, one per role.
+  - Page/feature code importing Radix / Base UI / Headless UI / Ariakit / vaul directly is flagged.
+  - Hand-built ones are flagged: `{open && <div>…}`, `{openKey === key && …}`, `{expanded[i] && …}`, native `<details>`, `<dialog>`, `popover=`. `!open`, data called `open` (`sku.open`, `open.length`) and components are left alone.
+  - **One custom dropdown per site**: a second Select / Listbox / Combobox implementation (Radix Select, Base UI Select/Combobox, react-select, downshift, `role="listbox"`) is an error, kit included.
+- **Disclosures animate [6.12]**: `Accordion.Content` / `Collapsible.Content|Panel` must animate their height in and out (`ui/overlay-motion`), and the rendered check now opens accordions, "show more" panels and `<details>` too — a panel that jumps open or shut is a red finding.
+
 ## What changed in 4.3 (overlay motion is measured, not assumed)
 
 - **Rendered check "overlay motion" [6.12]** (micro-check → Studio, and the Playwright suite): every trigger on the page — anything with `aria-haspopup` / `aria-expanded` / `aria-controls` / `role=combobox`, and buttons that look like one (a short label + a trailing chevron) — is opened and closed (Escape, then the trigger again). The page records the layer that appears and how it leaves, frame by frame: a CSS animation, a transition, a Web Animation or a per-frame change of opacity / transform / size counts as motion. A list that appears or vanishes in one frame is a red finding framed on its trigger, explained in plain words.
@@ -322,6 +330,7 @@ Some rules encode design choices rather than bugs. A project can opt out explici
 |---|---|---|
 | `no-native-controls`: `<select>`, date/time/file/checkbox/radio inputs, raw `<button>` outside the kit | 1.1 | P01 P03 P04 P20 P50 |
 | `no-native-dialogs`: `confirm`/`alert`/`prompt` | 1.1 | P20 |
+| `kit-interactive`: interactive elements come from the kit — no headless-library imports or hand-built dropdowns/menus/dialogs/accordions/tabs in pages (`{open && <div>}`, `<details>`, `<dialog>`, `popover=`); exactly one dropdown component replaces `<select>` per site | 1.18 | P01 P59 |
 | `overlay-motion`: select lists, menus, popovers, dialogs, drawers animate in **and** out; `animate-in`/`fade-in-0` classes without `tw-animate-css` are flagged (they compile to nothing); hand-made overlays mounted with `{open && <div className="absolute z-… shadow…">}` are flagged (they can never animate out); Radix Select below 2.3.0 is flagged (its exit classes never play) | 6.12 | P59 |
 | `no-auth-library-pages` | 1.14 | P20 |
 | `no-adhoc-button`: *clickable* element with fill/border + padding + radius | 1.3 / 1.5 | P04 P05 |

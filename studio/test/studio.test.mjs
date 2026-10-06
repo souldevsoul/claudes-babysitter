@@ -958,8 +958,41 @@ try {
     t.onclick = () => { const on = m.classList.toggle("on"); t.setAttribute("aria-expanded", String(on)); };
     addEventListener("keydown", (e) => { if (e.key === "Escape") { m.classList.remove("on"); t.setAttribute("aria-expanded", "false"); } });</script>`);
   assert.deepEqual(await c.overlayMotion(trans), [], "a transition both ways passes");
+  // 4. disclosures expand in place: an accordion toggled with `hidden` jumps; one that animates its height passes
+  const accBad = await page(`<section><button id="q" aria-expanded="false" aria-controls="a">What does it cost?</button><div id="a" hidden style="width:400px;height:80px">Per credit.</div></section><script>
+    const q = document.getElementById("q"), a = document.getElementById("a");
+    q.onclick = () => { a.hidden = !a.hidden; q.setAttribute("aria-expanded", String(!a.hidden)); };</script>`);
+  assert.deepEqual((await c.overlayMotion(accBad)).map((f) => f.what.split(" — ")[0]), ["opens without motion", "closes without motion"], "an accordion that jumps open and shut is caught");
+  const accGood = await page(`<style>#a{display:grid;grid-template-rows:0fr;transition:grid-template-rows .2s ease;width:400px} #a>div{overflow:hidden} #a.on{grid-template-rows:1fr} #a:not(.on){visibility:hidden;transition:grid-template-rows .2s ease,visibility 0s .2s}</style>
+    <section><button id="q" aria-expanded="false" aria-controls="a">What does it cost?</button><div id="a"><div style="height:80px">Per credit.</div></div></section><script>
+    const q = document.getElementById("q"), a = document.getElementById("a");
+    q.onclick = () => { const on = a.classList.toggle("on"); q.setAttribute("aria-expanded", String(on)); };</script>`);
+  assert.deepEqual(await c.overlayMotion(accGood), [], "an accordion that animates its height both ways passes");
+  const details = await page(`<details style="width:420px"><summary>Can I get a refund on unused credits?</summary><p style="height:80px;margin:0">Yes, within 14 days.</p></details>`);
+  assert.ok((await c.overlayMotion(details)).some((f) => /opens without motion/.test(f.what)), "a native <details> pops open");
+  // a button that reveals a validation message is not a disclosure (no aria-expanded): never a finding
+  const validate = await page(`<form style="width:420px"><input id="n"><button type="button" id="go">Continue ${chevron}</button><div id="msg"></div></form><script>
+    document.getElementById("go").onclick = () => { document.getElementById("msg").innerHTML = '<p style="height:40px;width:300px;margin:0">Display name is required</p>'; };</script>`);
+  assert.deepEqual(await c.overlayMotion(validate), [], "a validation message under a Continue button is not an accordion");
+  // Escape dismisses the whole banner, which slides away: the panel inside it leaves with motion
+  const banner = await page(`<style>#bn{position:fixed;left:0;right:0;bottom:0;background:#fff;padding:16px;transition:transform .2s ease,opacity .2s ease} #bn.out{transform:translateY(100%);opacity:0} #prefs{display:grid;grid-template-rows:0fr;transition:grid-template-rows .2s} #prefs>div{overflow:hidden} #prefs.on{grid-template-rows:1fr}</style>
+    <section id="bn"><button id="m" aria-expanded="false" aria-controls="prefs">Manage cookies</button><div id="prefs"><div style="height:90px;width:400px">Analytics</div></div></section><script>
+    const bn = document.getElementById("bn"), m = document.getElementById("m"), p = document.getElementById("prefs");
+    m.onclick = () => { const on = p.classList.toggle("on"); m.setAttribute("aria-expanded", String(on)); };
+    addEventListener("keydown", (e) => { if (e.key === "Escape") { bn.classList.add("out"); setTimeout(() => bn.remove(), 220); } });</script>`);
+  assert.deepEqual(await c.overlayMotion(banner), [], "a panel that leaves with its sliding banner is not 'closes without motion'");
+  // framer-motion style: Web Animations on exit, and the main thread busy so no frame lands inside the 200 ms exit
+  const waapi = await page(`<div class="wrap"><button id="t" aria-expanded="false">Menu ${chevron}</button></div><script>
+    const t = document.getElementById("t"); let m = null;
+    t.onclick = () => { if (m) return; m = document.createElement("div"); m.className = "menu"; m.textContent = "Pricing / About"; m.animate([{ opacity: 0 }, { opacity: 1 }], { duration: 150 }); t.parentElement.append(m); };
+    addEventListener("keydown", (e) => { if (e.key !== "Escape" || !m) return; const x = m; m = null; x.animate([{ opacity: 1 }, { opacity: 0 }], { duration: 200 }).onfinish = () => x.remove(); const end = performance.now() + 250; while (performance.now() < end) {} });</script>`);
+  assert.deepEqual(await c.overlayMotion(waapi), [], "a Web Animations exit counts even when a busy page skips every frame of it");
+  // a play button that lights a decorative glow opens nothing
+  const glow = await page(`<button id="p">Play ${chevron}</button><script>
+    document.getElementById("p").onclick = () => { const g = document.createElement("div"); g.style.cssText = "position:absolute;top:200px;left:0;width:300px;height:200px;background:radial-gradient(#f0f,transparent)"; document.body.append(g); };</script>`);
+  assert.deepEqual(await c.overlayMotion(glow), [], "a decorative glow (no text, nothing to use) is not an overlay");
   await b3.close();
-  ok("overlay motion is measured: a hand-made dropdown that blinks in and out is caught (frame on its trigger, red, explained); keyframes or transitions both ways pass");
+  ok("overlay motion is measured: a hand-made dropdown or an accordion that jumps is caught (frame on its trigger, red, explained); keyframes, transitions or a height animation both ways pass");
 }
 
 // a faint field edge: the finding names the lightest edge that passes, so the fix does not overshoot into a harsh one

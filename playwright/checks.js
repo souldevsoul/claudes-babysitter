@@ -746,27 +746,74 @@ export async function overlayMotion(page, max = 10) {
             }
             return set;
         };
-        const look = (el) => { const cs = getComputedStyle(el); const r = el.getBoundingClientRect(); return [cs.opacity, cs.transform, cs.scale, cs.translate, cs.clipPath, Math.round(r.height), Math.round(r.width)].join("|"); };
-        const animated = (el) => { try { return el.getAnimations({ subtree: true }).some((a) => a.playState === "running" || a.playState === "pending"); } catch { return false; } };
-        const alive = (el) => { if (!el.isConnected) return false; const cs = getComputedStyle(el); const r = el.getBoundingClientRect(); return cs.display !== "none" && cs.visibility !== "hidden" && r.width * r.height > 0; };
+        // the element and what it rides on: a panel inside a cookie banner that slides away as a whole moves too
+        const chain = (el) => { const out = []; for (let n = el.parentElement, i = 0; n && n !== document.body && i < 8; n = n.parentElement, i++) out.push(n); return out; };
+        const look = (el) => { const cs = getComputedStyle(el); const r = el.getBoundingClientRect(); return [cs.opacity, cs.transform, cs.scale, cs.translate, cs.clipPath, Math.round(r.height), Math.round(r.width), ...chain(el).map((n) => { const c = getComputedStyle(n); return c.opacity + c.transform + c.translate; })].join("|"); };
+        const running = (a) => a.playState === "running" || a.playState === "pending";
+        const animated = (el) => { try { return el.getAnimations({ subtree: true }).some(running) || chain(el).some((n) => n.getAnimations().some(running)); } catch { return false; } };
+        // checkVisibility also sees content-visibility:hidden (a closed <details> keeps its box but is not shown)
+        const shown = (el) => (typeof el.checkVisibility === "function" ? el.checkVisibility({ visibilityProperty: true, contentVisibilityAuto: true }) : getComputedStyle(el).visibility !== "hidden");
+        const alive = (el) => { if (!el.isConnected) return false; const cs = getComputedStyle(el); const r = el.getBoundingClientRect(); return cs.display !== "none" && shown(el) && r.width * r.height > 0; };
         const P = (W.__bsOverlayProbe = { events: [], run: null, last: null });
         for (const t of ["animationstart", "transitionstart", "transitionrun"])
             document.addEventListener(t, (e) => P.events.push({ t: performance.now(), el: e.target }), true);
+        // Motion that fires no CSS events, recorded as it starts — not sampled, so a busy machine that skips frames
+        // cannot miss it: Web Animations (framer-motion, element.animate) and JS that rewrites style= every frame (GSAP)
+        const origAnimate = Element.prototype.animate;
+        Element.prototype.animate = function (...args) { P.events.push({ t: performance.now(), el: this }); return origAnimate.apply(this, args); };
+        const styleWrites = new Map(); // element → count of style= rewrites in the current window
+        new MutationObserver((list) => { for (const m of list) { const n = (styleWrites.get(m.target) || 0) + 1; styleWrites.set(m.target, n); if (n === 3) P.events.push({ t: performance.now(), el: m.target }); } })
+            .observe(document.documentElement, { attributes: true, attributeFilter: ["style"], subtree: true });
         /** Watch what appears (phase "open": positioned boxes that were not there before the click — the outermost
          *  of them) or how the opened one leaves (phase "close") over the next ~500 ms, frame by frame. */
-        P.arm = (phase) => {
+        // what is visible near the trigger: a disclosure (accordion item, "show more", <details>) expands in place,
+        // not as a positioned layer — its panel is a new visible box next to the trigger, or the aria-controls target
+        const visibleNear = (trigger) => {
+            const set = new Set();
+            const box = trigger && (trigger.closest("li, section, article, [data-state], details") || (trigger.parentElement && trigger.parentElement.parentElement));
+            if (!box) return set;
+            for (const el of box.querySelectorAll("*")) { if (el === trigger || trigger.contains(el)) continue; const r = el.getBoundingClientRect(); if (r.width * r.height >= 600 && shown(el)) set.add(el); }
+            return set;
+        };
+        // when the person acted (Escape, a click) and when the watched layer actually left the page — both taken from
+        // events and mutation records, not frames: an instant close removes it within a few ms of the action; an exit
+        // animation keeps it on the page for 100 ms or more, however few frames a busy machine paints meanwhile
+        for (const t of ["keydown", "pointerdown", "click"]) document.addEventListener(t, () => { P.tAction = performance.now(); }, true);
+        new MutationObserver(() => { const r = P.run; if (r && r.phase === "close" && P.last && r.tGone == null && !alive(P.last)) r.tGone = performance.now(); })
+            .observe(document.documentElement, { childList: true, subtree: true, attributes: true, attributeFilter: ["hidden", "style", "class", "data-state", "open"] });
+        P.arm = (phase, trigger = null) => {
+            styleWrites.clear();
+            P.tAction = null;
             const before = phase === "open" ? positioned() : null;
+            const near = phase === "open" ? visibleNear(trigger) : null;
+            const controls = phase === "open" && trigger && trigger.getAttribute("aria-controls");
+            const target = controls ? document.getElementById(controls.split(/\s+/)[0]) : null;
+            const targetWasShown = !!(target && alive(target) && target.getBoundingClientRect().height > 1);
             const t0 = performance.now();
-            const run = (P.run = { phase, done: false, gone: [], seen: [] });
+            const run = (P.run = { phase, done: false, gone: [], seen: [], tGone: null });
             const watched = new Map(); // layer → looks per frame
             if (phase === "close" && P.last)
                 watched.set(P.last, [look(P.last)]);
             const step = () => {
                 if (phase === "open") {
-                    const fresh = [...positioned()].filter((el) => !before.has(el));
+                    // an overlay carries something to read or use; a glow, a grain layer or a pill that scrolled into view does not
+                    const meaningful = (el) => (el.innerText || "").trim().length > 0 || !!el.querySelector("a, button, input, select, textarea, [role=option], [role=menuitem], [tabindex]") || /^(dialog|alertdialog|menu|listbox)$/.test(el.getAttribute("role") || "");
+                    const fresh = [...positioned()].filter((el) => !before.has(el) && meaningful(el));
                     for (const l of fresh.filter((el) => !fresh.some((o) => o !== el && o.contains(el))))
                         if (![...watched.keys()].some((w) => w.contains(l)))
                             watched.set(l, []);
+                    // only a trigger that says it expands something (aria-expanded, <summary>) owns an in-place panel —
+                    // a "Continue" that reveals a validation message is not a disclosure
+                    if (!fresh.length && trigger && (trigger.hasAttribute("aria-expanded") || trigger.matches("summary"))) {
+                        // nothing floated up: look for the panel that expanded in place
+                        const t = controls ? document.getElementById(controls.split(/\s+/)[0]) : null;
+                        if (t && !targetWasShown && alive(t) && t.getBoundingClientRect().height > 1) { if (!watched.has(t)) watched.set(t, []); }
+                        else if (!t) {
+                            const now = [...visibleNear(trigger)].filter((el) => !near.has(el) && !(el.closest && el.closest("[data-babysitter]")));
+                            for (const l of now.filter((el) => !now.some((o) => o !== el && o.contains(el))))
+                                if (![...watched.keys()].some((w) => w.contains(l) || l.contains(w))) watched.set(l, []);
+                        }
+                    }
                 }
                 for (const [l, looks] of watched)
                     looks.push(alive(l) ? look(l) + (animated(l) ? "|anim" : "") : "gone");
@@ -774,7 +821,8 @@ export async function overlayMotion(page, max = 10) {
                     return requestAnimationFrame(step);
                 run.done = true;
                 for (const [l, looks] of watched) {
-                    const moved = looks.some((x) => x.endsWith("|anim")) || new Set(looks.filter((x) => x !== "gone").map((x) => x.replace(/\|anim$/, ""))).size > 1
+                    const lingered = phase === "close" && l === P.last && P.tAction != null && run.tGone != null && run.tGone - P.tAction >= 70;
+                    const moved = lingered || looks.some((x) => x.endsWith("|anim")) || new Set(looks.filter((x) => x !== "gone").map((x) => x.replace(/\|anim$/, ""))).size > 1
                         || P.events.some((e) => e.t >= t0 && e.el instanceof Node && (l.contains(e.el) || e.el.contains(l)));
                     const ended = looks[looks.length - 1];
                     const entry = { moved, where: W.__uiDescribe(l), selector: W.__uiSelector(l), human: W.__uiHuman(l) };
@@ -789,7 +837,7 @@ export async function overlayMotion(page, max = 10) {
             requestAnimationFrame(step);
         };
     });
-    const handles = await page.$$('[aria-haspopup]:not([aria-haspopup=false]), [aria-expanded], [aria-controls], [role=combobox], button[data-state], button:has(> svg:last-child), [role=button]:has(> svg:last-child), button[aria-label]:has(svg)');
+    const handles = await page.$$('[aria-haspopup]:not([aria-haspopup=false]), [aria-expanded], [aria-controls], [role=combobox], button[data-state], button:has(> svg:last-child), [role=button]:has(> svg:last-child), button[aria-label]:has(svg), summary');
     const done = new Set();
     let n = 0;
     const wait = () => page.waitForFunction(() => window.__bsOverlayProbe.run && window.__bsOverlayProbe.run.done, null, { timeout: 4000 }).catch(() => { });
@@ -799,7 +847,7 @@ export async function overlayMotion(page, max = 10) {
         const info = await h.evaluate((el) => {
             const W = window;
             const text = (el.textContent || "").trim();
-            const says = el.matches('[aria-haspopup]:not([aria-haspopup=false]), [aria-expanded], [aria-controls], [role=combobox], [data-state]')
+            const says = el.matches('[aria-haspopup]:not([aria-haspopup=false]), [aria-expanded], [aria-controls], [role=combobox], [data-state], summary')
                 || /menu|navigation|options|more|filter|sort|currency|language|меню|ещё|фильтр|сорт|валют|язык/i.test(el.getAttribute("aria-label") || "");
             const ok = el.getRootNode() === document && W.__uiVisible(el) && !el.matches("a[href], [type=submit], [disabled], [aria-disabled=true], [data-next-mark], #next-logo") && !el.closest("nextjs-portal, [data-nextjs-toast], [data-babysitter]") && !el.closest("form button[type=submit]")
                 && (says || (text.length > 0 && text.length <= 24)) && !/delete|remove|sign ?out|log ?out|удал|выйти|accept|allow|agree|reject|essential/i.test(text)
@@ -811,7 +859,7 @@ export async function overlayMotion(page, max = 10) {
         done.add(info.selector);
         const url = page.url();
         await h.scrollIntoViewIfNeeded().catch(() => { });
-        await page.evaluate(() => { window.__bsOverlayProbe.last = null; window.__bsOverlayProbe.arm("open"); });
+        await h.evaluate((el) => { window.__bsOverlayProbe.last = null; window.__bsOverlayProbe.arm("open", el); });
         await h.click({ timeout: 2000 }).catch(() => { });
         await wait();
         if (page.url() !== url) {
@@ -962,9 +1010,11 @@ export const tableClipping = (page) => page.evaluate(() => {
  */
 /** Framework/library internals that write style attributes the page author never writes. */
 // canvas + the wrappers WebGL renderers (three.js / react-three-fiber) size at runtime
-export const SNIPER_SKIP = ["script", "style", "noscript", "template", "next-route-announcer", "nextjs-portal", "[data-nextjs-toast]", "img[data-nimg]", "[data-radix-popper-content-wrapper]", "[data-floating-ui-portal]", "[data-sonner-toaster]", "canvas", ":has(> canvas)", ":has(> div > canvas)"];
+export const SNIPER_SKIP = ["script", "style", "noscript", "template", "next-route-announcer", "nextjs-portal", "[data-nextjs-toast]", "img[data-nimg]", "[data-radix-popper-content-wrapper]", "[data-floating-ui-portal]", "[data-sonner-toaster]", "canvas", ":has(> canvas)", ":has(> div > canvas)", "nav > div:has(> ul[data-orientation])", "[data-radix-navigation-menu-viewport]"];
 /** Written every frame by animation libraries (framer-motion, motion, GSAP): runtime state, not design tokens. */
 export const SNIPER_MOTION_PROPS = ["transform", "opacity", "translate", "scale", "rotate", "will-change", "transform-origin", "visibility", "transition",
+    // animation bookkeeping by Radix Presence / framer-motion (suppress the first-mount animation, measure a panel)
+    "transition-duration", "transition-property", "transition-delay", "animation-name", "animation-duration", "animation-delay", "animation-fill-mode", "filter",
     // behaviour set by UI libraries, not design: next-themes (color-scheme on <html>), Radix (pointer-events)
     "pointer-events", "color-scheme", "touch-action", "user-select", "-webkit-user-select", "overflow-anchor"];
 export const inlineStyles = (page, allowProps = [], skip = [], strict = false) => page.evaluate(({ allowProps, skip, strict }) => {

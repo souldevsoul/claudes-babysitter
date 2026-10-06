@@ -278,4 +278,72 @@ tester.run("no-inline-style (3.3 strict)", R["no-inline-style"], {
   });
 }
 
+// 1.18 — interactive elements are reusable kit components; one dropdown per site; disclosures animate (6.12)
+{
+  const { _resetSelectImpls } = await import("./rules/interactive.js");
+  const KIT = { uiKitPaths: ["**/components/ui/**"] };
+  const page = "/repo/app/contact/page.tsx", kit = "/repo/components/ui/select.tsx", kit2 = "/repo/components/ui/listbox.tsx";
+  _resetSelectImpls();
+  tester.run("kit-interactive", R["kit-interactive"], {
+    valid: [
+      // the kit builds them from the headless library
+      { code: 'import * as SelectPrimitive from "@radix-ui/react-select";', filename: kit, options: [KIT] },
+      { code: 'import * as D from "@radix-ui/react-dialog";', filename: "/repo/components/ui/dialog.tsx", options: [KIT] },
+      // pages use the kit
+      { code: 'import { Select } from "@/components/ui/select";\n<Select />', filename: page, options: [KIT] },
+      // a component shown on state is the component's business; plain state that is not "open"
+      { code: '<div>{open && <Menu items={x} />}</div>', filename: page, options: [KIT] },
+      { code: '<div>{error && <p className="text-red">x</p>}</div>', filename: page, options: [KIT] },
+      { code: '<div>{showPassword && <span>x</span>}</div>', filename: page, options: [KIT] },
+      // shown while closed, data called "open", list lengths
+      { code: '<div>{!open && <p>hint</p>}</div>', filename: page, options: [KIT] },
+      { code: '<div>{!loading && !open && <p>x</p>}</div>', filename: page, options: [KIT] },
+      { code: '<div>{open.length > 0 && <div>x</div>}</div>', filename: page, options: [KIT] },
+      { code: '<div>{sku.open && <button>Book</button>}</div>', filename: page, options: [KIT] },
+      // a business state called "open" (Plinth: buying is open), not a panel
+      { code: '<div>{buyingOpen && !canPay && <div className="stamp">Insufficient balance</div>}</div>', filename: page, options: [KIT] },
+      { code: '<div>{paymentsOpen ? <a href="/x">Top up</a> : null}</div>', filename: page, options: [KIT] },
+      { code: '<p hidden={!error}>x</p>', filename: page, options: [KIT] },
+      // a hand-made element inside the kit is the kit (overlay-motion checks its motion)
+      { code: '<div>{open && <ul className="absolute">x</ul>}</div>', filename: kit2.replace("listbox", "menu"), options: [KIT] },
+      // a non-element utility from the umbrella package
+      { code: 'import { Slot } from "radix-ui";', filename: page, options: [KIT] },
+    ],
+    invalid: [
+      { code: 'import * as SelectPrimitive from "@radix-ui/react-select";', filename: page, options: [KIT], errors: [{ messageId: "secondSelect" }, { messageId: "library" }] },
+      { code: 'import { Accordion } from "radix-ui";', filename: page, options: [KIT], errors: [{ messageId: "library" }] },
+      { code: 'import { Dialog } from "@headlessui/react";', filename: page, options: [KIT], errors: [{ messageId: "library" }] },
+      // hand-built in a page: an FAQ answer, a dropdown, a modal
+      { code: '<div>{isOpen && <div className="mt-2 text-sm">answer</div>}</div>', filename: page, options: [KIT], errors: [{ messageId: "handmade" }] },
+      { code: '<div>{menuOpen ? <ul className="absolute z-50">x</ul> : null}</div>', filename: page, options: [KIT], errors: [{ messageId: "handmade" }] },
+      { code: '<div>{expanded[i] && <p>x</p>}</div>', filename: page, options: [KIT], errors: [{ messageId: "handmade" }] },
+      { code: '<div>{openKey === key && <p>answer</p>}</div>', filename: page, options: [KIT], errors: [{ messageId: "handmade" }] },
+      { code: '<div>{mobileMenuOpen && <nav>x</nav>}</div>', filename: page, options: [KIT], errors: [{ messageId: "handmade" }] },
+      { code: '<div>{isFiltersOpen && <div>x</div>}</div>', filename: page, options: [KIT], errors: [{ messageId: "handmade" }] },
+      // a panel kept in the DOM and toggled with hidden= (Ferrous mobile nav)
+      { code: '<nav id="m" hidden={!mobileNavOpen} className="flex flex-col">x</nav>', filename: page, options: [KIT], errors: [{ messageId: "handmade" }] },
+      { code: '<div>{sidebarOpen && <div className="fixed inset-0 bg-black/50" />}</div>', filename: page, options: [KIT], errors: [{ messageId: "handmade" }] },
+      // native disclosure / dialog / popover
+      { code: '<details><summary>Q</summary>A</details>', filename: page, options: [KIT], errors: [{ messageId: "native" }] },
+      { code: '<dialog open>x</dialog>', filename: page, options: [KIT], errors: [{ messageId: "native" }] },
+      { code: '<div popover="auto" id="p">x</div>', filename: page, options: [KIT], errors: [{ messageId: "native" }] },
+      // a second dropdown implementation, even inside the kit
+      { code: '<ul role="listbox">x</ul>', filename: kit2, options: [KIT], errors: [{ messageId: "secondSelect" }] },
+    ],
+  });
+  _resetSelectImpls();
+  const accImp = 'import * as AccordionPrimitive from "@radix-ui/react-accordion";\n';
+  tester.run("overlay-motion (disclosures)", R["overlay-motion"], {
+    valid: [
+      { code: accImp + '<AccordionPrimitive.Content className="overflow-hidden data-[state=closed]:animate-accordion-up data-[state=open]:animate-accordion-down" />' },
+      { code: 'import { Collapsible } from "@base-ui-components/react/collapsible";\n<Collapsible.Panel className="h-[var(--collapsible-panel-height)] transition-[height] data-[starting-style]:h-0 data-[ending-style]:h-0" />' },
+      { code: accImp + '<AccordionPrimitive.Trigger className="x" />' },
+    ],
+    invalid: [
+      { code: accImp + '<AccordionPrimitive.Content className="overflow-hidden pb-4" />', errors: [{ messageId: "disclosure" }] },
+      { code: 'import * as C from "@radix-ui/react-collapsible";\n<C.Content className="data-[state=open]:animate-collapsible-down" />', errors: [{ messageId: "disclosure" }] },
+    ],
+  });
+}
+
 console.log(`eslint-plugin-babysitter: ${Object.keys(R).length} rules, all RuleTester cases passed`);
