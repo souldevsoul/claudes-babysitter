@@ -96,6 +96,12 @@ Or install it as a dev dependency: `npm i -D github:souldevsoul/claudes-babysitt
 - Reports and test results are written to the project's `.babysitter/`, not inside the tool. `playwright/project.ts` became `project.js`.
 - Self-test: `test/acceptance.test.mjs` serves a good and a bad fixture site and runs the real suite. The good one must pass every check; the bad one must fail the 20 checks it breaks.
 
+## What changed in 4.6 (one component per interactive role)
+
+- **`ui/kit-interactive` counts every role, not only the select**: dropdown (select, action/user menu, multi-pick filter, combobox — one component), modal (dialog, confirm, sheet, drawer — one component), button, input, textarea, checkbox, radio, switch, toast, tooltip, popover, disclosure, tabs. A role is recognised by the headless part a kit file builds on or by the kit file's name; a second implementation anywhere (kit included: `dropdown-menu.tsx` next to `select.tsx`, `pill-button.tsx` next to `button.tsx`) is an error naming the first one.
+- **Raw fields in page code** (`<input>` text/email/password/search/tel/url/number, `<textarea>`) are flagged: use the kit Input / Textarea (raw `<button>` and links dressed as buttons were already `no-native-controls` / `no-adhoc-button`).
+- Toast libraries (sonner, react-hot-toast…) count as the toast role; pages may still call `toast()`.
+
 ## What changed in 4.4 (interactive elements are reusable, animated kit components)
 
 - **New rule `ui/kit-interactive` [1.18]**: every interactive element — the dropdown that replaces `<select>`, menus, popovers, tooltips, dialogs, sheets, accordions, collapsibles, tabs — is a reusable component from `components/ui`, one per role.

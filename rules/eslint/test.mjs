@@ -305,14 +305,14 @@ tester.run("no-inline-style (3.3 strict)", R["no-inline-style"], {
       { code: '<div>{paymentsOpen ? <a href="/x">Top up</a> : null}</div>', filename: page, options: [KIT] },
       { code: '<p hidden={!error}>x</p>', filename: page, options: [KIT] },
       // a hand-made element inside the kit is the kit (overlay-motion checks its motion)
-      { code: '<div>{open && <ul className="absolute">x</ul>}</div>', filename: kit2.replace("listbox", "menu"), options: [KIT] },
+      { code: '<div>{open && <ul className="absolute">x</ul>}</div>', filename: "/repo/components/ui/panel.tsx", options: [KIT] },
       // a non-element utility from the umbrella package
       { code: 'import { Slot } from "radix-ui";', filename: page, options: [KIT] },
     ],
     invalid: [
-      { code: 'import * as SelectPrimitive from "@radix-ui/react-select";', filename: page, options: [KIT], errors: [{ messageId: "secondSelect" }, { messageId: "library" }] },
+      { code: 'import * as SelectPrimitive from "@radix-ui/react-select";', filename: page, options: [KIT], errors: [{ messageId: "secondImpl" }, { messageId: "library" }] },
       { code: 'import { Accordion } from "radix-ui";', filename: page, options: [KIT], errors: [{ messageId: "library" }] },
-      { code: 'import { Dialog } from "@headlessui/react";', filename: page, options: [KIT], errors: [{ messageId: "library" }] },
+      { code: 'import { Dialog } from "@headlessui/react";', filename: page, options: [KIT], errors: [{ messageId: "secondImpl" }, { messageId: "library" }] },
       // hand-built in a page: an FAQ answer, a dropdown, a modal
       { code: '<div>{isOpen && <div className="mt-2 text-sm">answer</div>}</div>', filename: page, options: [KIT], errors: [{ messageId: "handmade" }] },
       { code: '<div>{menuOpen ? <ul className="absolute z-50">x</ul> : null}</div>', filename: page, options: [KIT], errors: [{ messageId: "handmade" }] },
@@ -328,7 +328,39 @@ tester.run("no-inline-style (3.3 strict)", R["no-inline-style"], {
       { code: '<dialog open>x</dialog>', filename: page, options: [KIT], errors: [{ messageId: "native" }] },
       { code: '<div popover="auto" id="p">x</div>', filename: page, options: [KIT], errors: [{ messageId: "native" }] },
       // a second dropdown implementation, even inside the kit
-      { code: '<ul role="listbox">x</ul>', filename: kit2, options: [KIT], errors: [{ messageId: "secondSelect" }] },
+      { code: '<ul role="listbox">x</ul>', filename: kit2, options: [KIT], errors: [{ messageId: "secondImpl" }] },
+    ],
+  });
+  // one component per ROLE: a menu next to the select is a second dropdown; pill-button next to button; sheet next to dialog
+  for (const [first, second, role] of [
+    [['import * as S from "@radix-ui/react-select";', "/r2/components/ui/select.tsx"], ['import * as M from "@radix-ui/react-dropdown-menu";', "/r2/components/ui/dropdown-menu.tsx"], "dropdown (menu)"],
+    [['export const Button = () => null;', "/r3/components/ui/button.tsx"], ['export const PillButton = () => null;', "/r3/components/ui/pill-button.tsx"], "button"],
+    [['import * as D from "@radix-ui/react-dialog";', "/r4/components/ui/dialog.tsx"], ['import { Drawer } from "vaul";', "/r4/components/ui/drawer.tsx"], "modal"],
+    [['import { Toaster } from "sonner";', "/r5/components/ui/sonner.tsx"], ['export const Toast = () => null;', "/r5/components/ui/toast.tsx"], "toast"],
+  ]) {
+    _resetSelectImpls();
+    tester.run(`kit-interactive one ${role}`, R["kit-interactive"], {
+      valid: [{ code: first[0], filename: first[1], options: [KIT] }],
+      invalid: [{ code: second[0], filename: second[1], options: [KIT], errors: [{ messageId: "secondImpl" }] }],
+    });
+  }
+  _resetSelectImpls();
+  tester.run("kit-interactive roles (valid)", R["kit-interactive"], {
+    valid: [
+      // a kit component built on another kit component is not a second implementation
+      { code: 'import { Select } from "./select";\nexport const CurrencySelect = () => <Select />;', filename: "/r6/components/ui/currency-select.tsx", options: [KIT] },
+      // select-card / segmented / radio-button are not dropdowns or buttons
+      { code: 'export const SelectCard = () => null;', filename: "/r6/components/ui/select-card.tsx", options: [KIT] },
+      { code: 'export const S = () => null;', filename: "/r6/components/ui/segmented.tsx", options: [KIT] },
+      // pages call toast() — the Toaster is mounted once in the kit
+      { code: 'import { toast } from "sonner";\ntoast("Saved");', filename: page, options: [KIT] },
+      // checkbox/radio/hidden/file inputs are other rules' business
+      { code: '<form><input type="hidden" name="a" /><input type="file" /></form>', filename: page, options: [KIT] },
+    ],
+    invalid: [
+      { code: '<form><input className="border px-2" name="email" /></form>', filename: page, options: [KIT], errors: [{ messageId: "nativeField" }] },
+      { code: '<form><input type="email" name="email" /></form>', filename: page, options: [KIT], errors: [{ messageId: "nativeField" }] },
+      { code: '<textarea rows={4} />', filename: page, options: [KIT], errors: [{ messageId: "nativeField" }] },
     ],
   });
   _resetSelectImpls();

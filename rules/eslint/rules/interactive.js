@@ -9,9 +9,42 @@ const HEADLESS = /^(@radix-ui\/react-(select|dropdown-menu|popover|dialog|alert-
 const UMBRELLA = /^(radix-ui|@base-ui-components\/react|@base-ui\/react|@headlessui\/react|@ariakit\/react)$/;
 const INTERACTIVE_NAME = /(select|dropdown|menu|popover|dialog|accordion|collapsible|disclosure|tooltip|hovercard|hover-card|tabs?|toast|combobox|listbox|sheet|drawer|popup|navigation)/i;
 
-// a dropdown that replaces <select>: one implementation per site
-const SELECT_IMPL = /^(@radix-ui\/react-select|@base-ui-components\/react\/(select|combobox)|@base-ui\/react\/(select|combobox)|react-select|downshift)$/; // cmdk is a command palette, not a select
-const SELECT_NAMES = /^(Select|Combobox|Listbox)$/;
+// One component per interactive ROLE per site. A role is recognised by the headless part a kit file builds on, or by the
+// kit file's own name. A second implementation of a role (anywhere, kit included) is an error.
+//   dropdown  — the one floating list: <select> replacement, action/user menus, multi-pick filters, combobox
+//   modal     — dialog, alert dialog, sheet, drawer (variants of one component)
+//   button, input, textarea, checkbox, radio, switch, toast, tooltip, popover, disclosure (accordion/collapsible), tabs
+const ROLE_BY_IMPORT = [
+  ["dropdown", /^@radix-ui\/react-(select|dropdown-menu|context-menu|menubar)$|^@base-ui(-components)?\/react\/(select|combobox|menu|context-menu|menubar)$|^(react-select|downshift)$/],
+  ["modal", /^@radix-ui\/react-(dialog|alert-dialog)$|^@base-ui(-components)?\/react\/(dialog|alert-dialog)$|^vaul$/],
+  ["checkbox", /^@radix-ui\/react-checkbox$|^@base-ui(-components)?\/react\/checkbox$/],
+  ["radio", /^@radix-ui\/react-radio-group$|^@base-ui(-components)?\/react\/radio(-group)?$/],
+  ["switch", /^@radix-ui\/react-switch$|^@base-ui(-components)?\/react\/switch$/],
+  ["tooltip", /^@radix-ui\/react-tooltip$|^@base-ui(-components)?\/react\/tooltip$/],
+  ["popover", /^@radix-ui\/react-(popover|hover-card)$|^@base-ui(-components)?\/react\/(popover|preview-card)$/],
+  ["disclosure", /^@radix-ui\/react-(accordion|collapsible)$|^@base-ui(-components)?\/react\/(accordion|collapsible)$/],
+  ["tabs", /^@radix-ui\/react-tabs$|^@base-ui(-components)?\/react\/tabs$/],
+  ["toast", /^@radix-ui\/react-toast$|^@base-ui(-components)?\/react\/toast$|^(sonner|react-hot-toast|react-toastify)$/],
+];
+// named parts of umbrella packages (radix-ui, @base-ui/react, @headlessui/react, @ariakit/react)
+const ROLE_BY_NAME = [
+  ["dropdown", /^(Select|Combobox|Listbox|DropdownMenu|ContextMenu|Menubar|Menu)$/],
+  ["modal", /^(Dialog|AlertDialog|Sheet|Drawer)$/],
+  ["checkbox", /^Checkbox$/], ["radio", /^(RadioGroup|Radio)$/], ["switch", /^Switch$/], ["tooltip", /^Tooltip$/],
+  ["popover", /^(Popover|HoverCard|PreviewCard)$/], ["disclosure", /^(Accordion|Collapsible|Disclosure)$/], ["tabs", /^(Tabs|Tab)$/], ["toast", /^(Toast|Toaster)$/],
+];
+// kit files by name (basename without extension): pill-button, icon-button → button; dropdown-menu → dropdown; sheet → modal
+const ROLE_BY_FILE = [
+  ["dropdown", /^(select|dropdown|dropdown-menu|combobox|listbox|menu|context-menu|multi-select|multiselect)$/],
+  ["modal", /^(dialog|alert-dialog|modal|sheet|drawer)$/],
+  ["button", /^((?!radio|toggle|swap|segmented)[a-z]+-)?(button|btn)$/],
+  ["input", /^((?!file|search-palette)[a-z]+-)?(input|text-field|textfield)$/],
+  ["textarea", /^([a-z]+-)?textarea$/],
+  ["checkbox", /^checkbox$/], ["radio", /^radio(-group)?$/], ["switch", /^(switch|toggle)$/],
+  ["toast", /^(toast|toaster|sonner|notification)$/], ["tooltip", /^tooltip$/], ["popover", /^(popover|hover-card)$/],
+  ["disclosure", /^(accordion|collapsible|disclosure)$/], ["tabs", /^tabs$/],
+];
+const roleOf = (list, x) => { for (const [r, re] of list) if (re.test(x)) return r; return null; };
 
 // state that opens / expands something — judged on the AST, not the text:
 //   open, isOpen, menuOpen, isExpanded, showMenu, dropdownVisible, expanded[i], openKey === key, openIndex === i
@@ -38,8 +71,8 @@ function opensSomething(n) {
   }
 }
 
-/** One dropdown per site: every file that implements a select-like list (across one lint run). */
-const selectImpls = new Map(); // project root (nearest package.json dir is not known here — use cwd) → first file
+/** One component per role per site: role → the first file that implements it (across one lint run). */
+const roleImpls = new Map(); // `${root}|${role}` → { file, what }
 
 /**
  * 1.18 — interactive elements (selects/dropdowns, menus, popovers, dialogs, sheets, accordions, collapsibles, tabs,
@@ -49,13 +82,14 @@ const selectImpls = new Map(); // project root (nearest package.json dir is not 
  *   • the dropdown that replaces <select> exists once per site (a second implementation is an error, kit included).
  */
 export const kitInteractive = {
-  meta: meta("Interactive elements are reusable, animated kit components — one dropdown per site", "1.18", "P01 P59", {
+  meta: meta("Interactive elements are reusable, animated kit components — one component per role per site", "1.18", "P01 P59", {
     schema: [{ type: "object", properties: { uiKitPaths: { type: "array", items: { type: "string" } } }, additionalProperties: false }],
     messages: {
       library: "{{what}} is imported from {{src}} in page/feature code. Interactive elements are reusable kit components: build it once in components/ui (styled with the theme, animated in and out) and use that here. [1.18]",
       handmade: "<{{name}}> is a hand-built interactive element ({{cond}}). Use the kit component for it (Select / DropdownMenu / Popover / Dialog / Sheet / Accordion / Collapsible / Tabs): one reusable, animated component per role, not a copy per page. [1.18, 6.12]",
       native: "<{{name}}{{attr}}> is the browser's own {{what}}: it cannot be themed consistently and opens/closes without motion. Use the kit {{kit}}. [1.18, 6.12]",
-      secondSelect: "Two dropdown implementations on this site: {{first}} and this one ({{what}}). A site has exactly one custom dropdown that replaces <select> — keep the kit's (components/ui), give it the variants the other one needed (searchable, multi, sizes), and use it everywhere. [1.18]",
+      secondImpl: "Two {{role}} implementations on this site: {{first}} and this one ({{what}}). A site has exactly one {{role}} component, in components/ui — merge this one into it as a variant (sizes, tones, a menu/multi-pick mode for the dropdown, a sheet/confirm mode for the modal…) and use it everywhere. Never add a second one. [1.18]",
+      nativeField: "<{{name}}{{type}}> drawn in page/feature code. Fields are kit components too: use the kit {{kit}} (one per site, themed, with its states) — never a raw element with its own classes. [1.18, 1.1]",
     },
   }),
   create(context) {
@@ -63,21 +97,33 @@ export const kitInteractive = {
     const inKit = fileMatches(context.filename, allow);
     const file = context.filename;
     const root = context.cwd || process.cwd();
-    const claimSelect = (node, what) => {
-      const first = selectImpls.get(root);
-      if (!first) { selectImpls.set(root, { file, what }); return; }
+    const rel = (f) => f.replace(root + "/", "");
+    const reported = new Set(); // one report per role per file
+    const claim = (node, role, what) => {
+      if (!role || reported.has(role)) return;
+      const k = `${root}|${role}`;
+      const first = roleImpls.get(k);
+      if (!first) { roleImpls.set(k, { file, what }); return; }
       if (first.file === file) return;
-      const rel = (f) => f.replace(root + "/", "");
-      context.report({ node, messageId: "secondSelect", data: { what, first: `${rel(first.file)} (${first.what})` } });
+      reported.add(role);
+      context.report({ node, messageId: "secondImpl", data: { role, what, first: `${rel(first.file)} (${first.what})` } });
     };
-    return {
+    // a kit file named after a role claims it (pill-button.tsx next to button.tsx is a second button)
+    const base = file.replace(/^.*\//, "").replace(/\.(t|j)sx?$/, "").toLowerCase();
+    const fileRole = inKit ? roleOf(ROLE_BY_FILE, base) : null;
+        return {
+      Program(node) { if (fileRole) claim(node, fileRole, `components/ui/${base}`); },
       ImportDeclaration(node) {
         const src = String(node.source.value);
-        if (!HEADLESS.test(src)) return;
-        // one dropdown per site — kit included
-        if (SELECT_IMPL.test(src)) claimSelect(node, src);
-        else if (UMBRELLA.test(src)) for (const sp of node.specifiers) { const n = sp.imported ? sp.imported.name || sp.imported.value : ""; if (SELECT_NAMES.test(n)) { claimSelect(node, `${n} from ${src}`); break; } }
+        if (!HEADLESS.test(src) && !roleOf(ROLE_BY_IMPORT, src)) return;
+        // one component per role — kit included
+        const roles = new Set();
+        const r1 = roleOf(ROLE_BY_IMPORT, src); if (r1) roles.add(r1);
+        if (UMBRELLA.test(src)) for (const sp of node.specifiers) { const n = sp.imported ? sp.imported.name || sp.imported.value : ""; const r = roleOf(ROLE_BY_NAME, n); if (r) roles.add(r); }
+        for (const r of roles) claim(node, r, src);
         if (inKit) return;
+        // toast libraries are called imperatively from pages (toast("Saved")) — only their mounting point is the kit's
+        if (!HEADLESS.test(src)) return;
         let what = src;
         if (UMBRELLA.test(src)) {
           const names = node.specifiers.map((sp) => (sp.imported ? sp.imported.name || sp.imported.value : sp.local.name)).filter((n) => INTERACTIVE_NAME.test(n));
@@ -90,8 +136,15 @@ export const kitInteractive = {
         const name = elementName(node);
         // role="listbox" drawn by hand is a dropdown implementation too — counted in the kit as well
         const role = getAttr(node, "role");
-        if (role && role.value && role.value.type === "Literal" && role.value.value === "listbox") claimSelect(node, `role="listbox" in <${name}>`);
+        if (role && role.value && role.value.type === "Literal" && role.value.value === "listbox") claim(node, "dropdown", `role="listbox" in <${name}>`);
         if (inKit) return;
+        // raw fields in page code: the kit Input / Textarea (checkbox, radio, select, date, file: no-native-controls)
+        if (name === "textarea") return context.report({ node, messageId: "nativeField", data: { name, type: "", kit: "Textarea" } });
+        if (name === "input") {
+          const t = getAttr(node, "type");
+          const tv = !t ? "text" : t.value && t.value.type === "Literal" ? String(t.value.value) : null;
+          if (tv && /^(text|email|password|search|tel|url|number)$/.test(tv)) return context.report({ node, messageId: "nativeField", data: { name, type: t ? ` type="${tv}"` : "", kit: "Input" } });
+        }
         if (name === "details") return context.report({ node, messageId: "native", data: { name, attr: "", what: "disclosure", kit: "Accordion / Collapsible" } });
         if (name === "dialog") return context.report({ node, messageId: "native", data: { name, attr: "", what: "dialog", kit: "Dialog / Sheet" } });
         if (/^[a-z]/.test(name) && getAttr(node, "popover")) return context.report({ node, messageId: "native", data: { name, attr: " popover", what: "popover", kit: "Popover / DropdownMenu / Select" } });
@@ -122,5 +175,5 @@ export const kitInteractive = {
   },
 };
 
-/** Test hook: forget the "first dropdown" of previous runs. */
-export const _resetSelectImpls = () => selectImpls.clear();
+/** Test hook: forget the roles claimed by previous runs. */
+export const _resetSelectImpls = () => roleImpls.clear();
