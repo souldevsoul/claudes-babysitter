@@ -537,7 +537,7 @@ export const rowAlignment = (page) => page.evaluate(() => {
             if (Math.abs(rb.top - ra.bottom) <= 1 && Math.abs(ra.left - rb.left) <= 2 && parseFloat(getComputedStyle(a).borderBottomWidth) > 0 && parseFloat(getComputedStyle(b).borderTopWidth) > 0) {
                 const where = W.__uiDescribe(c);
                 if (!seen.has(where)) {
-                    out.push({ what: "double border between stacked rows [1.7, P55]", where, ...at });
+                    out.push({ what: "double border between stacked rows [1.7, P55]", where, selector: W.__uiSelector(c), human: W.__uiHuman(c) });
                     seen.add(where);
                 }
                 break;
