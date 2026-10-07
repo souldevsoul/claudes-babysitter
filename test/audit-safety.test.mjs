@@ -29,5 +29,14 @@ try {
   const broken = spawnSync(process.execPath, ["-e", `process.argv[1]=${JSON.stringify(join(ROOT, "bin/audit-summary.mjs"))}; import(${JSON.stringify(join(ROOT, "lib/adoption.js"))}).then(({ auditRepo }) => { try { auditRepo("/nonexistent/dir/for/audit"); console.log("NO THROW"); } catch (e) { console.log("THREW", e.message); } })`], { encoding: "utf8" });
   assert.match(broken.stdout, /THREW the check did not finish/, broken.stdout + broken.stderr);
   ok("a check that does not finish makes the audit fail loudly, never green");
+  // a folder with code but no git repository lists no files: that is "nothing checked" (exit 2), never 0 problems
+  const plain = mkdtempSync(join(tmpdir(), "nogit-"));
+  mkdirSync(join(plain, "src", "app"), { recursive: true });
+  writeFileSync(join(plain, "package.json"), "{}");
+  writeFileSync(join(plain, "src", "app", "page.tsx"), "export default function P(){ return <button className=\"bg-red-500\">x</button>; }\n");
+  const ng = spawnSync(process.execPath, [join(ROOT, "bin/ui-check.mjs"), "--repo", plain, "--format", "json"], { encoding: "utf8" });
+  assert.equal(ng.status, 2, ng.stdout + ng.stderr); assert.match(ng.stderr, /nothing was checked/);
+  rmSync(plain, { recursive: true, force: true });
+  ok("a full check that finds no files to check fails (exit 2) instead of reporting a clean repository");
 } finally { rmSync(repo, { recursive: true, force: true }); }
 console.log(`audit-safety: ${n} cases passed`);

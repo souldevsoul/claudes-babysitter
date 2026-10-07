@@ -93,7 +93,11 @@ if (changed) {
   const list = [git(`diff --name-only --diff-filter=ACMR ${base}`), git("diff --name-only --diff-filter=ACMR"), git("ls-files --others --exclude-standard")].join("\n");
   files = [...new Set(list.split("\n").filter(Boolean))].filter((f) => /\.(jsx|tsx|ts|js|mjs|s?css)$/.test(f) && !/\.d\.ts$|(^|\/)(next|tailwind|postcss|eslint|vite|playwright)\.config\./.test(f) && existsSync(join(repo, f)));
 } else {
+  // a full check that finds nothing to check is a failure, not a clean result (a folder that is not a git
+  // repository lists no files — it used to come back as "0 problems")
+  if (git("rev-parse --is-inside-work-tree") !== "true") { console.error(`ui-check: ${repo} is not a git repository — nothing was checked`); process.exit(2); }
   files = git("ls-files --cached --others --exclude-standard").split("\n").filter((f) => /\.(jsx|tsx|ts|js|mjs|s?css)$/.test(f) && !/\.d\.ts$|(^|\/)(next|tailwind|postcss|eslint|vite|playwright)\.config\./.test(f));
+  if (!files.length) { console.error(`ui-check: no source files found in ${repo} — nothing was checked`); process.exit(2); }
 }
 // third-party and static assets are not the product's code: vendored libraries, minified bundles, public/
 // third-party code is not the product's: vendored dirs, minified bundles and well-known libraries.
