@@ -31,6 +31,22 @@ const __mix = (top, bottom) => { const a = top[3]; return [0,1,2].map(i => top[i
 const __lum = (c) => { const f = (v) => { v /= 255; return v <= 0.03928 ? v / 12.92 : Math.pow((v + 0.055) / 1.055, 2.4); }; return 0.2126 * f(c[0]) + 0.7152 * f(c[1]) + 0.0722 * f(c[2]); };
 // Effective contrast of an element's text: background layers composited bottom-up (alpha blended, never ignored),
 // text colour alpha × ancestor opacity blended on top. overImage=true when a gradient/image sits underneath.
+// A photo or gradient often sits on an absolutely positioned SIBLING layer (hero banners), not on an ancestor:
+// such a layer under the text's centre also counts as an image, else the page colour is taken as the backdrop
+// (ferrous market banner, 2026-10: light heading over a dark photo reported as 1.13:1).
+window.__uiImageBehind = (el, sib) => {
+  const r = el.getBoundingClientRect(); const cx = r.left + r.width / 2, cy = r.top + r.height / 2;
+  const covers = (n) => { const b = n.getBoundingClientRect(); return b.width > 0 && b.height > 0 && b.left <= cx && b.right >= cx && b.top <= cy && b.bottom >= cy; };
+  const pos = getComputedStyle(sib).position;
+  if ((pos !== 'absolute' && pos !== 'fixed') || !covers(sib) || !window.__uiVisible(sib)) return false;
+  const nodes = [sib, ...Array.from(sib.querySelectorAll('*')).slice(0, 60)];
+  return nodes.some((n) => {
+    if (!covers(n)) return false;
+    if (/^(IMG|VIDEO|CANVAS|PICTURE)$/.test(n.tagName)) return true;
+    const bi = getComputedStyle(n).backgroundImage;
+    return !!bi && bi !== 'none';
+  });
+};
 window.__uiContrast = (el) => {
   const layers = []; let overImage = false; let opacity = 1;
   for (let e = el; e; e = e.parentElement) {
@@ -39,6 +55,7 @@ window.__uiContrast = (el) => {
     const bg = window.__uiRGBA(cs.backgroundColor);
     if (cs.backgroundImage && cs.backgroundImage !== 'none') overImage = true;
     if (bg[3] > 0) { layers.push(bg); if (bg[3] >= 1) break; }
+    if (!overImage && e.parentElement) for (const s of e.parentElement.children) if (s !== e && window.__uiImageBehind(el, s)) { overImage = true; break; }
   }
   let base = [255, 255, 255, 1];
   for (let i = layers.length - 1; i >= 0; i--) base = __mix(layers[i], base);
