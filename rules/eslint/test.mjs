@@ -124,6 +124,7 @@ tester.run("variant-budget", R["variant-budget"], {
   invalid: [
     { code: 'const b = cva("x", { variants: { size: { k0: "bg-a0", k1: "bg-a1", k2: "bg-a2", k3: "bg-a3", k4: "bg-a4", k5: "bg-a5", k6: "bg-a6", k7: "bg-a7", k8: "bg-a8", k9: "bg-a9", k10: "bg-a10" } } })', filename: "/app/src/components/ui/button.tsx", errors: [{ messageId: "budget" }] },
     { code: 'const VARIANTS = { k0: "bg-a0", k1: "bg-a1", k2: "bg-a2", k3: "bg-a3", k4: "bg-a4", k5: "bg-a5", k6: "bg-a6", k7: "bg-a7", k8: "bg-a8", k9: "bg-a9", k10: "bg-a10", k11: "bg-a11", k12: "bg-a12", k13: "bg-a13", k14: "bg-a14", k15: "bg-a15" }', filename: "/app/src/components/ui/button.tsx", errors: [{ messageId: "budget" }] },
+    { code: 'const VARIANT = { k0: { base: "bg-a0", on: "x" }, k1: { base: "bg-a1", on: "x" }, k2: { base: "bg-a2", on: "x" }, k3: { base: "bg-a3", on: "x" }, k4: { base: "bg-a4", on: "x" }, k5: { base: "bg-a5", on: "x" }, k6: { base: "bg-a6", on: "x" }, k7: { base: "bg-a7", on: "x" }, k8: { base: "bg-a8", on: "x" }, k9: { base: "bg-a9", on: "x" }, k10: { base: "bg-a10", on: "x" }, k11: { base: "bg-a11", on: "x" } }', filename: "/app/src/components/ui/button.tsx", errors: [{ messageId: "budget" }] },
     { code: 'const buttonTones = { k0: "bg-a0", k1: "bg-a1", k2: "bg-a2", k3: "bg-a3", k4: "bg-a4", k5: "bg-a5", k6: "bg-a6", k7: "bg-a7", k8: "bg-a8", k9: "bg-a9", k10: "bg-a10", k11: "bg-a11" }', filename: "/app/src/components/ui/button.tsx", errors: [{ messageId: "budget" }] },
   ],
 });

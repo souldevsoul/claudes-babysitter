@@ -206,9 +206,12 @@ export const noStylesOutsideKit = {
  * / buttonTones — may hold at most `max` (default 10) looks. Merge near-duplicates; a look one screen uses
  * is a role of its own and becomes its own kit component.
  */
-const MAP_NAME = /^(?:[A-Z_]*(?:VARIANTS?|LOOKS?|TONES?|SIZES?|KINDS?|INTENTS?)|[a-z]\w*(?:Variants|Looks|Tones|Sizes|Kinds|Intents)|variants|looks|tones|sizes)$/;
+const MAP_NAME = /^(?:[A-Z_]*(?:VARIANTS?|LOOKS?|TONES?|SIZES?|KINDS?|INTENTS?|PAINTS?|SKINS?|STYLES)|[a-z]\w*(?:Variants|Looks|Tones|Sizes|Kinds|Intents|Paints|Skins)|variants|looks|tones|sizes|paints?)$/;
 const AXIS_NAME = /^(variant|look|tone|size|kind|intent|appearance|color|colour)s?$/i;
-const isStyleValue = (v) => v && ((v.type === "Literal" && typeof v.value === "string") || v.type === "TemplateLiteral" || (v.type === "ArrayExpression" && v.elements.every((e) => e && e.type === "Literal" && typeof e.value === "string")));
+const isStyleValue = (v) => v && ((v.type === "Literal" && typeof v.value === "string") || v.type === "TemplateLiteral" || (v.type === "ArrayExpression" && v.elements.every((e) => e && e.type === "Literal" && typeof e.value === "string")) ||
+  // { base, on, off } style records
+  (v.type === "ObjectExpression" && v.properties.length > 0 && v.properties.every((q) => q.type === "Property" && isStyleValue(q.value))));
+const TYPE_NAME = /(Variant|Look|Tone|Kind|Intent|Size)$/;
 export const variantBudget = {
   meta: meta("A kit component has at most a handful of looks per variant axis", "1.16", "P46 P47", {
     schema: [{ type: "object", properties: { max: { type: "integer", minimum: 2 }, themePaths: { type: "array", items: { type: "string" } } }, additionalProperties: false }],
@@ -225,6 +228,12 @@ export const variantBudget = {
       context.report({ node: obj, messageId: "budget", data: { where, n: props.length, max } });
     };
     return {
+      // type ButtonVariant = 'primary' | 'ghost' | … — the union is the list of looks
+      TSTypeAliasDeclaration(node) {
+        if (!TYPE_NAME.test(node.id.name) || node.typeAnnotation.type !== "TSUnionType") return;
+        const lits = node.typeAnnotation.types.filter((t) => t.type === "TSLiteralType" && typeof t.literal.value === "string");
+        if (lits.length > max && lits.length === node.typeAnnotation.types.length) context.report({ node, messageId: "budget", data: { where: `type ${node.id.name}`, n: lits.length, max } });
+      },
       ObjectExpression(node) {
         const parent = node.parent;
         // cva/tv: variants: { variant: {…}, size: {…} } — every axis counts
@@ -234,8 +243,10 @@ export const variantBudget = {
           if (outer && outer.type === "Property" && (outer.key.name || outer.key.value) === "variants") return check(node, `variant axis "${key}"`);
           if (AXIS_NAME.test(String(key)) && !(outer && outer.type === "Property")) return check(node, `"${key}" map`);
         }
-        if (parent && parent.type === "VariableDeclarator" && parent.id.type === "Identifier" && MAP_NAME.test(parent.id.name)) return check(node, parent.id.name);
-        if (parent && parent.type === "TSAsExpression" && parent.parent.type === "VariableDeclarator" && parent.parent.id.type === "Identifier" && MAP_NAME.test(parent.parent.id.name)) return check(node, parent.parent.id.name);
+        // const LOOKS = {…}, also through `as const` / `satisfies …`
+        let decl = parent;
+        while (decl && (decl.type === "TSAsExpression" || decl.type === "TSSatisfiesExpression")) decl = decl.parent;
+        if (decl && decl.type === "VariableDeclarator" && decl.id.type === "Identifier" && MAP_NAME.test(decl.id.name)) return check(node, decl.id.name);
       },
     };
   },
