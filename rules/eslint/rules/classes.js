@@ -208,7 +208,9 @@ export const noStylesOutsideKit = {
  */
 const MAP_NAME = /^(?:[A-Z_]*(?:VARIANTS?|LOOKS?|TONES?|SIZES?|KINDS?|INTENTS?|PAINTS?|SKINS?|STYLES)|[a-z]\w*(?:Variants|Looks|Tones|Sizes|Kinds|Intents|Paints|Skins)|variants|looks|tones|sizes|paints?)$/;
 const AXIS_NAME = /^(variant|look|tone|size|kind|intent|appearance|color|colour)s?$/i;
-const isStyleValue = (v) => v && ((v.type === "Literal" && typeof v.value === "string") || v.type === "TemplateLiteral" || (v.type === "ArrayExpression" && v.elements.every((e) => e && e.type === "Literal" && typeof e.value === "string")) ||
+const isStyleValue = (v) => v && ((v.type === "Literal" && typeof v.value === "string") || v.type === "TemplateLiteral" || (v.type === "ArrayExpression" && v.elements.every((e) => e && (e.type === "Literal" || e.type === "TemplateLiteral")) && v.elements.some((e) => e.type === "TemplateLiteral" || (typeof e.value === "string" && /\s/.test(e.value)))) ||
+  // [base variant, size, classes] tuples whose classes come from a const
+  (v.type === "ArrayExpression" && v.elements.length > 0 && v.elements.every((e) => e && (e.type === "Literal" || e.type === "TemplateLiteral" || e.type === "Identifier"))) ||
   // { base, on, off } style records
   (v.type === "ObjectExpression" && v.properties.length > 0 && v.properties.every((q) => q.type === "Property" && isStyleValue(q.value))));
 const TYPE_NAME = /(Variant|Look|Tone|Kind|Intent|Size)$/;
@@ -232,7 +234,7 @@ export const variantBudget = {
       TSTypeAliasDeclaration(node) {
         if (!TYPE_NAME.test(node.id.name) || node.typeAnnotation.type !== "TSUnionType") return;
         const lits = node.typeAnnotation.types.filter((t) => t.type === "TSLiteralType" && typeof t.literal.value === "string");
-        if (lits.length > max && lits.length === node.typeAnnotation.types.length) context.report({ node, messageId: "budget", data: { where: `type ${node.id.name}`, n: lits.length, max } });
+        if (lits.length > max) context.report({ node, messageId: "budget", data: { where: `type ${node.id.name}`, n: lits.length, max } });
       },
       ObjectExpression(node) {
         const parent = node.parent;
