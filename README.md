@@ -384,6 +384,7 @@ Some rules encode design choices rather than bugs. A project can opt out explici
 | `no-arbitrary-values`: `text-[#…]`, `rounded-[…]`, `shadow-[…]`, `text-[15px]`, `tracking-[…]` outside theme paths | 6.3 / 6.5 / 1.16 | P04 P33 P46 P47 |
 | `no-raw-palette`: `bg-blue-600`, `text-zinc-900`, `border-slate-200` outside the kit (white/black allowed) | 6.3 / 6.5 / 1.16 | P04 P33 P46 P47 |
 | `no-styles-outside-kit`: `cva()` / `tv()` in page or feature code | 1.15 / 1.16 | P04 P46 P47 |
+| `variant-budget`: a kit component with more than 10 looks on one variant axis (`variantBudget` in the config) | 1.16 | P46 P47 |
 | `no-arbitrary-spacing` (`allowNegative` option) | 2.7 / 2.8 | P28 P29 |
 | `no-illegible-text`: font size < 12px only. Weight and translucency are judged at runtime by measured contrast | 6.4 | P11 |
 | `no-scroll-rail` | 2.2 | P15 P16 |

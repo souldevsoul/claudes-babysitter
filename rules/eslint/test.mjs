@@ -115,6 +115,18 @@ tester.run("no-arbitrary-values", R["no-arbitrary-values"], {
 });
 
 
+tester.run("variant-budget", R["variant-budget"], {
+  valid: [
+    { code: 'const b = cva("x", { variants: { variant: { k0: "bg-a0", k1: "bg-a1", k2: "bg-a2", k3: "bg-a3", k4: "bg-a4", k5: "bg-a5", k6: "bg-a6", k7: "bg-a7", k8: "bg-a8", k9: "bg-a9" } } })', filename: "/app/src/components/ui/button.tsx" },
+    { code: 'const VARIANTS = { k0: "bg-a0", k1: "bg-a1", k2: "bg-a2", k3: "bg-a3", k4: "bg-a4", k5: "bg-a5", k6: "bg-a6", k7: "bg-a7", k8: "bg-a8", k9: "bg-a9", k10: "bg-a10", k11: "bg-a11", k12: "bg-a12", k13: "bg-a13" }', filename: "/app/src/app/page.tsx" },
+    { code: 'const routes = { k0: "bg-a0", k1: "bg-a1", k2: "bg-a2", k3: "bg-a3", k4: "bg-a4", k5: "bg-a5", k6: "bg-a6", k7: "bg-a7", k8: "bg-a8", k9: "bg-a9", k10: "bg-a10", k11: "bg-a11", k12: "bg-a12", k13: "bg-a13" }', filename: "/app/src/components/ui/nav.tsx" },
+  ],
+  invalid: [
+    { code: 'const b = cva("x", { variants: { size: { k0: "bg-a0", k1: "bg-a1", k2: "bg-a2", k3: "bg-a3", k4: "bg-a4", k5: "bg-a5", k6: "bg-a6", k7: "bg-a7", k8: "bg-a8", k9: "bg-a9", k10: "bg-a10" } } })', filename: "/app/src/components/ui/button.tsx", errors: [{ messageId: "budget" }] },
+    { code: 'const VARIANTS = { k0: "bg-a0", k1: "bg-a1", k2: "bg-a2", k3: "bg-a3", k4: "bg-a4", k5: "bg-a5", k6: "bg-a6", k7: "bg-a7", k8: "bg-a8", k9: "bg-a9", k10: "bg-a10", k11: "bg-a11", k12: "bg-a12", k13: "bg-a13", k14: "bg-a14", k15: "bg-a15" }', filename: "/app/src/components/ui/button.tsx", errors: [{ messageId: "budget" }] },
+    { code: 'const buttonTones = { k0: "bg-a0", k1: "bg-a1", k2: "bg-a2", k3: "bg-a3", k4: "bg-a4", k5: "bg-a5", k6: "bg-a6", k7: "bg-a7", k8: "bg-a8", k9: "bg-a9", k10: "bg-a10", k11: "bg-a11" }', filename: "/app/src/components/ui/button.tsx", errors: [{ messageId: "budget" }] },
+  ],
+});
 tester.run("no-thin-kit-wrapper", R["no-thin-kit-wrapper"], {
   valid: [
     "const Toolbar = (p) => <div><Button {...p} /><Button>b</Button></div>",

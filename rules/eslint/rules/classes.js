@@ -16,7 +16,7 @@ export const noVisualClassnameOverride = {
   meta: meta("UI-kit components accept layout-only className", "1.3 / 1.4 / 1.15", "P04 P06 P46", {
     schema: [kitOption],
     messages: {
-      override: '<{{name}} className="… {{token}} …"> overrides the component\'s look. Add or use a variant/size instead; className may only carry layout (margin, width, flex/grid placement). [1.15, P46]',
+      override: '<{{name}} className="… {{token}} …"> overrides the component\'s look. Use an existing variant/size; className may only carry layout (margin, width, flex/grid placement). A look used in one place is not a new variant: it is a role of its own (nav row, pager step, skip link) and gets its own kit component. [1.15, P46]',
       dynamic: "<{{name}} className={…}> is built from a variable, so its classes cannot be checked. Pass a variant prop instead, or inline the layout classes. [1.15, P46]",
       style: "<{{name}} style={…}> restyles a kit component. Add a variant instead. [1.15, P46]",
     },
@@ -156,7 +156,7 @@ export const noScrollRail = {
 export const noThinKitWrapper = {
   meta: meta("Extend the kit with variants instead of wrapper components", "1.16", "P05 P46 P47", {
     schema: [kitOption],
-    messages: { wrapper: "{{comp}} only wraps <{{name}}> and forwards props. Add a variant to the kit's {{name}} instead of a new look-alike component. [1.16, P46 P47]" },
+    messages: { wrapper: "{{comp}} only wraps <{{name}}> and forwards props. Use one of {{name}}'s existing variants instead of a look-alike component; if the look is a distinct role, make it a kit component of its own in components/ui. [1.16, P46 P47]" },
   }),
   create(context) {
     const kit = new Set((context.options[0] && context.options[0].components) || DEFAULT_KIT);
@@ -193,6 +193,49 @@ export const noStylesOutsideKit = {
       CallExpression(node) {
         const c = node.callee;
         if (c.type === "Identifier" && ["cva", "tv"].includes(c.name)) context.report({ node, messageId: "bad", data: { fn: c.name } });
+      },
+    };
+  },
+};
+
+/**
+ * 1.16 — a design system has a handful of looks per component. Moving every call-site override into a
+ * "named variant" satisfies no-visual-classname-override and changes nothing: a button with 109 variants
+ * (seen on a real product, 2026-10) is the same drift under new names. Each variant axis of a kit
+ * component — a cva/tv `variants: { variant: {…}, size: {…} }` axis, or a const map such as VARIANTS / LOOKS
+ * / buttonTones — may hold at most `max` (default 10) looks. Merge near-duplicates; a look one screen uses
+ * is a role of its own and becomes its own kit component.
+ */
+const MAP_NAME = /^(?:[A-Z_]*(?:VARIANTS?|LOOKS?|TONES?|SIZES?|KINDS?|INTENTS?)|[a-z]\w*(?:Variants|Looks|Tones|Sizes|Kinds|Intents)|variants|looks|tones|sizes)$/;
+const AXIS_NAME = /^(variant|look|tone|size|kind|intent|appearance|color|colour)s?$/i;
+const isStyleValue = (v) => v && ((v.type === "Literal" && typeof v.value === "string") || v.type === "TemplateLiteral" || (v.type === "ArrayExpression" && v.elements.every((e) => e && e.type === "Literal" && typeof e.value === "string")));
+export const variantBudget = {
+  meta: meta("A kit component has at most a handful of looks per variant axis", "1.16", "P46 P47", {
+    schema: [{ type: "object", properties: { max: { type: "integer", minimum: 2 }, themePaths: { type: "array", items: { type: "string" } } }, additionalProperties: false }],
+    messages: { budget: "{{where}} has {{n}} looks (budget {{max}}). That is call-site overrides renamed, not a design system: merge near-duplicates into the core looks, and move a look only one screen uses into a kit component of its own (nav row, pager step, skip link). [1.16, P46 P47]" },
+  }),
+  create(context) {
+    const opts = context.options[0] || {};
+    const max = opts.max || 10;
+    if (!fileMatches(context.filename, opts.themePaths || DEFAULT_THEME_PATHS)) return {};
+    const check = (obj, where) => {
+      const props = obj.properties.filter((p) => p.type === "Property");
+      if (props.length <= max) return;
+      if (props.filter((p) => isStyleValue(p.value)).length < props.length * 0.8) return;
+      context.report({ node: obj, messageId: "budget", data: { where, n: props.length, max } });
+    };
+    return {
+      ObjectExpression(node) {
+        const parent = node.parent;
+        // cva/tv: variants: { variant: {…}, size: {…} } — every axis counts
+        if (parent && parent.type === "Property" && parent.value === node) {
+          const key = parent.key && (parent.key.name || parent.key.value);
+          const outer = parent.parent && parent.parent.parent;
+          if (outer && outer.type === "Property" && (outer.key.name || outer.key.value) === "variants") return check(node, `variant axis "${key}"`);
+          if (AXIS_NAME.test(String(key)) && !(outer && outer.type === "Property")) return check(node, `"${key}" map`);
+        }
+        if (parent && parent.type === "VariableDeclarator" && parent.id.type === "Identifier" && MAP_NAME.test(parent.id.name)) return check(node, parent.id.name);
+        if (parent && parent.type === "TSAsExpression" && parent.parent.type === "VariableDeclarator" && parent.parent.id.type === "Identifier" && MAP_NAME.test(parent.parent.id.name)) return check(node, parent.parent.id.name);
       },
     };
   },

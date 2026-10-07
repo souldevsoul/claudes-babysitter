@@ -2,7 +2,7 @@
 import { noNativeControls, noNativeDialogs, noAuthLibraryPages, noAdhocButton } from "./rules/controls.js";
 import {
   noVisualClassnameOverride, noTransitionAll, noArbitrarySpacing, noIllegibleText, noScrollRail,
-  noArbitraryValues, noThinKitWrapper, noRawPalette, noStylesOutsideKit,
+  noArbitraryValues, noThinKitWrapper, noRawPalette, noStylesOutsideKit, variantBudget,
 } from "./rules/classes.js";
 import { noEmoji, imgDimensions } from "./rules/content.js";
 import { uiNoInlineStyle } from "./rules/ui-no-inline-style.js";
@@ -22,6 +22,7 @@ const rules = {
   "no-arbitrary-values": noArbitraryValues,
   "no-raw-palette": noRawPalette,
   "no-styles-outside-kit": noStylesOutsideKit,
+  "variant-budget": variantBudget,
   "no-transition-all": noTransitionAll,
   "no-arbitrary-spacing": noArbitrarySpacing,
   "no-illegible-text": noIllegibleText,
@@ -63,6 +64,7 @@ plugin.configs.create = (project = {}) => {
         "ui/no-arbitrary-values": ["error", { themePaths }],
         "ui/no-raw-palette": allow.palette ? "off" : ["error", { themePaths }],
         "ui/no-styles-outside-kit": ["error", { themePaths }],
+        "ui/variant-budget": ["error", { themePaths, max: project.variantBudget || 10 }],
         "ui/no-transition-all": "error",
         "ui/no-arbitrary-spacing": ["error", { allowNegative: !!allow.negativeMargins }],
         "ui/no-illegible-text": "error",
