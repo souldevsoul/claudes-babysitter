@@ -73,6 +73,22 @@ const { routes, unreached } = routesFromChanges();
 if (!routes.length && !unreached.length) { if (format === "json") out("[]"); process.exit(0); }
 const storage = join(repo, ".babysitter/storage.json");
 const browser = await chromium.launch({ channel: process.env.PW_CHANNEL || "chrome" });
+// A hard ceiling for the whole run. A page that never settles (a stuck dev server, an endless
+// animation, a dialog that will not close) once kept three micro-checks and their browsers alive for
+// 18 hours, slowing every other process on the machine. Past the ceiling: close the browser and exit,
+// saying so — never hang. BABYSITTER_MICRO_TIMEOUT_S overrides (default 130 s: under the Stop hook's
+// 150 s, so the check ends itself and closes its browser instead of being killed and leaving it behind).
+const CEILING_S = Number(process.env.BABYSITTER_MICRO_TIMEOUT_S || 130);
+// killed from outside (hook timeout, Ctrl-C): take the browser down too, or it lives on as an orphan
+for (const sig of ["SIGTERM", "SIGINT", "SIGHUP"]) process.on(sig, async () => {
+  try { await Promise.race([browser.close(), new Promise((r) => setTimeout(r, 3000))]); } catch {}
+  process.exit(sig === "SIGINT" ? 130 : 143);
+});
+setTimeout(async () => {
+  console.error(`micro-check: stopped after ${CEILING_S}s (a page did not settle) — rendered checks incomplete`);
+  try { await Promise.race([browser.close(), new Promise((r) => setTimeout(r, 5000))]); } catch {}
+  process.exit(3);
+}, CEILING_S * 1000).unref();
 const problems = [];
 // a changed page that cannot be opened was not checked — say so, with the fix
 for (const t of unreached) {
