@@ -316,6 +316,10 @@ tester.run("no-inline-style (3.3 strict)", R["no-inline-style"], {
       { code: '<div>{buyingOpen && !canPay && <div className="stamp">Insufficient balance</div>}</div>', filename: page, options: [KIT] },
       { code: '<div>{paymentsOpen ? <a href="/x">Top up</a> : null}</div>', filename: page, options: [KIT] },
       { code: '<p hidden={!error}>x</p>', filename: page, options: [KIT] },
+      // an early return that is not an overlay, or a component that delegates to the kit / framer-motion
+      { code: 'function Row({ open }) { if (!open) return null; return <p className="mt-2">x</p>; }', filename: page, options: [KIT] },
+      { code: 'function QV({ open }) { if (!open) return null; return <Dialog open>x</Dialog>; }', filename: page, options: [KIT] },
+      { code: 'function L({ loading }) { if (!loading) return null; return <div className="fixed inset-0">spinner</div>; }', filename: page, options: [KIT] },
       // a hand-made element inside the kit is the kit (overlay-motion checks its motion)
       { code: '<div>{open && <ul className="absolute">x</ul>}</div>', filename: "/repo/components/ui/panel.tsx", options: [KIT] },
       // a non-element utility from the umbrella package
@@ -378,6 +382,9 @@ tester.run("no-inline-style (3.3 strict)", R["no-inline-style"], {
       { code: '<input type="range" min={1} max={9} />', filename: page, options: [KIT], errors: [{ messageId: "nativeField" }] },
       { code: '<div>{payOpen && createPortal(<div className="fixed inset-0">pay</div>, document.body)}</div>', filename: page, options: [KIT], errors: [{ messageId: "handmade" }] },
       { code: '<div role="dialog" aria-modal="true">x</div>', filename: page, options: [KIT], errors: [{ messageId: "handRole" }] },
+      // Mise quick view: renders nothing while closed, a fixed overlay while open — no motion either way
+      { code: 'function QuickView({ open }) { if (!open) return null; return (<div className="fixed inset-0 z-50 flex">x</div>); }', filename: page, options: [KIT], errors: [{ messageId: "handmade" }] },
+      { code: 'const Modal = ({ isOpen }) => { if (!isOpen) { return null; } return createPortal(<div className="fixed inset-0">x</div>, document.body); };', filename: page, options: [KIT], errors: [{ messageId: "handmade" }] },
       { code: '<button role="radio" aria-checked={on}>EUR</button>', filename: page, options: [KIT], errors: [{ messageId: "handRole" }] },
       { code: '<ul role="menu"><li role="menuitem">a</li></ul>', filename: page, options: [KIT], errors: [{ messageId: "handRole" }, { messageId: "handRole" }] },
     ],

@@ -168,6 +168,40 @@ export const kitInteractive = {
           if (e.type === "UnaryExpression" && e.operator === "!" && opensSomething(e.argument)) return context.report({ node, messageId: "handmade", data: { name, cond: `hidden={${context.sourceCode.getText(e)}}` } });
         }
       },
+      // A component that renders nothing while closed and an overlay while open:
+      //   if (!open) return null;  …  return (<div className="fixed inset-0 …">…</div>)
+      // mounts and unmounts in one frame — no enter, no exit animation; the modal role is the kit's (1.18, 6.12)
+      IfStatement(node) {
+        if (inKit) return;
+        const t = node.test;
+        const closed = (t.type === "UnaryExpression" && t.operator === "!" && opensSomething(t.argument))
+          || (t.type === "BinaryExpression" && /^[!=]==?$/.test(t.operator) && [t.left, t.right].some((x) => x.type === "Literal" && x.value === false) && [t.left, t.right].some((x) => opensSomething(x)));
+        if (!closed) return;
+        const isNull = (r) => r && r.type === "ReturnStatement" && (!r.argument || (r.argument.type === "Literal" && r.argument.value === null));
+        const c = node.consequent;
+        if (!(isNull(c) || (c.type === "BlockStatement" && c.body.length === 1 && isNull(c.body[0])))) return;
+        let fn = node.parent;
+        while (fn && !/Function/.test(fn.type)) fn = fn.parent;
+        if (!fn || !fn.body || fn.body.type !== "BlockStatement") return;
+        const overlayRoot = (e) => {
+          if (!e) return null;
+          if (e.type === "CallExpression" && /(^|\.)createPortal$/.test(context.sourceCode.getText(e.callee))) return overlayRoot(e.arguments[0]) || e;
+          if (e.type === "JSXFragment") { for (const ch of e.children) { const r = ch.type === "JSXElement" ? overlayRoot(ch) : null; if (r) return r; } return null; }
+          if (e.type !== "JSXElement") return null;
+          const n = elementName(e.openingElement);
+          if (/^(AnimatePresence|motion\.|m\.)/.test(n) || /^[A-Z]/.test(n)) return null; // framer-motion / a component decides itself
+          const role = getAttr(e.openingElement, "role");
+          const rv = role && role.value && role.value.type === "Literal" ? role.value.value : "";
+          const cls = (getAttr(e.openingElement, "className") && context.sourceCode.getText(getAttr(e.openingElement, "className"))) || "";
+          if (/^(dialog|alertdialog)$/.test(rv) || getAttr(e.openingElement, "aria-modal") || /(^|[\s"'`])(fixed|absolute)(?=[\s"'`])/.test(cls)) return e;
+          return null;
+        };
+        for (const st of fn.body.body) {
+          if (st.type !== "ReturnStatement" || st === node) continue;
+          const root = overlayRoot(st.argument);
+          if (root) return context.report({ node: root.type === "JSXElement" ? root.openingElement : root, messageId: "handmade", data: { name: root.type === "JSXElement" ? elementName(root.openingElement) : "createPortal", cond: `if (${context.sourceCode.getText(t)}) return null` } });
+        }
+      },
       "LogicalExpression, ConditionalExpression"(node) {
         if (inKit) return;
         let cond, el, portal = false;

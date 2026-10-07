@@ -96,6 +96,11 @@ Or install it as a dev dependency: `npm i -D github:souldevsoul/claudes-babysitt
 - Reports and test results are written to the project's `.babysitter/`, not inside the tool. `playwright/project.ts` became `project.js`.
 - Self-test: `test/acceptance.test.mjs` serves a good and a bad fixture site and runs the real suite. The good one must pass every check; the bad one must fail the 20 checks it breaks.
 
+## What changed in 4.6.5 (the overlay that renders nothing while closed)
+
+- `ui/kit-interactive` catches `if (!open) return null; … return (<div className="fixed inset-0 …">)` (and the same with `createPortal` or `role="dialog"`): the overlay mounts and unmounts in one frame, so it can neither open nor close with motion — found as Mise's /shop "Quick view" in production. Framer-motion roots and components (the kit Dialog) are left alone.
+- Guideline 6.12: a page that 500s/404s in the check environment for lack of data must be seeded and checked — every overlay on it opened — not skipped. (Mise /shop was skipped because it 500s on an empty database, so its modal was never opened.)
+
 ## What changed in 4.6 (one component per interactive role)
 
 - **`ui/kit-interactive` counts every role, not only the select**: dropdown (select, action/user menu, multi-pick filter, combobox — one component), modal (dialog, confirm, sheet, drawer — one component), button, input, textarea, checkbox, radio, switch, toast, tooltip, popover, disclosure, tabs. A role is recognised by the headless part a kit file builds on or by the kit file's name; a second implementation anywhere (kit included: `dropdown-menu.tsx` next to `select.tsx`, `pill-button.tsx` next to `button.tsx`) is an error naming the first one.
