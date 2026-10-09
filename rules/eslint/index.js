@@ -1,7 +1,7 @@
 // eslint-plugin-babysitter — enforces ui-architecture-guidelines.md (Nexus patterns P01–P58).
 import { noNativeControls, noNativeDialogs, noAuthLibraryPages, noAdhocButton } from "./rules/controls.js";
 import {
-  noVisualClassnameOverride, noTransitionAll, noArbitrarySpacing, noIllegibleText, noScrollRail,
+  noVisualClassnameOverride, noTransitionAll, noCssTransitionOnMotion, noArbitrarySpacing, noIllegibleText, noScrollRail,
   noArbitraryValues, noThinKitWrapper, noRawPalette, noStylesOutsideKit, variantBudget,
 } from "./rules/classes.js";
 import { noEmoji, imgDimensions } from "./rules/content.js";
@@ -24,6 +24,7 @@ const rules = {
   "no-styles-outside-kit": noStylesOutsideKit,
   "variant-budget": variantBudget,
   "no-transition-all": noTransitionAll,
+  "no-css-transition-on-motion": noCssTransitionOnMotion,
   "no-arbitrary-spacing": noArbitrarySpacing,
   "no-illegible-text": noIllegibleText,
   "no-scroll-rail": noScrollRail,
@@ -66,6 +67,7 @@ plugin.configs.create = (project = {}) => {
         "ui/no-styles-outside-kit": ["error", { themePaths }],
         "ui/variant-budget": ["error", { themePaths, max: project.variantBudget || 10 }],
         "ui/no-transition-all": "error",
+        "ui/no-css-transition-on-motion": "error",
         "ui/no-arbitrary-spacing": ["error", { allowNegative: !!allow.negativeMargins }],
         "ui/no-illegible-text": "error",
         "ui/no-scroll-rail": allow.rails ? "off" : "error",

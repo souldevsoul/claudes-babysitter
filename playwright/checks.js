@@ -203,9 +203,14 @@ export const horizontalOverflow = (page) => page.evaluate(() => {
     }
     return out;
 });
-/** 1.1 — no native select / date / file / checkbox / radio rendered. */
+/**
+ * 1.1 — no native select / date / file / checkbox / radio rendered. A select, checkbox or radio with
+ * `appearance: none` is drawn by the product (a kit tick box keeps the real input for forms and the keyboard), so it
+ * is not the operating system's control; date and file inputs open system pickers whatever they look like.
+ */
 export const nativeControls = (page) => page.evaluate(() => Array.from(document.querySelectorAll('select, input[type=date], input[type=datetime-local], input[type=month], input[type=time], input[type=file], input[type=checkbox], input[type=radio]'))
     .filter((el) => window.__uiVisible(el))
+    .filter((el) => !(el.matches("select, input[type=checkbox], input[type=radio]") && getComputedStyle(el).appearance === "none"))
     .map((el) => ({ what: `native <${el.tagName.toLowerCase()}${el.type ? ` type=${el.type}` : ""}>`, where: window.__uiDescribe(el), selector: window.__uiSelector(el), human: window.__uiHuman(el) })));
 /** 6.4 — text ≥12px, weight ≥400, not translucent. */
 export const illegibleText = (page, allowLightWeights = false) => page.evaluate((allowLightWeights) => {
@@ -396,24 +401,33 @@ export const cls = (page) => page.evaluate(() => window.__cls);
 export async function focusVisible(page, presses = 8) {
     const out = [];
     await page.mouse.click(1, 1).catch(() => { });
+    // Styles are compared after transitions settle: a kit button with `transition-all` draws its focus ring over
+    // 150-300 ms, and a same-frame comparison read the ring's starting value as "no focus style".
+    const look = () => page.evaluate(() => {
+        const el = document.querySelector("[data-ui-focus-probe]");
+        const pick = (cs) => [cs.outlineStyle, cs.outlineWidth, cs.outlineColor, cs.boxShadow, cs.backgroundColor, cs.color, cs.borderColor, cs.textDecorationLine, cs.transform].join("|");
+        return pick(getComputedStyle(el)) + pick(getComputedStyle(el, "::after")) + pick(getComputedStyle(el, "::before"));
+    });
     for (let i = 0; i < presses; i++) {
         await page.keyboard.press("Tab");
-        const r = await page.evaluate(() => {
+        const where = await page.evaluate(() => {
             const el = document.activeElement;
             if (!el || el === document.body || !window.__uiVisible(el))
                 return null;
-            const snap = () => {
-                const pick = (cs) => [cs.outlineStyle, cs.outlineWidth, cs.outlineColor, cs.boxShadow, cs.backgroundColor, cs.color, cs.borderColor, cs.textDecorationLine, cs.transform].join("|");
-                return pick(getComputedStyle(el)) + pick(getComputedStyle(el, "::after")) + pick(getComputedStyle(el, "::before"));
-            };
-            const focused = snap();
-            el.blur();
-            const plain = snap();
-            el.focus({ preventScroll: true });
-            return focused === plain ? window.__uiDescribe(el) : null;
+            el.setAttribute("data-ui-focus-probe", "1");
+            return window.__uiDescribe(el);
         });
-        if (r && !out.some((o) => o.where === r))
-            out.push({ what: "focused element looks identical to unfocused", where: r });
+        if (!where)
+            continue;
+        await settle(page, 800);
+        const focused = await look();
+        await page.evaluate(() => document.querySelector("[data-ui-focus-probe]").blur());
+        await settle(page, 800);
+        const plain = await look();
+        // focus goes back where Tab left it, so the next Tab continues the order
+        await page.evaluate(() => { const el = document.querySelector("[data-ui-focus-probe]"); el.removeAttribute("data-ui-focus-probe"); el.focus({ preventScroll: true }); });
+        if (focused === plain && !out.some((o) => o.where === where))
+            out.push({ what: "focused element looks identical to unfocused", where });
     }
     return out;
 }
@@ -666,7 +680,8 @@ export async function hoverContrast(page, max = 12) {
         n++;
         await h.scrollIntoViewIfNeeded().catch(() => { });
         await h.hover({ timeout: 1500 }).catch(() => { });
-        await page.waitForTimeout(250); // let colour transitions finish
+        await page.waitForTimeout(100);
+        await settle(page, 1000); // let colour transitions finish (some run 500 ms)
         const r = await h.evaluate((el) => {
             const W = window;
             let t = el;
@@ -684,6 +699,19 @@ export async function hoverContrast(page, max = 12) {
     }
     await page.mouse.move(0, 0);
     return out;
+}
+/**
+ * Waits until the finite animations and transitions running on the page have finished (at most `cap` ms), so an
+ * overlay is measured where it lands and a hover colour where it settles: a sheet still sliding in is not "off-screen",
+ * a label mid-transition is not "unreadable". Endless ones (spinners, marquees) are not waited for.
+ */
+async function settle(page, cap = 1500) {
+    await page.evaluate((cap) => Promise.race([
+        Promise.all(document.getAnimations()
+            .filter((a) => { const t = a.effect?.getComputedTiming?.(); return a.playState === "running" && t && Number.isFinite(t.endTime); })
+            .map((a) => a.finished.catch(() => { }))),
+        new Promise((r) => setTimeout(r, cap)),
+    ]), cap).catch(() => { });
 }
 /* ───────────────────────── interactive states: P02 P18 P19 P22 ───────────────────────── */
 const openPopups = (page) => page.evaluate(() => {
@@ -717,6 +745,7 @@ export async function interactiveStates(page, max = 8) {
         const before = await headerRect(page);
         await t.click({ timeout: 2000 }).catch(() => { });
         await page.waitForTimeout(350);
+        await settle(page);
         if (page.url() !== url) {
             await page.goBack().catch(() => { });
             continue;
@@ -1085,7 +1114,8 @@ export const revealLazy = async (page) => {
         for (let y = 0; y < document.documentElement.scrollHeight; y += step) { window.scrollTo(0, y); await new Promise((r) => setTimeout(r, 60)); }
         window.scrollTo(0, 0);
     });
-    await page.waitForTimeout(700); // reveal transitions finish
+    await page.waitForTimeout(300);
+    await settle(page, 3000); // reveal transitions finish (staggered reveals run past a fixed 700 ms and were measured half-faded)
 };
 /**
  * 1.17 — one shape language. Rendered boxes that a person reads as UI pieces (buttons, fields, dropdown

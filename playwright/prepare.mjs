@@ -1,6 +1,9 @@
 #!/usr/bin/env node
 // Logs in (optional) and crawls the site so the spec covers every page — public and signed-in.
 //   BASE_URL=https://app LOGIN_EMAIL=… LOGIN_PASSWORD=… node playwright/prepare.mjs
+// A site with no password form (an emailed code, a magic link, Steam…) takes a session instead:
+//   SESSION_COOKIES='[{"name":"authjs.session-token","value":"…"}]'  (or name=value for one cookie)
+// with "authRoutes" in babysitter.config.json as the signed-in pages to start the crawl from.
 // Writes .babysitter/storage.json (session) and .babysitter/routes.json ([{path, auth}]).
 // Credentials come only from env; nothing secret is written to the config file.
 import { chromium } from "@playwright/test";
@@ -59,7 +62,29 @@ const publicRoutes = await crawl(anon, seeds, false);
 await anon.close();
 let authRoutes = [];
 
-if (cfg.login && process.env.LOGIN_EMAIL && process.env.LOGIN_PASSWORD) {
+// A session handed in (passwordless sites): set the cookies, prove they sign in, crawl from cfg.authRoutes.
+function sessionCookies(raw) {
+  const list = raw.trim().startsWith("[") ? JSON.parse(raw) : [{ name: raw.slice(0, raw.indexOf("=")), value: raw.slice(raw.indexOf("=") + 1) }];
+  return list.map((c) => ({ name: c.name, value: c.value, url: base, ...(c.secure ? { secure: true } : {}) }));
+}
+
+if (process.env.SESSION_COOKIES) {
+  const seedsIn = cfg.authRoutes?.length ? cfg.authRoutes : ["/"];
+  const ctx = await browser.newContext();
+  await ctx.addCookies(sessionCookies(process.env.SESSION_COOKIES));
+  const page = await ctx.newPage();
+  const first = new URL(seedsIn[0], base).href;
+  await page.goto(first, { waitUntil: "domcontentloaded" }).catch(() => {});
+  const at = new URL(page.url()).pathname;
+  if ((cfg.login?.url && at === new URL(cfg.login.url, base).pathname) || /log-?in|sign-?in/i.test(at)) {
+    console.error(`SESSION_COOKIES do not sign in: ${seedsIn[0]} went to ${page.url()} (expired, wrong secret, or wrong cookie name)`);
+    process.exit(1);
+  }
+  await page.close();
+  await ctx.storageState({ path: storage });
+  authRoutes = (await crawl(ctx, seedsIn, true)).filter((p) => !publicRoutes.includes(p));
+  await ctx.close();
+} else if (cfg.login && process.env.LOGIN_EMAIL && process.env.LOGIN_PASSWORD) {
   const ctx = await browser.newContext();
   const page = await ctx.newPage();
   const loginUrl = new URL(cfg.login.url, base).href;

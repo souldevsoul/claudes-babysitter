@@ -57,12 +57,20 @@ Or install it as a dev dependency: `npm i -D github:souldevsoul/claudes-babysitt
 |---|---|
 | `bin/` | CLI: `babysitter` (init, check, audit, fingerprint, micro-check), Claude Code hooks, git pre-commit hook |
 | `lib/` | Colour/contrast maths, theme tokens and fingerprints, component graph, roles, registry, shared token definitions |
-| `rules/eslint/` | ESLint plugin (18 `ui/*` rules) |
+| `rules/eslint/` | ESLint plugin (`ui/*` rules) |
 | `rules/stylelint/` | Stylelint plugin and config |
 | `playwright/` | Runtime checks, full spec, login + crawl |
 | `templates/` | Config, CI workflow, agent instructions, Claude settings |
 | `docs/` | The guidelines the rules enforce |
 | `test/`, `fixtures/` | `npm test`: RuleTester, Stylelint fixtures, end-to-end cases |
+
+## What changed in 4.7.3 (measured where it lands; passwordless sign-in; reveals that replay)
+
+- **Overlays and hover colours are measured after their motion ends.** The interactive-state check opened a menu, waited a fixed 350 ms and measured; a mobile sheet that slides in for 500 ms was still 24 px past the edge and was reported "off-screen" although it fits exactly at rest. It now waits for the page's finite animations and transitions to finish (capped; spinners are not waited for). The hover-contrast check waits the same way instead of a fixed 250 ms.
+- **Reveals and focus rings are measured where they settle.** `revealLazy` waited a fixed 700 ms after scrolling; staggered reveals (0.8 s plus 0.1 s per item) were still half-faded and their text was reported translucent. The focus check compared styles in one frame, so a ring drawn through `transition-all` read as "identical to unfocused". Both now wait for the transitions to finish.
+- **A tick box the product draws is not a native control.** `appearance: none` on a select, checkbox or radio means the product draws it (a kit tick box keeps the real input for forms and the keyboard); date and file inputs are still reported, since they open system pickers.
+- **`prepare` signs in without a password.** Sites with an emailed code, a magic link or Steam have no form to fill. `SESSION_COOKIES` (a JSON cookie list, or `name=value`) plus `authRoutes` in the config now crawls the signed-in pages from a session; a session that does not sign in stops with the reason instead of quietly checking only the public pages.
+- **New rule `ui/no-css-transition-on-motion`.** A `<motion.*>` element with `transition` / `transition-all` / `transition-opacity` / `transition-transform`: framer-motion ends a reveal (or a hover/tap) by writing opacity/transform inline, and the CSS transition replays it — the block appears, blinks out and slides in a second time. `no-transition-all` no longer suggests `transition-opacity` / `transition-transform` as the fix.
 
 ## What changed in 4.5.1 (a page nobody opened is not a clean page)
 
@@ -390,6 +398,7 @@ Some rules encode design choices rather than bugs. A project can opt out explici
 | `no-scroll-rail` | 2.2 | P15 P16 |
 | `no-arbitrary-z-index` | 5.3 | P14 P19 P22 |
 | `no-transition-all` | 6.8 | — |
+| `no-css-transition-on-motion` | 6.8 | P59 |
 | `no-emoji` | 1.12 | P40 |
 | `img-dimensions` | 2.13 | P43 |
 

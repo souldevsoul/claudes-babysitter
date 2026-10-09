@@ -82,6 +82,18 @@ tester.run("no-transition-all", R["no-transition-all"], {
   invalid: [{ code: '<div className="transition-all duration-300" />', ...err("bad") }],
 });
 
+// Vertex 2026-10: tariff cards revealed by whileInView carried "transition-all duration-500": the reveal replayed
+tester.run("no-css-transition-on-motion", R["no-css-transition-on-motion"], {
+  valid: [
+    '<motion.div initial={{ opacity: 0 }} whileInView={{ opacity: 1 }} className="transition-[color,background-color,border-color,box-shadow] duration-500" />',
+    '<div className="transition-all duration-300" />', // not animated by framer-motion: no-transition-all's business
+  ],
+  invalid: [
+    { code: '<motion.div initial={{ opacity: 0, y: 40 }} whileInView={{ opacity: 1, y: 0 }} className="rounded-lg p-8 transition-all duration-500" />', ...err("bad") },
+    { code: '<motion.li className={`card transition-transform ${x}`} animate={{ y: 0 }} />', ...err("bad") },
+  ],
+});
+
 tester.run("no-arbitrary-spacing", R["no-arbitrary-spacing"], {
   valid: ['<div className="p-4 gap-6 mt-8" />', { code: '<div className="-mt-24" />', options: [{ allowNegative: true }] }],
   invalid: [{ code: '<div className="-mt-2" />', ...err("bad") }],

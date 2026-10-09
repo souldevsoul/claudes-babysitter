@@ -65,9 +65,36 @@ export const noTransitionAll = tokenRule({
   description: "Name the transitioned properties",
   guideline: "6.8",
   patterns: "—",
-  message: '"{{token}}" animates layout properties and causes jumps/jank. Use transition-colors / transition-opacity / transition-transform. [6.8]',
+  message: '"{{token}}" animates layout properties and causes jumps/jank. Name what changes: transition-colors, transition-[color,box-shadow,translate]… (never opacity/transform on a framer-motion element: see no-css-transition-on-motion). [6.8]',
   test: (b) => b === "transition-all" || b === "transition",
 });
+
+/**
+ * 6.8 — an element framer-motion animates must not also carry a CSS transition on what it animates.
+ * framer-motion runs a reveal (initial → whileInView/animate) on opacity and transform, then writes the end value
+ * inline; a CSS transition on those properties replays it from the start value: the block appears, blinks out,
+ * drops and slides in again (Vertex, 2026-10). Hover effects keep their own properties (colors, shadow, and the
+ * separate translate/scale properties Tailwind 4 uses for hover:-translate-y / hover:scale).
+ */
+const MOTION_TRANSITION = /^(transition|transition-all|transition-opacity|transition-transform)$/;
+export const noCssTransitionOnMotion = {
+  meta: meta("No CSS transition on what framer-motion animates", "6.8", "P59", {
+    messages: { bad: '"{{token}}" on <{{el}}> fights framer-motion: its reveal ends by writing opacity/transform inline, and this CSS transition replays it (the block blinks out and slides in twice). Transition only what hover changes, e.g. transition-[color,background-color,border-color,box-shadow,translate,scale]. [6.8, P59]' },
+  }),
+  create(context) {
+    return {
+      JSXOpeningElement(node) {
+        const n = node.name;
+        if (n.type !== "JSXMemberExpression" || !["motion", "m"].includes(n.object.name)) return;
+        const cls = node.attributes.find((a) => a.type === "JSXAttribute" && a.name && ["className", "class"].includes(a.name.name));
+        if (!cls) return;
+        for (const tok of classTokens(cls, context)) {
+          if (MOTION_TRANSITION.test(base(tok))) context.report({ node: cls, messageId: "bad", data: { token: tok, el: `${n.object.name}.${n.property.name}` } });
+        }
+      },
+    };
+  },
+};
 
 /** 2.7 — spacing comes from the scale. Negative margins are allowed only when the project opts in. */
 export const noArbitrarySpacing = tokenRule({
