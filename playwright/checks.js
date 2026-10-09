@@ -991,7 +991,8 @@ export const collectSignatures = (page, route) => page.evaluate((route) => {
         const variant = filled ? `filled ${W.__uiRGBA(cs.backgroundColor).slice(0, 3).map((x) => Math.round(x / 8)).join(",")}` : "outlined";
         sigs.push({ kind: "button", filled, variant, radius: Math.min(Math.round(parseFloat(cs.borderTopLeftRadius)), 999), height: Math.round(r.height), font: font(cs), size: Math.round(parseFloat(cs.fontSize)), weight: Number(cs.fontWeight), route, where: W.__uiDescribe(el), selector: W.__uiSelector(el), human: W.__uiHuman(el) });
     }
-    for (const el of Array.from(document.querySelectorAll('input:not([type=hidden]):not([type=checkbox]):not([type=radio]), textarea, [role=combobox]'))) {
+    // text fields only: a range slider, colour well, file picker or input-button is not a field to keep in one height
+    for (const el of Array.from(document.querySelectorAll('input:not([type=hidden]):not([type=checkbox]):not([type=radio]):not([type=range]):not([type=color]):not([type=file]):not([type=submit]):not([type=button]):not([type=reset]):not([type=image]), textarea, [role=combobox]'))) {
         if (!W.__uiVisible(el))
             continue;
         const cs = getComputedStyle(el);
@@ -1005,7 +1006,11 @@ export const collectSignatures = (page, route) => page.evaluate((route) => {
         const r = el.getBoundingClientRect();
         if (r.width < 180 || r.height < 100 || r.width > innerWidth * 0.9)
             continue;
-        const border = parseFloat(cs.borderTopWidth) > 0 && W.__uiRGBA(cs.borderTopColor)[3] > 0.05;
+        // a form control is not a card; a one-sided rule (border-top between sections) is a divider, not a card's edge
+        if (el.matches("input, textarea, select, button, [role=combobox]"))
+            continue;
+        const side = (k) => parseFloat(cs[`border${k}Width`]) > 0 && W.__uiRGBA(cs[`border${k}Color`])[3] > 0.05;
+        const border = side("Top") && side("Right") && side("Bottom") && side("Left");
         const shadow = cs.boxShadow !== "none";
         if (!(border || shadow) || parseFloat(cs.paddingTop) < 12)
             continue;
@@ -1111,8 +1116,10 @@ export const inlineStyles = (page, allowProps = [], skip = [], strict = false) =
 export const revealLazy = async (page) => {
     await page.evaluate(async () => {
         const step = Math.max(200, Math.floor(window.innerHeight * 0.8));
-        for (let y = 0; y < document.documentElement.scrollHeight; y += step) { window.scrollTo(0, y); await new Promise((r) => setTimeout(r, 60)); }
-        window.scrollTo(0, 0);
+        // instant: with `scroll-behavior: smooth` a plain scrollTo animates, and the page was then measured a few
+        // pixels short of the top ("page loads scrolled to top" failed now and then)
+        for (let y = 0; y < document.documentElement.scrollHeight; y += step) { window.scrollTo({ top: y, behavior: "instant" }); await new Promise((r) => setTimeout(r, 60)); }
+        window.scrollTo({ top: 0, behavior: "instant" });
     });
     await page.waitForTimeout(300);
     await settle(page, 3000); // reveal transitions finish (staggered reveals run past a fixed 700 ms and were measured half-faded)

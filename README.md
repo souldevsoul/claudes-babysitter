@@ -64,6 +64,12 @@ Or install it as a dev dependency: `npm i -D github:souldevsoul/claudes-babysitt
 | `docs/` | The guidelines the rules enforce |
 | `test/`, `fixtures/` | `npm test`: RuleTester, Stylelint fixtures, end-to-end cases |
 
+## What changed in 4.7.4 (the site-wide shapes count only fields and cards)
+
+- **Input height and radius count text fields only.** A range slider (4 px tall), colour well, file picker or input-button was grouped with the text fields and reported as a sixth input height.
+- **Scrolling during the checks is instant.** On a site with `scroll-behavior: smooth`, the reveal pass scrolled back to the top with an animation and "page loads scrolled to top" read 1-4 px now and then.
+- **A card is boxed on all four sides (or shadowed), and is not a form control.** A textarea and a `border-t` divider between sections were counted as cards, which inflated "card style" with variants nobody would call a card.
+
 ## What changed in 4.7.3 (measured where it lands; passwordless sign-in; reveals that replay)
 
 - **Overlays and hover colours are measured after their motion ends.** The interactive-state check opened a menu, waited a fixed 350 ms and measured; a mobile sheet that slides in for 500 ms was still 24 px past the edge and was reported "off-screen" although it fits exactly at rest. It now waits for the page's finite animations and transitions to finish (capped; spinners are not waited for). The hover-contrast check waits the same way instead of a fixed 250 ms.

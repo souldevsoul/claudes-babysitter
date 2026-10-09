@@ -53,6 +53,12 @@ try {
   const foc = await checks.focusVisible(page, 2);
   assert.ok(!foc.some((f) => /Ring/.test(f.where)), `a ring drawn through a transition counts: ${JSON.stringify(foc)}`);
   assert.ok(foc.some((f) => /None/.test(f.where)), "a button with no focus style still fails");
+  // site-wide shapes: a range slider is not a field, a textarea is not a card, a border-top divider is not a card's edge
+  await page.setViewportSize({ width: 1280, height: 900 });
+  await page.goto("data:text/html," + encodeURIComponent('<main><input type="range" style="height:4px;width:300px"><textarea style="width:400px;height:160px;border:1px solid #888;padding:16px"></textarea><div style="width:400px;height:150px;border-top:1px solid #888;padding:24px">divided section</div><div id="card" style="width:400px;height:150px;border:1px solid #888;padding:24px">card</div></main>'));
+  const shapes = await checks.collectShapes(page, "/");
+  assert.ok(!shapes.some((x) => x.kind === "input" && x.height === 4), "a range slider is not a field");
+  assert.equal(shapes.filter((x) => x.kind === "card").length, 1, `only the boxed div is a card: ${JSON.stringify(shapes.filter((x) => x.kind === "card").map((x) => x.where))}`);
   console.log("checks-runtime: ok");
 } finally {
   await browser.close();
