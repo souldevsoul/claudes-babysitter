@@ -2635,9 +2635,11 @@ const ixProbe = () => {
         const moved = (s) => [...R.anims].some((x) => related(s, x)) || R.events.some((x) => x instanceof Element && related(s, x))
             || new Set((R.looks.get(s) || []).filter((l) => l !== "gone")).size > 1;
         const desc = (el) => ({ where: W.__uiDescribe(el), selector: W.__uiSelector(el) || "", human: W.__uiHuman(el), positioned: /fixed|absolute/.test(el.isConnected ? getComputedStyle(el).position : "") });
+        // a control the click removed (a cookie banner's "Got it", a quiz option replaced by the next question) has no
+        // computed style any more: every property reads "" and looked changed with no transition — nothing to judge
         const cs = getComputedStyle(t);
         const now = STATE.map((k) => cs[k]);
-        const changed = STATE.filter((k, i) => now[i] !== R.state[i]);
+        const changed = t.isConnected ? STATE.filter((k, i) => now[i] !== R.state[i]) : [];
         let snaps = false;
         if (changed.length && !R.anims.has(t)) {
             const props = cs.transitionProperty.split(",").map((s) => s.trim());
@@ -2719,19 +2721,36 @@ const ixProbe = () => {
  * a transition is a soft finding. Links to other pages, form submits and destructive actions are not clicked, and
  * everything not clicked is returned with the reason (`notTested`) — never dropped silently.
  * Runs with prefers-reduced-motion: no-preference.
+ *
+ * Time: every click has a hard budget (`clickBudget`, ms) and the page a deadline (`deadline`, epoch ms). A click that
+ * runs over is abandoned, the page is reloaded and the control is listed as not tested; once the deadline passes the
+ * remaining controls are listed as "not tested (time budget)" — the findings gathered so far are returned either way.
+ * Every Playwright action carries its own timeout (under @playwright/test the default action timeout is none, and one
+ * `scrollIntoViewIfNeeded` on an element that never becomes visible hung the whole site-wide test — Vertex, 2026-10).
  */
-export async function interactionMotion(page, { reload, max = 30, perReload = 6 } = {}) {
+export async function interactionMotion(page, { reload, max = 30, perReload = 6, clickBudget = 20_000, deadline = Infinity } = {}) {
     const hard = [], soft = [];
     const notTested = [];
     await page.emulateMedia({ reducedMotion: "no-preference" }).catch(() => { });
     let reloading = false; // our own reloads pass; a click that would leave the page is stopped
-    const blockNav = (route) => (!reloading && route.request().isNavigationRequest() && route.request().frame() === page.mainFrame() ? route.abort() : route.continue());
+    const blockNav = (route) => (!reloading && route.request().isNavigationRequest() && route.request().frame() === page.mainFrame() ? route.abort() : route.continue()).catch(() => { });
     const closePopup = (p) => p.close().catch(() => { });
     await page.route("**/*", blockNav);
     page.on("popup", closePopup);
+    const CANCEL = Symbol("cancelled");
+    /** Resolves with `p`, or with `fallback` after `ms` (the promise keeps running; its result is ignored). */
+    const within = (p, ms, fallback) => { let t; return Promise.race([Promise.resolve(p).catch(() => fallback), new Promise((res) => { t = setTimeout(() => res(fallback), Math.max(0, ms)); })]).finally(() => clearTimeout(t)); };
+    const timeLeft = () => deadline - Date.now();
+    const overBudget = { reason: "", count: 0, examples: [] };
+    const timedOut = [], failedOn = [];
     try {
-        await page.evaluate(ixProbe);
-        const { picks, skipped, lookalikes } = await page.evaluate(() => window.__bsIx.candidates());
+        await within(page.evaluate(ixProbe), 10_000);
+        const cands = await within(page.evaluate(() => window.__bsIx.candidates()), 15_000, null);
+        if (!cands) {
+            notTested.push({ reason: "time budget: listing the page's controls did not finish within 15 s", count: 1, examples: [] });
+            return { hard, soft, notTested };
+        }
+        const { picks, skipped, lookalikes } = cands;
         const home = page.url();
         if (skipped.navigates.length)
             notTested.push({ reason: "link to another page (navigation is not an in-page change)", count: skipped.navigates.length, examples: skipped.navigates.slice(0, 3) });
@@ -2743,60 +2762,58 @@ export async function interactionMotion(page, { reload, max = 30, perReload = 6 
             notTested.push({ reason: "look-alike of a control that was clicked (same component, judged once)", count: lookalikes, examples: [] });
         if (picks.length > max)
             notTested.push({ reason: `over the per-page cap of ${max} clicks (babysitter.config.json → motion.maxClicks)`, count: picks.length - max, examples: picks.slice(max, max + 3).map((p) => p.where) });
+        /** A fresh copy of the page; false when it did not come back within 30 s (or the deadline). */
         const fresh = async () => {
             reloading = true;
-            try {
+            const ok = await within((async () => {
                 if (reload)
                     await reload();
                 else
-                    await page.goto(home).catch(() => { });
-            }
-            finally {
-                reloading = false;
-            }
-            await page.evaluate(ixProbe).catch(() => { });
+                    await page.goto(home, { waitUntil: "load", timeout: 30_000 });
+                return true;
+            })(), Math.min(30_000, Math.max(5_000, timeLeft())), false);
+            reloading = false;
+            await within(page.evaluate(ixProbe), 5_000);
+            return ok && page.url().split("#")[0] === home.split("#")[0];
         };
         let since = 0;
         const gone = [];
-        for (const pick of picks.slice(0, max)) {
-            if (since >= perReload || page.url() !== home) {
-                await fresh();
-                since = 0;
-            }
-            const found = await page.evaluate(({ sig, text, ord }) => window.__bsIx.find(sig, text, ord), pick).catch(() => false);
-            const h = found ? await page.$("[data-bs-ix]").catch(() => null) : null;
-            let ok = h && (await h.evaluate((el) => window.__uiVisible(el)).catch(() => false));
+        /** One control: click, judge, toggle back. Every await goes through `g`, so an abandoned click stops at its next step. */
+        const one = async (pick, tok) => {
+            const g = async (p) => { const v = await p; if (tok.dead) throw CANCEL; return v; };
+            const found = await g(page.evaluate(({ sig, text, ord }) => window.__bsIx.find(sig, text, ord), pick).catch(() => false));
+            const h = found ? await g(page.$("[data-bs-ix]").catch(() => null)) : null;
+            let ok = h && (await g(h.evaluate((el) => window.__uiVisible(el)).catch(() => false)));
             if (h && !ok) {
                 // after a reload, reveal-on-scroll content is still faded out until it is scrolled to
-                await h.scrollIntoViewIfNeeded().catch(() => { });
-                await page.waitForTimeout(300);
-                await settle(page, 2000);
-                ok = await h.evaluate((el) => window.__uiVisible(el)).catch(() => false);
+                await g(h.scrollIntoViewIfNeeded({ timeout: 2000 }).catch(() => { }));
+                await g(page.waitForTimeout(300));
+                await g(settle(page, 2000));
+                ok = await g(h.evaluate((el) => window.__uiVisible(el)).catch(() => false));
             }
             if (!ok) {
                 gone.push(pick.where);
-                continue;
+                return;
             }
             since++;
-            await h.scrollIntoViewIfNeeded().catch(() => { });
-            await settle(page, 2000); // a reveal set off by the scroll is not the click's motion
-            await uncover(h);
-            await h.hover({ timeout: 1500 }).catch(() => { });
-            await settle(page, 600);
-            await h.evaluate((el) => window.__bsIx.arm(el));
-            await h.click({ timeout: 2000 }).catch(() => { });
-            await page.waitForFunction(() => window.__bsIx && window.__bsIx.run && window.__bsIx.run.done, null, { timeout: 4000 }).catch(() => { });
+            await g(h.scrollIntoViewIfNeeded({ timeout: 2000 }).catch(() => { }));
+            await g(settle(page, 2000)); // a reveal set off by the scroll is not the click's motion
+            await g(uncover(h));
+            await g(h.hover({ timeout: 1500 }).catch(() => { }));
+            await g(settle(page, 600));
+            await g(h.evaluate((el) => window.__bsIx.arm(el)).catch(() => { }));
+            await g(h.click({ timeout: 2000 }).catch(() => { }));
+            await g(page.waitForFunction(() => window.__bsIx && window.__bsIx.run && window.__bsIx.run.done, null, { timeout: 4000 }).catch(() => { }));
             if (page.url().split("#")[0] !== home.split("#")[0]) {
                 notTested.push({ reason: "navigated (client-side routing) when clicked", count: 1, examples: [pick.where] });
-                await fresh();
-                since = 0;
-                continue;
+                since = perReload; // reload before the next one
+                return;
             }
-            await settle(page, 1200);
-            const r = await page.evaluate(() => window.__bsIx.result()).catch(() => null);
+            await g(settle(page, 1200));
+            const r = await g(page.evaluate(() => window.__bsIx.result()).catch(() => null));
             if (!r) {
-                await recover(page);
-                continue;
+                await g(recover(page));
+                return;
             }
             const at = { sig: pick.sig, selector: pick.selector, human: pick.human };
             const name = (list) => list.slice(0, 2).map((x) => x.where).join(" + ");
@@ -2811,30 +2828,66 @@ export async function interactionMotion(page, { reload, max = 30, perReload = 6 
                 const positioned = r.appeared.some((x) => x.positioned);
                 let back = null;
                 if (positioned) {
-                    await h.evaluate((el) => window.__bsIx.arm(el)).catch(() => { });
-                    await page.keyboard.press("Escape").catch(() => { });
-                    await page.waitForFunction(() => window.__bsIx.run.done, null, { timeout: 4000 }).catch(() => { });
-                    back = await page.evaluate(() => window.__bsIx.result()).catch(() => null);
+                    await g(h.evaluate((el) => window.__bsIx.arm(el)).catch(() => { }));
+                    await g(page.keyboard.press("Escape").catch(() => { }));
+                    await g(page.waitForFunction(() => window.__bsIx.run.done, null, { timeout: 4000 }).catch(() => { }));
+                    back = await g(page.evaluate(() => window.__bsIx.result()).catch(() => null));
                 }
                 const still = (res) => !res || !res.disappeared.length;
-                if (still(back) && (pick.toggle || !positioned) && (await h.evaluate((el) => window.__uiVisible(el)).catch(() => false))) {
-                    await h.evaluate((el) => window.__bsIx.arm(el)).catch(() => { });
-                    await h.click({ timeout: 2000 }).catch(() => { });
-                    await page.waitForFunction(() => window.__bsIx.run.done, null, { timeout: 4000 }).catch(() => { });
-                    await settle(page, 1200);
-                    back = page.url().split("#")[0] === home.split("#")[0] ? await page.evaluate(() => window.__bsIx.result()).catch(() => null) : null;
+                if (still(back) && (pick.toggle || !positioned) && (await g(h.evaluate((el) => window.__uiVisible(el)).catch(() => false)))) {
+                    await g(h.evaluate((el) => window.__bsIx.arm(el)).catch(() => { }));
+                    await g(h.click({ timeout: 2000 }).catch(() => { }));
+                    await g(page.waitForFunction(() => window.__bsIx.run.done, null, { timeout: 4000 }).catch(() => { }));
+                    await g(settle(page, 1200));
+                    back = page.url().split("#")[0] === home.split("#")[0] ? await g(page.evaluate(() => window.__bsIx.result()).catch(() => null)) : null;
                 }
                 if (back && back.disappeared.length && !back.appeared.length && !back.disappeared.some((x) => x.moved))
                     hard.push({ kind: "close", what: `toggling it back hides ${name(back.disappeared)} in one frame — no exit motion. Animate it out, mirroring the enter [6.12, P59]`, where: pick.where, ...at });
             }
-            await recover(page);
+            await g(recover(page));
+        };
+        const todo = picks.slice(0, max);
+        for (let i = 0; i < todo.length; i++) {
+            const pick = todo[i];
+            if (timeLeft() < 3_000) {
+                overBudget.reason = "time budget: the page's time ran out before these were clicked (raise motion.pageBudget / the run's timeout)";
+                overBudget.count = todo.length - i;
+                overBudget.examples = todo.slice(i, i + 3).map((p) => p.where);
+                break;
+            }
+            if (since >= perReload || page.url().split("#")[0] !== home.split("#")[0]) {
+                since = 0;
+                if (!(await fresh())) {
+                    overBudget.reason = "the page did not reload within 30 s, so these were not clicked";
+                    overBudget.count = todo.length - i;
+                    overBudget.examples = todo.slice(i, i + 3).map((p) => p.where);
+                    break;
+                }
+            }
+            const tok = { dead: false };
+            const done = await within(one(pick, tok).then(() => true, (e) => (e === CANCEL ? true : String((e && e.message) || e).split("\n")[0])), Math.min(clickBudget, timeLeft()), false);
+            if (typeof done === "string") {
+                failedOn.push(`${pick.where}: ${done}`);
+                since = perReload;
+            }
+            else if (!done) {
+                tok.dead = true; // the abandoned click stops at its next await
+                timedOut.push(pick.where);
+                since = perReload; // whatever it left half-done, start the next one on a fresh page
+            }
         }
         if (gone.length)
             notTested.push({ reason: "not on the page after a reload (rendered differently, or gone for good after an earlier click — e.g. a remembered cookie choice)", count: gone.length, examples: gone.slice(0, 3) });
+        if (timedOut.length)
+            notTested.push({ reason: `time budget: the click took longer than ${Math.round(clickBudget / 1000)} s and was abandoned (babysitter.config.json → motion.clickBudget)`, count: timedOut.length, examples: timedOut.slice(0, 3) });
+        if (failedOn.length)
+            notTested.push({ reason: "the check failed on these controls", count: failedOn.length, examples: failedOn.slice(0, 3) });
+        if (overBudget.count)
+            notTested.push(overBudget);
     }
     finally {
         page.off("popup", closePopup);
-        await page.unroute("**/*", blockNav).catch(() => { });
+        await within(page.unroute("**/*", blockNav), 5_000);
     }
     return { hard, soft, notTested };
 }

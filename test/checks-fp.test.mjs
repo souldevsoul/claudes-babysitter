@@ -221,6 +221,30 @@ try {
     assert.ok(capped.notTested.some((n) => /over the per-page cap of 2/.test(n.reason) && n.count > 0), `the cap says how many were not clicked: ${JSON.stringify(capped.notTested)}`);
     assert.equal(await page.evaluate(() => location.protocol), "file:", "never navigated away");
   });
+  await test("6.12 interactions: a click that runs over its time budget is abandoned and listed; the controls around it are still judged; a page deadline lists what was left", async (page) => {
+    const u = url("budget.html");
+    await page.goto(u);
+    const t0 = Date.now();
+    const r = await checks.interactionMotion(page, { reload: () => page.goto(u), clickBudget: 2500 });
+    assert.ok(Date.now() - t0 < 30_000, `bounded: ${Date.now() - t0} ms`);
+    assert.ok(has(r.hard, /#first-bad/) && has(r.hard, /#last-bad/), `findings before and after the stuck click are kept: ${JSON.stringify(r.hard.map((f) => f.where))}`);
+    const over = r.notTested.find((n) => /time budget: the click took longer/.test(n.reason));
+    assert.ok(over && over.count === 1 && over.examples.some((e) => /#busy/.test(e)), `the stuck click is listed as not tested (time budget): ${JSON.stringify(r.notTested)}`);
+    assert.ok(!has(r.hard, /#busy/), "nothing is judged from an abandoned click");
+    await page.goto(u);
+    const t1 = Date.now();
+    const d = await checks.interactionMotion(page, { reload: () => page.goto(u), deadline: Date.now() + 1000 });
+    assert.ok(Date.now() - t1 < 10_000, `the page deadline stops the run: ${Date.now() - t1} ms`);
+    const left = d.notTested.find((n) => /time budget: the page's time ran out/.test(n.reason));
+    assert.ok(left && left.count === 3 && left.examples.length, `what was left is counted, with examples: ${JSON.stringify(d.notTested)}`);
+  });
+  await test("6.12 interactions: a control the click removes (cookie banner \"Got it\") is not a state snap; one that stays and snaps still is", async (page) => {
+    const u = url("state-removed.html");
+    await page.goto(u);
+    const r = await checks.interactionMotion(page, { reload: () => page.goto(u) });
+    assert.ok(!has(r.soft, /got-it|Got it/), `a detached control reads "" for every style — not a snap: ${JSON.stringify(r.soft.map((f) => f.where))}`);
+    assert.ok(has(r.soft, /#snap|Filter/), `a pressed fill that snaps on a control that stays is still soft: ${JSON.stringify(r.soft)}`);
+  });
 } finally {
   await browser.close();
 }

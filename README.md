@@ -64,6 +64,14 @@ Or install it as a dev dependency: `npm i -D github:souldevsoul/claudes-babysitt
 | `docs/` | The guidelines the rules enforce |
 | `test/`, `fixtures/` | `npm test`: RuleTester, Stylelint fixtures, end-to-end cases |
 
+## What changed in 4.9.1 (the site-wide motion check finishes; no snap for a control the click removes)
+
+From a live run on vertex.boutique, where the 4.9.0 site-wide check "every interactive element animates what it shows, hides or changes" timed out at 390 px after 17 min and lost every page's findings.
+
+- **Fix: one stuck click no longer holds the whole run.** After a footer link to the page itself was clicked, the next control was still in the DOM but never visible, and `scrollIntoViewIfNeeded` (no timeout under `@playwright/test`) waited forever; the three page lanes stuck one by one. Every action now has its own timeout, every click a hard budget (`motion.clickBudget`, default 20 s: an abandoned click reloads the page and is listed as not tested), and every page a deadline (`motion.pageBudget`, default 180 s). What a budget leaves out is reported as "N not tested — time budget: …" in the Not tested note and printed in the run's output, never dropped. The run itself stops before Playwright's timeout, so the findings already gathered on other pages are always reported.
+- **Faster:** pages load with `load` plus at most 8 s (3 s on the check's own reloads) of network quiet instead of an unbounded `networkidle` (long-polling, analytics and chat widgets never go idle), and four pages are checked at once (`motion.concurrency`). Vertex 390 px: timed out at 17 min → 79 s; 1440 px and truelogos.pro finish in about 1–2 min.
+- **Fix (false positive): "its own state change snaps in one frame" on a control the click removes.** A cookie banner's "Got it" / "Accept all", or a quiz option replaced by the next question, is detached by the time it is read; every computed style is then empty and all six properties looked changed with no transition. A detached control's own state is no longer judged; one that stays and snaps is still reported.
+
 ## What changed in 4.9.0 (motion everywhere, the open mobile menu, classes that do nothing)
 
 From live misses on truelogos.pro and sprout.boutique.
@@ -404,6 +412,9 @@ Some rules encode design choices rather than bugs. A project can opt out explici
 | `kit` | Extra project components treated as kit (e.g. `StatTile`). |
 | `consistency` | How many radii/heights/fonts per role, and card styles, the site may use. Button fonts are counted per variant. |
 | `motion.maxClicks` | Clicks per page for "every interactive element animates what it changes" (default 30). What is over the cap is listed as not tested, never dropped. |
+| `motion.clickBudget` | Hard time budget per click in that check, ms (default 20000). A click that runs over is abandoned and listed as not tested (time budget). |
+| `motion.pageBudget` | Time budget per page in that check, ms (default 180000). Controls left when it runs out are listed as not tested (time budget). |
+| `motion.concurrency` | Pages that check runs at once (default 4). |
 | `ignore` | Extra paths (regex) excluded from `ui-check`. |
 | `cssLayers` | Force `ui/require-layer` on/off (default: on only if Tailwind or `@layer` is detected). |
 | `audit.exclude` | Paths the reuse audit ignores (e.g. design experiments). |

@@ -13,9 +13,18 @@ const allow = cfg.allow || {};
 
 const fmt = (list: c.Offender[]) => list.map((o) => `  • ${o.what} — ${o.where}`).join("\n");
 
+/**
+ * Load, then wait for the network to go quiet for at most `idleCap` ms: a site with long-polling, analytics beacons or
+ * a chat widget never reaches networkidle, and an unbounded networkidle wait held a page until the test timed out.
+ */
+async function goto(page: Page, route: string, idleCap = 8_000) {
+  await page.goto(route, { waitUntil: "load", timeout: 45_000 }).catch(() => page.goto(route, { waitUntil: "domcontentloaded", timeout: 30_000 }));
+  await page.waitForLoadState("networkidle", { timeout: idleCap }).catch(() => {});
+}
+
 async function open(page: Page, route: string) {
   await c.install(page);
-  await page.goto(route, { waitUntil: "networkidle" }).catch(() => page.goto(route, { waitUntil: "load" }));
+  await goto(page, route);
   await page.waitForTimeout(800); // late fonts / hydration
   if (await c.applyColorScheme(page)) await page.waitForTimeout(300); // class-based dark theme
   await c.revealLazy(page); // reveal-on-scroll sections render as a reader sees them
@@ -112,11 +121,21 @@ for (const route of ROUTES) {
 test.describe("site-wide interactions", () => {
   test("6.12 every interactive element animates what it shows, hides or changes [P59]", async ({ browser }, info) => {
     test.skip(!/mobile-390|desktop-1440/.test(info.project.name), "run at one mobile and one desktop width");
-    const max = Number(cfg.motion?.maxClicks ?? 30);
-    test.setTimeout(120_000 + Math.ceil(ROUTES.length / 3) * (30_000 + max * 4_000));
+    const mo = cfg.motion || {};
+    const max = Number(mo.maxClicks ?? 30);
+    const clickBudget = Number(mo.clickBudget ?? 20_000); // one click, judged and toggled back
+    const pageBudget = Number(mo.pageBudget ?? 180_000); // all clicks on one page, reloads included
+    const lanes = Math.max(1, Number(mo.concurrency ?? 4)); // pages checked at once
+    const openBudget = 60_000;
+    const timeout = 60_000 + Math.ceil(ROUTES.length / lanes) * (openBudget + pageBudget);
+    test.setTimeout(timeout);
+    // findings are reported before the test's own timeout can throw them away: everything stops at `deadline`
+    const deadline = Date.now() + timeout - 40_000;
+    const within = <T,>(p: Promise<T>, ms: number, fallback: T) => { let t: NodeJS.Timeout; return Promise.race([p.catch(() => fallback), new Promise<T>((res) => { t = setTimeout(() => res(fallback), Math.max(0, ms)); })]).finally(() => clearTimeout(t)); };
     const hardG = new Map<string, { what: string; where: string; pages: string[] }>();
     const softG = new Map<string, { what: string; where: string; pages: string[] }>();
     const notTested: string[] = [];
+    const budgetHits: string[] = [];
     const add = (g: typeof hardG, f: { kind: string; sig: string; what: string; where: string }, route: string) => {
       const k = `${f.kind}|${f.sig}`;
       const e = g.get(k) || { what: f.what, where: f.where, pages: [] };
@@ -124,23 +143,44 @@ test.describe("site-wide interactions", () => {
       g.set(k, e);
     };
     const queue = [...ROUTES];
+    const timings: string[] = [];
     const worker = async () => {
       for (let route = queue.shift(); route; route = queue.shift()) {
+        if (deadline - Date.now() < 10_000) { queue.unshift(route); return; }
+        const t0 = Date.now();
         const ctx = await browser.newContext({ ...info.project.use, storageState: route.auth ? STORAGE : undefined, baseURL: info.project.use.baseURL });
         const page = await ctx.newPage();
         try {
-          await open(page, route.path);
-          const reload = async () => { await page.goto(route.path, { waitUntil: "networkidle" }).catch(() => page.goto(route.path, { waitUntil: "load" }).catch(() => {})); await page.waitForTimeout(500); if (await c.applyColorScheme(page)) await page.waitForTimeout(300); };
-          const r = await c.interactionMotion(page, { reload, max });
+          const opened = await within(open(page, route.path).then(() => true), Math.min(openBudget, deadline - Date.now()), false);
+          if (!opened) {
+            const line = `${route.path}: not tested (time budget) — the page did not open within ${Math.round(openBudget / 1000)} s`;
+            notTested.push(line); budgetHits.push(line);
+            continue;
+          }
+          const reload = async () => { await goto(page, route.path, 3_000); await page.waitForTimeout(500); if (await c.applyColorScheme(page)) await page.waitForTimeout(300); };
+          const r = await c.interactionMotion(page, { reload, max, clickBudget, deadline: Math.min(deadline, Date.now() + pageBudget) });
           for (const f of r.hard) add(hardG, f, route.path);
           for (const f of r.soft) add(softG, f, route.path);
-          for (const n of r.notTested) notTested.push(`${route.path}: ${n.count} not tested — ${n.reason}${n.examples.length ? ` (e.g. ${n.examples.join("; ")})` : ""}`);
+          for (const n of r.notTested) {
+            const line = `${route.path}: ${n.count} not tested — ${n.reason}${n.examples.length ? ` (e.g. ${n.examples.join("; ")})` : ""}`;
+            notTested.push(line);
+            if (/time budget|did not reload/.test(n.reason)) budgetHits.push(line);
+          }
         } catch (e) {
           notTested.push(`${route.path}: not tested — the check failed on this page: ${String((e as Error).message || e).split("\n")[0]}`);
-        } finally { await ctx.close(); }
+        } finally {
+          await within(ctx.close(), 10_000, undefined);
+          timings.push(`${route.path} ${Math.round((Date.now() - t0) / 1000)}s`);
+        }
       }
     };
-    await Promise.all([worker(), worker(), worker()]);
+    await within(Promise.all(Array.from({ length: lanes }, worker)).then(() => undefined), deadline - Date.now() + 20_000, undefined);
+    if (queue.length) {
+      const line = `${queue.length} page(s) not tested (time budget — the run's ${Math.round(timeout / 60_000)} min ran out): ${queue.map((r) => r.path).join(", ")}`;
+      notTested.push(line); budgetHits.push(line);
+    }
+    test.info().annotations.push({ type: "timing", description: timings.join(", ") });
+    if (budgetHits.length) console.log(`6.12 [${info.project.name}] time budget hit — not every control was clicked:\n${budgetHits.map((x) => `  ${x}`).join("\n")}`);
     const show = (g: typeof hardG) => [...g.values()].map((e) => `  • ${e.what} — ${e.where} — on ${e.pages.join(", ")}`).join("\n");
     if (notTested.length) test.info().annotations.push({ type: "not tested", description: notTested.join("\n") });
     if (softG.size) {

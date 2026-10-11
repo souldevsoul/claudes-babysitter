@@ -1,0 +1,20 @@
+<!doctype html>
+<html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<!-- Time budget for "every interaction animates what it changes" (6.12). #busy freezes the page for 4 s when clicked
+     (a stand-in for the Vertex mobile run, 2026-10, where one stuck click held the whole site-wide test until it
+     timed out and every page's findings were lost). The controls before and after it pop panels in one frame and
+     must still be reported; #busy itself is listed as not tested (time budget), never dropped. -->
+<style>
+  body { margin: 0; padding: 24px; font: 16px/1.5 Arial, sans-serif; background: #fff; color: #111; }
+  section { margin: 0 0 32px; width: 600px; }
+  button { height: 44px; padding: 0 16px; border: 1px solid #555; background: #fff; color: #111; font: inherit; border-radius: 8px; }
+  .panel { padding: 16px; border: 1px solid #ccc; height: 120px; }
+</style></head>
+<body>
+<section><button id="first-bad" class="a" aria-expanded="false" onclick="const p=document.getElementById('p1');p.hidden=!p.hidden;this.setAttribute('aria-expanded',String(!p.hidden))">First</button>
+  <div id="p1" class="panel" hidden>Panel one</div></section>
+<section><button id="busy" class="b" onclick="const t=Date.now();while(Date.now()-t<4000){};document.getElementById('p2').hidden=false">Busy</button>
+  <div id="p2" class="panel" hidden>Panel two</div></section>
+<section><button id="last-bad" class="c" aria-expanded="false" onclick="const p=document.getElementById('p3');p.hidden=!p.hidden;this.setAttribute('aria-expanded',String(!p.hidden))">Last</button>
+  <div id="p3" class="panel" hidden>Panel three</div></section>
+</body></html>

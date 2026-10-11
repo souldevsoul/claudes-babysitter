@@ -1,0 +1,16 @@
+<!doctype html>
+<html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<!-- 6.12 own-state snap. #got-it removes its own cookie banner when clicked (it has transition-colors, and once it is
+     detached every computed style reads "" — that was reported as "its own state change snaps", truelogos/Vertex
+     2026-10). #snap stays on the page and its pressed fill snaps: still a soft finding. -->
+<style>
+  body { margin: 0; padding: 24px; font: 16px/1.5 Arial, sans-serif; background: #fff; color: #111; }
+  button { height: 44px; padding: 0 16px; border: 1px solid #555; background: #fff; color: #111; font: inherit; border-radius: 8px; }
+  #got-it { transition: background-color 150ms, color 150ms, border-color 150ms, box-shadow 150ms; }
+  #snap[aria-pressed=true] { background: #1d4ed8; color: #fff; }
+  .banner { margin-top: 24px; width: 600px; padding: 16px; border: 1px solid #ccc; }
+</style></head>
+<body>
+<button id="snap" aria-pressed="false" onclick="this.setAttribute('aria-pressed', String(this.getAttribute('aria-pressed') !== 'true'))">Filter</button>
+<div class="banner" id="banner">We use cookies. <button id="got-it" class="ok" onclick="document.getElementById('banner').remove()">Got it</button></div>
+</body></html>
