@@ -2,6 +2,7 @@
 import { existsSync, readFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { meta, elementName, getAttr, classTokens, classStrings, resolveConst } from "../util.js";
+import { animatePluginState } from "./dead-classes.js";
 
 // headless UI libraries whose Content / Popup parts are overlays (a select list, a menu, a popover, a dialog…)
 const LIBS = /^(@radix-ui\/|radix-ui$|@base-ui-components\/|@base-ui\/|@headlessui\/|@ariakit\/)/;
@@ -19,24 +20,9 @@ const ENTER = /(^|:)(animate-in|animate-(?!out\b|none\b)|fade-in|zoom-in|slide-i
 const EXIT = /(^|:)(animate-out|fade-out|zoom-out|slide-out)|data-\[(state=closed|closed|ending-style|exiting)\]:|data-(ending-style|closed):/;
 const PLUGIN_CLASS = /(^|:)(animate-in|animate-out|fade-(in|out)-|zoom-(in|out)-|slide-(in|out)-from-|slide-(in|out)-to-)/;
 
-const pkgCache = new Map();
-/** Does the project that owns `file` have an animation-utility plugin (tw-animate-css / tailwindcss-animate)? */
-function hasAnimatePlugin(file) {
-  for (let dir = dirname(file); dir && dir !== dirname(dir); dir = dirname(dir)) {
-    const pkg = join(dir, "package.json");
-    if (pkgCache.has(pkg)) return pkgCache.get(pkg);
-    if (!existsSync(pkg)) continue;
-    let ok = null;
-    try {
-      const j = JSON.parse(readFileSync(pkg, "utf8"));
-      const deps = { ...j.dependencies, ...j.devDependencies };
-      ok = !!(deps["tw-animate-css"] || deps["tailwindcss-animate"]);
-    } catch {}
-    pkgCache.set(pkg, ok);
-    return ok;
-  }
-  return null; // unknown: do not guess
-}
+/** Is an animation-utility plugin (tw-animate-css / tailwindcss-animate) in effect for the project that owns `file`?
+ *  Installed AND imported (Tailwind v4 @import / @plugin, or v3 tailwind.config plugins) — see dead-classes.js. */
+const hasAnimatePlugin = (file) => animatePluginState(file).available;
 
 const verCache = new Map();
 /** Installed version of `pkg` as seen from `file` (nearest node_modules), else the lowest version its package.json range allows. */

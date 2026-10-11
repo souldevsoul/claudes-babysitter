@@ -126,6 +126,12 @@ for (const route of routes) {
     }
     // DOM sniper: rendered style attributes may only carry CSS custom properties
     if (!v.mobile) for (const o of await c.inlineStyles(page, sniper.allowProps, sniper.skip, sniper.strict)) problems.push({ route, viewport: v.name, check: "inline style [DOM]", ...o });
+    for (const o of await c.deadAnimationClasses(page)) problems.push({ route, viewport: v.name, check: "dead animation classes [6.12]", ...o });
+    if (v.mobile) {
+      // the open mobile menu, as a person sees it after tapping the burger (soft findings included: it is a look check)
+      const m = await c.mobileMenu(page, !!(cfg.allow && cfg.allow.lightWeights));
+      for (const o of [...m.hard, ...m.soft]) problems.push({ route, viewport: v.name, check: "mobile menu [3.5]", ...o });
+    }
     // last: it opens and closes things. Every dropdown / menu / popover / dialog must move both ways — measured
     for (const o of await c.overlayMotion(page)) problems.push({ route, viewport: v.name, check: "overlay motion [6.12]", ...o });
     await ctx.close();

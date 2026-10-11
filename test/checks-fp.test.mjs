@@ -122,6 +122,105 @@ try {
     }));
     assert.deepEqual(state, { boxes: [false, false, false, false, false, false], r1: true, sw: "false" }, "every control is put back");
   });
+  // 6.12 — overlays that appear by themselves (truelogos.pro cookie banner, 2026-10): popped in after 1 s, gone in one frame
+  const self = async (page, q) => checks.selfAppearingMotion(page, url("self-appear.html", q), { windowMs: 2000 });
+  await test("6.12 self-appearing: a banner that pops in and is removed at once fails both ways, naming its dead animate-in classes", async (page) => {
+    await page.setViewportSize({ width: 390, height: 844 });
+    const out = await self(page, "?bad");
+    assert.ok(out.some((f) => /appears by itself/.test(f.what) && /animate-in/.test(f.what) && f.selector === "#banner"), `enter without motion: ${JSON.stringify(out)}`);
+    assert.ok(out.some((f) => /"Reject all" removes it in one frame/.test(f.what)), `exit without motion (Reject is clicked before Accept): ${JSON.stringify(out)}`);
+  });
+  await test("6.12 self-appearing: a banner with enter keyframes and an exit transition passes", async (page) => {
+    const out = await self(page, "?good");
+    assert.deepEqual(out, [], JSON.stringify(out));
+  });
+  await test("6.12 self-appearing: animated in but removed at once fails on the exit only", async (page) => {
+    const out = await self(page, "?enteronly");
+    assert.equal(out.length, 1, JSON.stringify(out));
+    assert.match(out[0].what, /removes it in one frame/);
+  });
+  await test("6.12 self-appearing: a banner in the HTML from the first frame is the page load, not an overlay that appears", async (page) => {
+    const out = await self(page, "?ssr");
+    assert.ok(!out.some((f) => /appears by itself/.test(f.what)), JSON.stringify(out));
+  });
+  await test("6.12 self-appearing: an endless spinner is not an entrance; a fade-out close is an exit", async (page) => {
+    const out = await self(page, "?spinner");
+    assert.ok(out.some((f) => /appears by itself/.test(f.what) && f.selector === "#toast"), `the toast pops in: ${JSON.stringify(out)}`);
+    assert.ok(!out.some((f) => /removes it/.test(f.what)), `its close fades: ${JSON.stringify(out)}`);
+  });
+
+  await test("6.12 dead classes at runtime: animate-in with no animation fails; with the plugin's CSS, a closed data-state, or no animate-in it passes", async (page) => {
+    await page.goto(url("dead-anim.html"));
+    const out = await checks.deadAnimationClasses(page);
+    assert.ok(ids(out).includes("#dead") && ids(out).includes("#open"), `animate-in without CSS: ${JSON.stringify(out)}`);
+    assert.match(out.find((f) => f.selector === "#dead").what, /tailwindcss-animate \/ tw-animate-css is missing/);
+    assert.ok(!ids(out).includes("#closed") && !ids(out).includes("#plain"), "an inactive variant and fade-in alone promise nothing");
+    await page.goto(url("dead-anim.html", "?plugin"));
+    assert.deepEqual(await checks.deadAnimationClasses(page), [], "with the plugin's CSS it animates");
+    await page.emulateMedia({ reducedMotion: "reduce" });
+    await page.goto(url("dead-anim.html"));
+    assert.deepEqual(await checks.deadAnimationClasses(page), [], "not judged under reduced motion");
+  });
+
+  // 3.5 — the open mobile menu (truelogos.pro, 2026-10: white square inset panel on a navy site, 32 px buttons, page below)
+  const menu = async (page, q) => { await page.setViewportSize({ width: 390, height: 844 }); await page.goto(url("mobile-menu.html", q)); return checks.mobileMenu(page); };
+  await test("3.5 open menu (truelogos before): small targets, undimmed page around it and a light panel on a dark site are reported; menu closed after", async (page) => {
+    const m = await menu(page, "?bad");
+    assert.ok(m.applicable, "the burger is found and opened");
+    assert.deepEqual(m.hard, [], `nothing hard: ${JSON.stringify(m.hard)}`);
+    assert.ok(m.soft.some((f) => /"Sign in" is a \d+×32px tap target/.test(f.what)) && m.soft.some((f) => /"€ EUR" is a/.test(f.what)), `32 px buttons and chips: ${JSON.stringify(m.soft)}`);
+    assert.ok(!m.soft.some((f) => /"Designers" is a/.test(f.what)), "48 px links are fine");
+    assert.ok(m.soft.some((f) => /showing the page undimmed \(below it, at its sides/.test(f.what)), `page below and at the sides: ${JSON.stringify(m.soft)}`);
+    assert.ok(m.soft.some((f) => /surface doesn't match the theme: a light panel/.test(f.what) && /dark header/.test(f.what)), `white panel under a navy header on a navy site: ${JSON.stringify(m.soft)}`);
+    assert.equal(await page.evaluate(() => document.getElementById("burger").getAttribute("aria-expanded")), "false", "the menu is closed again");
+    assert.equal(await page.evaluate(() => document.querySelectorAll("[data-bs-menu-panel], [data-bs-menu-link], [data-bs-hide]").length), 0, "no marks left behind");
+    const sigs = await checks.collectSignatures(page, "/");
+    const c = await checks.mobileMenuConsistency(page, sigs);
+    assert.ok(c.list.some((f) => /button "Sign in" doesn't match/.test(f.what) && /height 32px/.test(f.what) && /rounded corners, 6px \(site buttons are pill\)/.test(f.what) && /font "georgia"/.test(f.what)), `menu buttons vs the 52 px pill CTAs: ${JSON.stringify(c.list)}`);
+    assert.ok(!c.list.some((f) => /€ EUR/.test(f.what)), "currency chips are a chip group, not CTAs");
+    assert.ok(c.list.some((f) => /panel has square corners \(0px\) while the site's cards are rounded \(16px\)/.test(f.what)), `square inset panel vs rounded cards: ${JSON.stringify(c.list)}`);
+  });
+  await test("3.5 open menu: a full-height navy panel with the site's pill buttons passes everything", async (page) => {
+    const m = await menu(page, "?good");
+    assert.ok(m.applicable);
+    assert.deepEqual([...m.hard, ...m.soft], [], JSON.stringify([...m.hard, ...m.soft]));
+    const c = await checks.mobileMenuConsistency(page, await checks.collectSignatures(page, "/"));
+    assert.deepEqual(c.list, [], JSON.stringify(c.list));
+  });
+  await test("3.5 open menu: a side sheet over a dimming backdrop (portal links) covers the page; a light site's white panel matches it", async (page) => {
+    const s = await menu(page, "?sheet");
+    assert.ok(s.applicable, "links rendered in a separate sheet are found");
+    assert.deepEqual([...s.hard, ...s.soft], [], JSON.stringify([...s.hard, ...s.soft]));
+    const l = await menu(page, "?light");
+    assert.ok(l.applicable);
+    assert.ok(!l.soft.some((f) => /surface/.test(f.what)), `a white panel on a light site under a navy header is the site's surface: ${JSON.stringify(l.soft)}`);
+  });
+  await test("3.5 open menu: a cookie banner over its buttons is a hard finding; no burger on a wide screen is not applicable", async (page) => {
+    const m = await menu(page, "?covered");
+    assert.ok(m.hard.some((f) => /"Get started" is covered by div#cookie/.test(f.what)), `covered item: ${JSON.stringify(m.hard)}`);
+    await page.setViewportSize({ width: 1280, height: 800 });
+    await page.goto(url("mobile-menu.html", "?bad"));
+    assert.equal((await checks.mobileMenu(page)).applicable, false);
+  });
+  // 6.12 generalised — every interaction animates what it changes (tabs, show-more, toasts, chips), both ways
+  await test("6.12 interactions: tabs, show-more and a toast without motion fail; faded tabs, a grid-rows show-more and a transitioning chip pass; links and submits are listed as not tested", async (page) => {
+    const u = url("interactions.html");
+    await page.goto(u);
+    const r = await checks.interactionMotion(page, { reload: () => page.goto(u) });
+    const at = (re, kind) => r.hard.some((f) => re.test(f.where) && (!kind || f.kind === kind));
+    assert.ok(r.hard.some((f) => /#tabs-bad/.test(f.where) && /shows div#b2/.test(f.what)), `tabs without motion: ${JSON.stringify(r.hard.map((f) => f.what))}`);
+    assert.ok(!at(/#tabs-good/), "tabs that fade the new panel in pass");
+    assert.ok(at(/#more-bad/, "open") && r.hard.some((f) => /#more-bad/.test(f.where) && /toggling it back hides/.test(f.what)), "show-more without motion fails open and close");
+    assert.ok(!at(/#more-good-btn/), "a grid-rows transition passes both ways");
+    assert.ok(r.hard.some((f) => /#toast-btn/.test(f.where) && /shows div#toast/.test(f.what)), "a toast that pops in fails");
+    assert.ok(r.soft.some((f) => /#chip-bad/.test(f.where)) && !r.soft.some((f) => /#chip-good/.test(f.where)), `pressed fill that snaps is soft; with transition-colors it passes: ${JSON.stringify(r.soft)}`);
+    assert.ok(!r.hard.some((f) => /#nav|#submit/.test(f.where)), "the link and the submit were not clicked");
+    assert.ok(r.notTested.some((n) => /another page/.test(n.reason) && n.examples.some((e) => /#nav/.test(e))), `the link is listed as not tested: ${JSON.stringify(r.notTested)}`);
+    assert.ok(r.notTested.some((n) => /submits a form/.test(n.reason)), "the submit is listed");
+    const capped = await (async () => { await page.goto(u); return checks.interactionMotion(page, { reload: () => page.goto(u), max: 2 }); })();
+    assert.ok(capped.notTested.some((n) => /over the per-page cap of 2/.test(n.reason) && n.count > 0), `the cap says how many were not clicked: ${JSON.stringify(capped.notTested)}`);
+    assert.equal(await page.evaluate(() => location.protocol), "file:", "never navigated away");
+  });
 } finally {
   await browser.close();
 }

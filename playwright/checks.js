@@ -265,10 +265,14 @@ export const nativeControls = (page) => page.evaluate(() => Array.from(document.
     .filter((el) => !(el.matches("select, input[type=checkbox], input[type=radio]") && getComputedStyle(el).appearance === "none"))
     .map((el) => ({ what: `native <${el.tagName.toLowerCase()}${el.type ? ` type=${el.type}` : ""}>`, where: window.__uiDescribe(el), selector: window.__uiSelector(el), human: window.__uiHuman(el) })));
 /** 6.4 — text ≥12px, weight ≥400, not translucent. */
-export const illegibleText = (page, allowLightWeights = false) => page.evaluate((allowLightWeights) => {
+// root: a selector to scope the check to one part of the page (the open mobile menu panel)
+export const illegibleText = (page, allowLightWeights = false, root = null) => page.evaluate(({ allowLightWeights, root }) => {
     const out = [];
     const eye = [];
-    const walker = document.createTreeWalker(document.body, NodeFilter.SHOW_TEXT);
+    const scope = root ? document.querySelector(root) : document.body;
+    if (!scope)
+        return { hard: out, eye };
+    const walker = document.createTreeWalker(scope, NodeFilter.SHOW_TEXT);
     const seen = new Set();
     for (let n = walker.nextNode(); n; n = walker.nextNode()) {
         const el = n.parentElement;
@@ -314,7 +318,7 @@ export const illegibleText = (page, allowLightWeights = false) => page.evaluate(
     }
     // every finding is reported: a dense page with 60 faint captions has 60 findings, not the first 40
     return { hard: out, eye };
-}, allowLightWeights);
+}, { allowLightWeights, root });
 /** 1.12 — no emoji in visible text. */
 // An emoji is on the page whether or not a reveal has faded it in yet, and an aria-hidden "icon" span is exactly
 // how emoji-as-icons are written: only display:none / visibility:hidden / no box / [hidden] / sr-only clips hide it.
@@ -1794,3 +1798,1043 @@ export const nativeSkin = (page) => page.evaluate(() => {
     }
     return out;
 });
+/* ───────────────────────── dead animation classes: 6.12 P59 ───────────────────────── */
+/**
+ * 6.12 — `animate-in` promises motion: tailwindcss-animate / tw-animate-css turn it into an `enter` animation. Without
+ * the plugin it compiles to nothing and the computed animation-name stays `none` (truelogos.pro cookie banner,
+ * 2026-10: `animate-in fade-in slide-in-from-bottom-4 duration-500`, popped in and out in one frame). Every element
+ * whose active classes include animate-in / animate-out (plain, motion-safe:, or data-[state=…]: while in that state)
+ * and that has no animation is reported. Not judged under prefers-reduced-motion: reduce (motion-reduce: may remove it).
+ */
+export const deadAnimationClasses = (page) => page.evaluate(() => {
+    const W = window;
+    if (matchMedia("(prefers-reduced-motion: reduce)").matches)
+        return [];
+    const out = [];
+    let ruled = null; // does any stylesheet the page can read define .animate-in at all?
+    const defined = () => {
+        if (ruled !== null)
+            return ruled;
+        ruled = false;
+        const visit = (rules) => { for (const r of Array.from(rules || [])) {
+            if (r.selectorText && /\.animate-in\b/.test(r.selectorText))
+                ruled = true;
+            if (!ruled && r.cssRules)
+                visit(r.cssRules);
+        } };
+        for (const sh of Array.from(document.styleSheets)) {
+            try {
+                visit(sh.cssRules);
+            }
+            catch { }
+            if (ruled)
+                break;
+        }
+        return ruled;
+    };
+    for (const el of Array.from(document.querySelectorAll('[class*="animate-in"], [class*="animate-out"]'))) {
+        const cls = el.getAttribute("class") || "";
+        const active = cls.split(/\s+/).filter((t) => {
+            const m = t.match(/^(?:(motion-safe|data-\[state=([\w-]+)\]|data-\[([\w-]+)\]|data-(open|closed)):)?(animate-(?:in|out))$/);
+            if (!m)
+                return false;
+            if (m[2])
+                return el.getAttribute("data-state") === m[2];
+            if (m[3] || m[4])
+                return el.hasAttribute(`data-${m[3] || m[4]}`);
+            return true;
+        });
+        if (!active.length)
+            continue;
+        const cs = getComputedStyle(el);
+        if (cs.animationName !== "none" && cs.animationName !== "")
+            continue;
+        out.push({ what: `has ${active.join(" ")} but no animation runs (computed animation-name: none)${defined() ? "" : " — no stylesheet defines .animate-in: tailwindcss-animate / tw-animate-css is missing"}; it appears and disappears in one frame [6.12, P59]`, where: W.__uiDescribe(el), selector: W.__uiSelector(el), human: W.__uiHuman(el) });
+    }
+    return out;
+});
+/* ───────────────────────── overlays that appear by themselves: 6.12 P59 ───────────────────────── */
+/**
+ * In-page probe, installed before the page's own scripts (addInitScript): from the first frame until the page settles
+ * (`windowMs` after load), every fixed layer (and sticky bar at the top/bottom edge) that shows up by itself — a
+ * cookie/consent banner, a toast, a promo bar, a chat bubble — is watched frame by frame for ~600 ms from the moment it
+ * becomes visible. Motion = a running finite animation/transition (on it, its wrappers, or a child as big as half of
+ * it), a CSS animation/transition event, element.animate(), JS rewriting its style= every frame, or a look that changes
+ * between frames (opacity, transform, clip, position, size). Layers already on the first frame, parser-inserted before
+ * DOMContentLoaded, or re-mounted by hydration in place are part of the page load, not overlays that appear.
+ * `armLeave` then watches one of them leave after its dismiss control is clicked.
+ */
+const selfProbe = (windowMs) => {
+    const W = window;
+    if (W.__bsSelf)
+        return;
+    const S = (W.__bsSelf = { tracked: new Map(), events: [], list: [], gone: [], done: false, load: null, dcl: null, leave: null, t0: performance.now() });
+    addEventListener("load", () => { S.load = performance.now(); }, { once: true });
+    document.addEventListener("DOMContentLoaded", () => { S.dcl = performance.now(); }, { once: true });
+    const rec = (e) => S.events.push({ t: performance.now(), el: e.target });
+    for (const t of ["animationstart", "transitionrun", "transitionstart"])
+        document.addEventListener(t, rec, true);
+    const origAnimate = Element.prototype.animate;
+    Element.prototype.animate = function (...args) { S.events.push({ t: performance.now(), el: this }); return origAnimate.apply(this, args); };
+    const writes = new Map();
+    const dirty = new Set();
+    const scanned = new WeakMap();
+    const chain = (el) => { const o = []; for (let n = el.parentElement, i = 0; n && n !== document.body && n !== document.documentElement && i < 8; n = n.parentElement, i++) o.push(n); return o; };
+    const opac = (el) => { let o = 1; for (let n = el; n && n.nodeType === 1; n = n.parentElement) o *= Number(getComputedStyle(n).opacity); return o; };
+    const shown = (el) => (typeof el.checkVisibility === "function" ? el.checkVisibility({ visibilityProperty: true }) : getComputedStyle(el).visibility !== "hidden");
+    const meaningful = (el) => (el.innerText || "").trim().length > 0 || !!el.querySelector("a, button, input, select, textarea, [role=button]");
+    const alive = (el) => {
+        if (!el.isConnected)
+            return false;
+        const cs = getComputedStyle(el);
+        if (cs.display === "none" || !shown(el))
+            return false;
+        const r = el.getBoundingClientRect();
+        return r.width * r.height >= 1500 && r.bottom > 0 && r.top < innerHeight && r.right > 0 && r.left < innerWidth && opac(el) > 0.05 && meaningful(el);
+    };
+    const look = (el) => { const r = el.getBoundingClientRect(); const cs = getComputedStyle(el); return [cs.opacity, cs.transform, cs.translate, cs.scale, cs.clipPath, Math.round(r.top), Math.round(r.left), Math.round(r.height), Math.round(r.width), ...chain(el).map((n) => { const c = getComputedStyle(n); return c.opacity + c.transform + c.translate + c.clipPath; })].join("|"); };
+    const bigKids = (el) => { const r = el.getBoundingClientRect(); const a = r.width * r.height; const o = []; for (const k of el.querySelectorAll("*")) { if (o.length >= 12) break; const b = k.getBoundingClientRect(); if (b.width * b.height >= a * 0.5) o.push(k); } return o; };
+    const finite = (a) => { try { return Number.isFinite(a.effect.getComputedTiming().endTime); } catch { return true; } };
+    const animated = (l, kids) => { try { return [l, ...kids, ...chain(l)].some((n) => n.getAnimations().some((a) => (a.playState === "running" || a.playState === "pending") && finite(a))); } catch { return false; } };
+    const related = (l, kids, x) => x === l || kids.includes(x) || chain(l).includes(x);
+    const isLayer = (el) => {
+        const p = getComputedStyle(el).position;
+        if (p !== "fixed" && p !== "sticky")
+            return false;
+        return !el.closest("header, nav, [role=banner], [role=navigation], nextjs-portal, [data-nextjs-toast], [data-babysitter], babysitter-studio");
+    };
+    new MutationObserver((list) => {
+        for (const m of list) {
+            if (m.type === "childList") {
+                for (const n of m.addedNodes)
+                    if (n.nodeType === 1)
+                        dirty.add(n);
+            }
+            else {
+                dirty.add(m.target);
+                if (m.attributeName === "style") {
+                    const k = (writes.get(m.target) || 0) + 1;
+                    writes.set(m.target, k);
+                    if (k === 3)
+                        S.events.push({ t: performance.now(), el: m.target });
+                }
+            }
+        }
+        const L = S.leave;
+        if (L && L.tAction != null && L.tGone == null && !alive(L.el))
+            L.tGone = performance.now();
+    }).observe(document, { childList: true, subtree: true, attributes: true, attributeFilter: ["class", "style", "hidden", "open", "data-state", "aria-hidden"] });
+    document.addEventListener("pointerdown", () => { if (S.leave && S.leave.tAction == null) S.leave.tAction = performance.now(); }, true);
+    document.addEventListener("click", () => { if (S.leave && S.leave.tAction == null) S.leave.tAction = performance.now(); }, true);
+    let frame = 0;
+    const step = () => {
+        const now = performance.now();
+        if (!document.body) {
+            requestAnimationFrame(step);
+            return;
+        }
+        if (frame === 0)
+            dirty.add(document.body);
+        let budget = 6000;
+        for (const root of [...dirty]) {
+            dirty.delete(root);
+            if (root.nodeType !== 1 || !root.isConnected || budget <= 0)
+                continue;
+            const last = scanned.get(root);
+            if (last && now - last < 250 && root !== document.body) {
+                dirty.add(root);
+                continue;
+            }
+            scanned.set(root, now);
+            const all = [root, ...root.querySelectorAll("*")];
+            budget -= all.length;
+            for (const el of all)
+                if (!S.tracked.has(el) && isLayer(el))
+                    S.tracked.set(el, { prev: frame === 0 ? alive(el) : false, kids: [], watch: null });
+        }
+        for (const [el, st] of S.tracked) {
+            const a = alive(el);
+            if (a && !st.prev && !st.watch) {
+                // part of the page load, or the same box re-mounted by hydration in place
+                const r = el.getBoundingClientRect();
+                const sig = `${el.tagName}|${el.getAttribute("class") || ""}|${Math.round(r.top)}|${Math.round(r.height)}`;
+                const remount = S.gone.some((g) => g.sig === sig && now - g.t < 200);
+                const sticky = getComputedStyle(el).position === "sticky";
+                const edgeBar = !sticky || r.top <= 1 || r.bottom >= innerHeight - 1;
+                if (S.dcl != null && !remount && edgeBar) {
+                    st.watch = { t: now, looks: [look(el)], anim: animated(el, (st.kids = bigKids(el))), end: now + 600 };
+                    S.list.push(el);
+                }
+            }
+            if (!a && st.prev) {
+                const r = el.getBoundingClientRect();
+                S.gone.push({ sig: `${el.tagName}|${el.getAttribute("class") || ""}|${Math.round(r.top)}|${Math.round(r.height)}`, t: now });
+            }
+            if (st.watch && !st.watch.final && now <= st.watch.end) {
+                if (a) {
+                    st.watch.looks.push(look(el));
+                    if (!st.watch.anim)
+                        st.watch.anim = animated(el, st.kids);
+                }
+            }
+            else if (st.watch && !st.watch.final) {
+                const w = st.watch;
+                w.moved = w.anim || new Set(w.looks).size > 1 || S.events.some((e) => e.t >= w.t - 120 && e.t <= w.end && e.el instanceof Element && related(el, st.kids, e.el));
+                w.final = true;
+            }
+            st.prev = a;
+        }
+        const L = S.leave;
+        if (L && !L.done) {
+            if (alive(L.el)) {
+                if (L.tAction != null) {
+                    L.looks.push(look(L.el));
+                    if (!L.anim)
+                        L.anim = animated(L.el, L.kids);
+                }
+            }
+            else if (L.tAction != null && L.tGone == null)
+                L.tGone = now;
+            if (L.tAction != null && (now - L.tAction > 1500 || (L.tGone != null && now - L.tGone > 100))) {
+                L.moved = L.anim || L.looks.some((x) => x !== L.pre) || S.events.some((e) => e.t >= L.tAction && e.el instanceof Element && related(L.el, L.kids, e.el));
+                L.left = L.tGone != null;
+                L.done = true;
+            }
+            if (L.tAction == null && now - L.t0 > 5000)
+                L.done = true;
+        }
+        const pending = [...S.tracked.values()].some((st) => st.watch && !st.watch.final);
+        if (!S.done && S.load != null && now - S.load > windowMs && !pending)
+            S.done = true;
+        if (!S.done && now - S.t0 > windowMs + 20000)
+            S.done = true;
+        frame++;
+        if (!S.done || (L && !L.done))
+            requestAnimationFrame(step);
+    };
+    requestAnimationFrame(step);
+    S.report = () => {
+        const appeared = S.list.filter((el) => S.tracked.get(el).watch && S.tracked.get(el).watch.final);
+        // the outermost layer only: a toast inside a toaster root that appeared with it is one finding
+        const outer = appeared.filter((el) => !appeared.some((o) => o !== el && o.contains(el)));
+        return outer.map((el) => {
+            const w = S.tracked.get(el).watch;
+            const i = S.list.indexOf(el);
+            el.setAttribute("data-bs-self", String(i));
+            const dead = ((el.getAttribute("class") || "").match(/(^|\s)(animate-in|fade-in\S*|slide-in-from-\S+|zoom-in\S*)(?=\s|$)/g) || []).map((x) => x.trim());
+            return { i, moved: !!w.moved, at: Math.round(w.t - (S.load ?? S.t0)), alive: alive(el), dead: dead.length && getComputedStyle(el).animationName === "none" ? dead.join(" ") : "", where: W.__uiDescribe(el), selector: W.__uiSelector(el), human: W.__uiHuman(el) };
+        });
+    };
+    S.dismissControl = (i) => {
+        const l = S.list[i];
+        if (!l || !alive(l))
+            return null;
+        const label = (e) => [e.getAttribute("aria-label"), e.textContent, e.getAttribute("title"), e.getAttribute("value")].filter(Boolean).join(" ").trim().replace(/\s+/g, " ");
+        const score = (e) => {
+            const t = label(e);
+            if (e.matches("a[href]") && !/^(#|javascript:)/.test(e.getAttribute("href") || ""))
+                return 0;
+            if (/reject|decline|deny|refuse|necessary only|only necessary|essential only|отклон|только необх/i.test(t))
+                return 4;
+            if (/close|dismiss|no,? thanks|not now|later|hide|закры|скрыть|^[×✕✖xX]$/.test(t) || /close|dismiss/i.test(t))
+                return 3;
+            if (/accept|allow|agree|got it|^ok(ay)?\b|understand|continue|принять|соглас|понятно|хорошо/i.test(t))
+                return 2;
+            return !t && e.querySelector("svg") ? 1 : 0;
+        };
+        const items = Array.from(l.querySelectorAll("button, [role=button], a[href], input[type=button], input[type=submit]")).filter((e) => W.__uiVisible(e) && !e.matches("[disabled], [aria-disabled=true]"));
+        const best = items.map((e) => [e, score(e)]).filter(([, s]) => s > 0).sort((a, b) => b[1] - a[1])[0];
+        if (!best)
+            return null;
+        for (const e of document.querySelectorAll("[data-bs-dismiss]"))
+            e.removeAttribute("data-bs-dismiss");
+        best[0].setAttribute("data-bs-dismiss", "");
+        return { label: label(best[0]).slice(0, 40) || "close", where: W.__uiDescribe(best[0]), selector: W.__uiSelector(best[0]), human: W.__uiHuman(best[0]) };
+    };
+    S.armLeave = (i) => {
+        const el = S.list[i];
+        writes.clear();
+        S.leave = { el, pre: look(el), kids: bigKids(el), looks: [], anim: false, tAction: null, tGone: null, done: false, t0: performance.now() };
+        if (S.done)
+            requestAnimationFrame(step);
+    };
+};
+/**
+ * 6.12 — overlays that appear by themselves (cookie/consent banners, toasts, promo bars, chat bubbles) come in AND go
+ * away with motion. Trigger-opened overlays are 6.12's `overlayMotion`; these were never tested (truelogos.pro, 2026-10:
+ * the cookie banner popped in after 1 s in one frame and vanished in one frame on Accept/Reject). Loads `route` itself
+ * on a fresh page (call it before any navigation; nothing is remembered, so the banner shows), with
+ * prefers-reduced-motion: no-preference, samples frames from the start until `windowMs` after load, then clicks each
+ * appeared layer's dismiss control (Reject / Close before Accept) and watches it leave.
+ */
+export async function selfAppearingMotion(page, route, { windowMs = 3000 } = {}) {
+    const out = [];
+    await page.emulateMedia({ reducedMotion: "no-preference" }).catch(() => { });
+    await page.addInitScript(selfProbe, windowMs);
+    await page.goto(route, { waitUntil: "load" }).catch(() => { });
+    await page.waitForFunction(() => window.__bsSelf && window.__bsSelf.done, null, { timeout: windowMs + 25000 }).catch(() => { });
+    const layers = await page.evaluate(() => (window.__bsSelf ? window.__bsSelf.report() : [])).catch(() => []);
+    for (const l of layers)
+        if (!l.moved)
+            out.push({ what: `appears by itself (${l.at} ms after load) in one frame with no motion — no opacity, transform or clip change${l.dead ? `; its classes "${l.dead}" promise an animation but none runs (tailwindcss-animate / tw-animate-css missing)` : ""}. Give it an enter animation (fade + an 8–16px slide, 200–300 ms, motion-reduce:animate-none) [6.12, P59]`, where: l.where, selector: l.selector, human: l.human });
+    for (const l of layers) {
+        if (!l.alive)
+            continue;
+        const ctl = await page.evaluate((i) => window.__bsSelf.dismissControl(i), l.i).catch(() => null);
+        if (!ctl)
+            continue;
+        const url = page.url();
+        await page.evaluate((i) => window.__bsSelf.armLeave(i), l.i);
+        await page.locator("[data-bs-dismiss]").first().click({ timeout: 3000 }).catch(() => { });
+        await page.waitForFunction(() => window.__bsSelf.leave && window.__bsSelf.leave.done, null, { timeout: 8000 }).catch(() => { });
+        if (page.url() !== url)
+            break;
+        const r = await page.evaluate(() => { const L = window.__bsSelf.leave; return L && { left: L.left, moved: L.moved, ms: L.tGone != null && L.tAction != null ? Math.round(L.tGone - L.tAction) : null }; }).catch(() => null);
+        if (r && r.left && !r.moved)
+            out.push({ what: `"${ctl.label}" removes it in one frame (gone ${r.ms ?? 0} ms after the click, no exit motion) — give it an exit that mirrors the enter (fade/slide out, 150–250 ms) [6.12, P59]`, where: `${l.where} (dismissed by ${ctl.where})`, selector: l.selector, human: l.human });
+    }
+    return out;
+}
+/* ───────────────────────── the open mobile menu: 3.5 / 6.4 / 1.16 ───────────────────────── */
+/**
+ * Finds the menu toggle of a narrow layout (header nav links hidden + a button that says it opens them: aria-expanded /
+ * aria-controls / a "menu" label / an icon-only header button), opens it and marks the panel that shows the links
+ * (`data-bs-menu-panel`). Returns null when there is no such menu (navReachable covers "no way to the links").
+ */
+async function openMobileMenu(page) {
+    const prep = await page.evaluate(() => {
+        const W = window;
+        if (Math.min(innerWidth, screen.width) >= 1024)
+            return null;
+        for (const a of ["data-bs-menu-link", "data-bs-menu-toggle", "data-bs-menu-panel", "data-bs-pre", "data-bs-vis"])
+            for (const e of document.querySelectorAll(`[${a}]`))
+                e.removeAttribute(a);
+        const dest = (a) => { try {
+            const u = new URL(a.href, location.href);
+            return u.origin === location.origin ? (u.pathname.replace(/\/$/, "") || "/") : u.href;
+        }
+        catch {
+            return null;
+        } };
+        const isLogo = (a) => (dest(a) === "/" && !!a.querySelector("img, svg")) || /logo|brand/i.test(a.className + " " + (a.getAttribute("aria-label") || ""));
+        const links = Array.from(document.querySelectorAll("header a[href], nav a[href], [role=navigation] a[href]"))
+            .filter((a) => !a.closest("footer, [role=contentinfo]") && !isLogo(a) && dest(a) && !/^(mailto|tel):/.test(a.getAttribute("href") || ""));
+        const shown = new Set(links.filter((a) => W.__uiVisible(a)).map(dest));
+        const hidden = links.filter((a) => !W.__uiVisible(a) && !shown.has(dest(a)));
+        if (new Set(hidden.map(dest)).size < 2)
+            return null;
+        // the menu may show these links, or its own copies of them (a portal sheet): any link to the same places that
+        // is not on screen yet. Links already visible (a "Pricing" CTA in the page) are not the menu.
+        const dests = [...new Set(hidden.map(dest))];
+        for (const a of document.querySelectorAll("a[href]"))
+            if (!a.closest("footer, [role=contentinfo]") && dests.includes(dest(a)) && !W.__uiVisible(a))
+                a.setAttribute("data-bs-menu-link", "");
+        for (const a of document.querySelectorAll("a[href]"))
+            if (W.__uiVisible(a))
+                a.setAttribute("data-bs-vis", "");
+        const other = /search|cart|basket|\bbag\b|theme|dark mode|light mode|language|\blang\b|currency|account|profile|avatar|notification|cookie|share|play|video|filter|sort/i;
+        const cands = Array.from(document.querySelectorAll("button, [role=button], summary, label[for], a[href^='#'], [aria-expanded], [aria-controls]"))
+            .filter((el) => W.__uiVisible(el) && !el.closest("footer, [role=contentinfo]") && el.getAttribute("aria-expanded") !== "true" && el.getAttribute("aria-haspopup") !== "listbox");
+        const score = (el) => {
+            const label = [el.getAttribute("aria-label"), el.getAttribute("title"), el.textContent, typeof el.className === "string" ? el.className : "", el.id].join(" ");
+            const says = /menu|navigation|\bnav\b|burger|drawer|меню|навигац/i.test(label);
+            if (other.test(label) && !says)
+                return 0;
+            let s = says ? 3 : 0;
+            const ctl = el.getAttribute("aria-controls");
+            const t = ctl && document.getElementById(ctl.split(/\s+/)[0]);
+            if (t && t.querySelector("[data-bs-menu-link]"))
+                s += 3;
+            if (el.hasAttribute("aria-expanded"))
+                s += 1;
+            const inHeader = !!el.closest("header, [role=banner], nav, [role=navigation]");
+            if (inHeader)
+                s += 1;
+            if (inHeader && el.querySelector("svg, img, span") && !(el.textContent || "").trim())
+                s += 1;
+            if (el.getBoundingClientRect().top > innerHeight)
+                s -= 3;
+            return s;
+        };
+        const ranked = cands.map((el) => [el, score(el)]).filter(([, s]) => s >= 2).sort((a, b) => b[1] - a[1]).slice(0, 3);
+        ranked.forEach(([el], i) => el.setAttribute("data-bs-menu-toggle", String(i)));
+        if (!ranked.length)
+            return null;
+        const bar = ranked[0][0].closest("header, [role=banner]") || ranked[0][0].parentElement;
+        const headerBottom = Math.round(Math.max(0, Math.min(innerHeight * 0.4, bar.getBoundingClientRect().bottom)));
+        // fixed layers already on screen (cookie banner, chat bubble, the header itself): not something the menu opened
+        for (const el of document.body.querySelectorAll("*"))
+            if (getComputedStyle(el).position === "fixed" && W.__uiVisible(el))
+                el.setAttribute("data-bs-pre", "");
+        return { n: ranked.length, headerBottom, dests };
+    });
+    if (!prep)
+        return null;
+    for (let i = 0; i < prep.n; i++) {
+        const t = page.locator(`[data-bs-menu-toggle="${i}"]`).first();
+        const url = page.url();
+        await t.click({ timeout: 2000 }).catch(() => { });
+        await page.waitForTimeout(350);
+        await settle(page);
+        if (page.url() !== url) {
+            await page.goBack().catch(() => { });
+            return null;
+        }
+        const panel = await page.evaluate((dests) => {
+            const W = window;
+            const dest = (a) => { try {
+                const u = new URL(a.href, location.href);
+                return u.origin === location.origin ? (u.pathname.replace(/\/$/, "") || "/") : u.href;
+            }
+            catch {
+                return null;
+            } };
+            // links rendered on opening (a portal menu mounts new ones) count too
+            for (const a of document.querySelectorAll("a[href]:not([data-bs-vis]):not([data-bs-menu-link])"))
+                if (!a.closest("footer, [role=contentinfo]") && dests.includes(dest(a)))
+                    a.setAttribute("data-bs-menu-link", "");
+            const links = Array.from(document.querySelectorAll("[data-bs-menu-link]")).filter((a) => W.__uiVisible(a));
+            if (links.length < 2)
+                return null;
+            let lca = links[0];
+            while (lca && !links.every((a) => lca.contains(a)))
+                lca = lca.parentElement;
+            if (!lca || lca === document.body || lca === document.documentElement)
+                return null;
+            const painted = (e) => { const cs = getComputedStyle(e); return W.__uiRGBA(cs.backgroundColor)[3] >= 0.5 || /gradient|url\(/.test(cs.backgroundImage) || (!!cs.backdropFilter && cs.backdropFilter !== "none"); };
+            // the panel: the nearest box around the links that draws a surface, floats, or is a dialog — not the header bar
+            let panel = null;
+            for (let e = lca; e && e !== document.body; e = e.parentElement) {
+                if (e.matches("header, [role=banner]"))
+                    break;
+                const pos = getComputedStyle(e).position;
+                if (painted(e) || e.matches("dialog, [role=dialog]") || pos === "fixed" || pos === "absolute") {
+                    panel = e;
+                    break;
+                }
+            }
+            panel = panel || lca;
+            panel.setAttribute("data-bs-menu-panel", "");
+            return { where: W.__uiDescribe(panel), selector: W.__uiSelector(panel), human: W.__uiHuman(panel) };
+        }, prep.dests);
+        if (panel)
+            return { ...prep, ...panel, toggle: i };
+        await page.keyboard.press("Escape").catch(() => { });
+        if ((await t.getAttribute("aria-expanded").catch(() => null)) === "true")
+            await t.click({ timeout: 1000 }).catch(() => { });
+        await page.waitForTimeout(200);
+    }
+    return null;
+}
+async function closeMobileMenu(page, m) {
+    await recover(page);
+    const open = () => page.evaluate(() => { const p = document.querySelector("[data-bs-menu-panel]"); return !!p && Array.from(p.querySelectorAll("[data-bs-menu-link]")).some((a) => window.__uiVisible(a)); }).catch(() => false);
+    await page.keyboard.press("Escape").catch(() => { });
+    await page.waitForTimeout(250);
+    if (await open()) {
+        const t = page.locator(`[data-bs-menu-toggle="${m.toggle}"]`).first();
+        if (await t.isVisible().catch(() => false))
+            await t.click({ timeout: 1500 }).catch(() => { });
+        else
+            await page.locator('header [aria-expanded="true"], nav [aria-expanded="true"], header button[aria-label*="close" i]').first().click({ timeout: 1500 }).catch(() => { });
+        await page.waitForTimeout(250);
+    }
+    await settle(page);
+    await page.evaluate(() => { for (const a of ["data-bs-menu-link", "data-bs-menu-toggle", "data-bs-menu-panel", "data-bs-pre", "data-bs-vis"]) for (const e of document.querySelectorAll(`[${a}]`)) e.removeAttribute(a); }).catch(() => { });
+}
+/** In-page: geometry of the open panel — off-screen, tap targets, what covers its items, and whether it covers the page. */
+const menuGeometry = (headerBottom) => {
+    const W = window;
+    const hard = [], soft = [];
+    const panel = document.querySelector("[data-bs-menu-panel]");
+    if (!panel)
+        return { hard, soft };
+    const at = (e) => ({ where: W.__uiDescribe(e), selector: W.__uiSelector(e), human: W.__uiHuman(e) });
+    const pr = panel.getBoundingClientRect();
+    if (pr.right > innerWidth + 1 || pr.left < -1)
+        hard.push({ what: `open mobile menu goes off-screen (left/right ${Math.round(pr.left)}/${Math.round(pr.right)}, viewport ${innerWidth}) [1.2, P02]`, ...at(panel) });
+    const name = (e) => ((e.getAttribute("aria-label") || e.textContent || "").trim().replace(/\s+/g, " ").slice(0, 40)) || e.tagName.toLowerCase();
+    const items = Array.from(panel.querySelectorAll("a[href], button, [role=button], [role=menuitem], [role=option], [role=tab], [role=switch], [role=checkbox], summary, input:not([type=hidden]), select, textarea"))
+        .filter((e) => W.__uiVisible(e) && !e.closest("[inert]") && !(e.parentElement && e.parentElement.closest("a[href], button, [role=button]")));
+    const scrollers = new Map();
+    for (const e of items) {
+        let r = e.getBoundingClientRect();
+        if (r.height < 43.5 || r.width < 43.5)
+            soft.push({ what: `open mobile menu: "${name(e)}" is a ${Math.round(r.width)}×${Math.round(r.height)}px tap target — under 44×44 px on a touch screen [3.5, WCAG 2.5.5]`, ...at(e) });
+        if (r.bottom > innerHeight || r.top < 0) {
+            for (let p = e.parentElement; p && p !== document.body; p = p.parentElement)
+                if (/(auto|scroll)/.test(getComputedStyle(p).overflowY) && !scrollers.has(p))
+                    scrollers.set(p, p.scrollTop);
+            e.scrollIntoView({ block: "nearest", behavior: "instant" });
+            r = e.getBoundingClientRect();
+        }
+        for (const [fx, fy] of [[0.5, 0.5], [0.12, 0.5], [0.88, 0.5]]) {
+            const x = r.left + r.width * fx, y = r.top + r.height * fy;
+            if (y < 0 || y > innerHeight || x < 0 || x > innerWidth)
+                continue;
+            const t = document.elementFromPoint(x, y);
+            if (!t || e.contains(t) || t.contains(e) || panel.contains(t))
+                continue;
+            let layer = t;
+            for (let n = t; n && n !== document.body; n = n.parentElement) {
+                const p = getComputedStyle(n).position;
+                if (p === "fixed" || p === "sticky")
+                    layer = n;
+            }
+            hard.push({ what: `open mobile menu: "${name(e)}" is covered by ${W.__uiDescribe(layer)} — it cannot be tapped [3.5/4.6, P57]`, ...at(e) });
+            break;
+        }
+    }
+    for (const [p, top] of scrollers)
+        p.scrollTop = top;
+    // does it cover the page coherently: full height, or a backdrop that dims what is around it?
+    const bgA = (e) => W.__uiRGBA(getComputedStyle(e).backgroundColor)[3];
+    const dims = (e) => { const cs = getComputedStyle(e); return bgA(e) >= 0.1 || (!!cs.backdropFilter && cs.backdropFilter !== "none"); };
+    const paints = (e) => { const cs = getComputedStyle(e); return bgA(e) >= 0.1 || cs.backgroundImage !== "none" || /^(IMG|VIDEO|CANVAS|PICTURE|svg)$/i.test(e.tagName) || Array.from(e.childNodes).some((n) => n.nodeType === 3 && n.textContent.trim()); };
+    const big = (e) => { const r = e.getBoundingClientRect(); return r.width >= innerWidth * 0.9 && r.height >= innerHeight * 0.9; };
+    // a backdrop the menu brought with it (pointer-events:none ones are not in elementsFromPoint)
+    const backdrops = Array.from(document.body.querySelectorAll("*")).filter((e) => !e.hasAttribute("data-bs-pre") && !panel.contains(e) && getComputedStyle(e).position === "fixed" && W.__uiVisible(e) && dims(e)).map((e) => e.getBoundingClientRect());
+    let total = 0, bare = 0, below = 0, sides = 0;
+    const cols = 7, rows = 12, top = headerBottom + 4, h = innerHeight - headerBottom - 8;
+    if (h > 40)
+        for (let yi = 0; yi < rows; yi++)
+            for (let xi = 0; xi < cols; xi++) {
+                const x = 3 + ((innerWidth - 6) * xi) / (cols - 1), y = top + (h * yi) / (rows - 1);
+                let verdict = "page";
+                if (backdrops.some((r) => x >= r.left && x <= r.right && y >= r.top && y <= r.bottom))
+                    verdict = "menu";
+                else
+                    for (const e of document.elementsFromPoint(x, y)) {
+                        if (panel.contains(e)) {
+                            verdict = "menu";
+                            break;
+                        }
+                        if (e.contains(panel)) {
+                            if (dims(e)) {
+                                verdict = "menu";
+                                break;
+                            }
+                            continue;
+                        }
+                        const pre = e.closest("[data-bs-pre]");
+                        if (pre && !big(pre) && !pre.contains(panel)) {
+                            verdict = "other"; // a cookie banner or chat bubble that was there before: neither menu nor page
+                            break;
+                        }
+                        if (paints(e))
+                            break;
+                    }
+                if (verdict === "other")
+                    continue;
+                total++;
+                if (verdict === "page") {
+                    bare++;
+                    if (y > pr.bottom)
+                        below++;
+                    else if (x < pr.left || x > pr.right)
+                        sides++;
+                }
+            }
+    if (total && bare / total >= 0.1) {
+        const spots = [below ? "below it" : "", sides ? "at its sides" : "", bare - below - sides > 0 ? "around it" : ""].filter(Boolean).join(", ");
+        soft.push({ what: `open mobile menu leaves ${Math.round((100 * bare) / total)}% of the screen showing the page undimmed (${spots}) — make the panel full-height, or put a backdrop behind it (bg-black/50, backdrop-blur) so the page reads as "behind" [3.5]`, ...at(panel) });
+    }
+    return { hard, soft };
+};
+/** In-page: median colour (every 3rd pixel, by luminance) of a PNG screenshot, as [r, g, b]. Self-contained (serialized). */
+const medianColour = async (b64) => {
+    const img = await window.__uiDecode(b64);
+    const d = img.data, px = [];
+    for (let y = 0; y < img.height; y += 3)
+        for (let x = 0; x < img.width; x += 3) {
+            const i = (y * img.width + x) * 4;
+            px.push([d[i], d[i + 1], d[i + 2], 0.2126 * d[i] + 0.7152 * d[i + 1] + 0.0722 * d[i + 2]]);
+        }
+    if (!px.length)
+        return null;
+    px.sort((p, q) => p[3] - q[3]);
+    return px[Math.floor(px.length / 2)].slice(0, 3);
+};
+/**
+ * Panel surface vs the theme, from pixels: the panel's median colour against the header bar it opens under and the
+ * page as a whole. A light panel under a dark header on a dark site (truelogos.pro, 2026-10: a white inset panel on a
+ * navy site) does not match; it does when the site itself is light overall (or the panel matches the header).
+ */
+async function menuSurface(page, m) {
+    const box = await page.evaluate(() => {
+        const p = document.querySelector("[data-bs-menu-panel]");
+        const r = p.getBoundingClientRect();
+        const x = Math.max(0, r.left), y = Math.max(0, r.top);
+        return { x, y, w: Math.min(innerWidth, r.right) - x, h: Math.min(innerHeight, r.bottom) - y, vw: innerWidth, vh: innerHeight };
+    });
+    if (box.w < 24 || box.h < 24)
+        return null;
+    // layers that are neither the menu nor its header (cookie banner, chat bubble) stay out of the pictures
+    const hideForeign = (also) => page.evaluate((also) => {
+        if (!document.getElementById("bs-hide-style")) {
+            const st = document.createElement("style");
+            st.id = "bs-hide-style";
+            st.textContent = "[data-bs-hide] { visibility: hidden !important; }";
+            document.head.appendChild(st);
+        }
+        const panel = document.querySelector("[data-bs-menu-panel]");
+        const toggle = document.querySelector("[data-bs-menu-toggle]");
+        for (const e of document.querySelectorAll("[data-bs-pre]"))
+            if (!e.contains(panel) && !(toggle && e.contains(toggle)) && !panel.contains(e))
+                e.setAttribute("data-bs-hide", "");
+        if (also)
+            for (const e of document.querySelectorAll(also))
+                e.setAttribute("data-bs-hide", "");
+    }, also);
+    const frame = () => page.evaluate(() => new Promise((r) => requestAnimationFrame(() => requestAnimationFrame(r))));
+    let withPanel, header, full;
+    try {
+        await hideForeign(null);
+        await frame();
+        withPanel = await page.screenshot({ clip: { x: box.x, y: box.y, width: box.w, height: box.h }, scale: "css" });
+        await hideForeign("[data-bs-menu-panel]");
+        await frame();
+        header = m.headerBottom >= 8 ? await page.screenshot({ clip: { x: 0, y: 0, width: box.vw, height: m.headerBottom }, scale: "css" }) : null;
+    }
+    finally {
+        await recover(page);
+    }
+    const colours = { panel: await page.evaluate(medianColour, withPanel.toString("base64")).catch(() => null), head: header ? await page.evaluate(medianColour, header.toString("base64")).catch(() => null) : null };
+    if (!colours.panel || !colours.head)
+        return null;
+    const lum = (c) => { const f = (v) => { v /= 255; return v <= 0.03928 ? v / 12.92 : Math.pow((v + 0.055) / 1.055, 2.4); }; return 0.2126 * f(c[0]) + 0.7152 * f(c[1]) + 0.0722 * f(c[2]); };
+    const ratio = (p, q) => { const x = lum(p), y = lum(q); return (Math.max(x, y) + 0.05) / (Math.min(x, y) + 0.05); };
+    const hex = (c) => "#" + c.map((v) => Math.round(v).toString(16).padStart(2, "0")).join("");
+    const tone = (c) => (lum(c) > 0.4 ? "light" : lum(c) < 0.12 ? "dark" : "mid-tone");
+    const rHead = ratio(colours.panel, colours.head);
+    if (rHead < 3)
+        return null;
+    // the site as a whole (the whole page, menu and fixed layers hidden): a light panel on a light site is its own surface
+    try {
+        await hideForeign("[data-bs-menu-panel], header, [role=banner]");
+        await frame();
+        full = await page.screenshot({ fullPage: true, scale: "css" }).catch(() => null);
+    }
+    finally {
+        await recover(page);
+    }
+    let site = null;
+    if (full)
+        site = await page.evaluate(medianColour, full.toString("base64")).catch(() => null);
+    if (site && ratio(colours.panel, site) < 3)
+        return null;
+    return { what: `open mobile menu's surface doesn't match the theme: a ${tone(colours.panel)} panel (${hex(colours.panel)}) opens under a ${tone(colours.head)} header (${hex(colours.head)}, ${rHead.toFixed(1)}:1 apart)${site ? ` on a ${tone(site)} site (${hex(site)})` : ""}. Use the header's / page's surface token for the panel so the menu reads as part of the site [3.5 / 1.16]`, where: m.where, selector: m.selector, human: m.human };
+}
+/**
+ * 3.5 — the open mobile menu, as a person sees it after tapping the burger. Every check above runs with the menu
+ * closed, so the open panel's look was never judged (truelogos.pro, 2026-10: a white square-cornered inset panel on a
+ * navy site, 32 px buttons next to 44–56 px pill CTAs, page content showing below). Opens the menu and checks:
+ *   hard — text in the panel is legible (6.4), nothing covers its items, it fits the screen, no sideways scroll;
+ *   soft — 44×44 px tap targets; it covers the page coherently (full height, or a backdrop that dims the rest);
+ *          its surface matches the theme (not a light panel under a dark header on a dark site, or the reverse).
+ * Closes the menu afterwards. No menu toggle (or a wide screen): { applicable: false }.
+ */
+export async function mobileMenu(page, allowLightWeights = false) {
+    const m = await openMobileMenu(page);
+    if (!m)
+        return { applicable: false, hard: [], soft: [], eye: [] };
+    const hard = [], soft = [];
+    let eye = [];
+    try {
+        const txt = await illegibleText(page, allowLightWeights, "[data-bs-menu-panel]");
+        for (const o of txt.hard)
+            hard.push({ ...o, what: `open mobile menu: ${o.what} [6.4]` });
+        eye = txt.eye;
+        const geo = await page.evaluate(menuGeometry, m.headerBottom);
+        hard.push(...geo.hard);
+        soft.push(...geo.soft);
+        const hx = await horizontalOverflow(page);
+        if (hx.length)
+            hard.push({ what: `opening the mobile menu causes horizontal overflow: ${hx[0].what} [2.1]`, where: hx[0].where, selector: hx[0].selector, human: hx[0].human });
+        const surf = await menuSurface(page, m).catch(() => null);
+        if (surf)
+            soft.push(surf);
+    }
+    finally {
+        await closeMobileMenu(page, m);
+    }
+    return { applicable: true, hard, soft, eye };
+}
+/**
+ * 3.5 / 1.3 / 1.16 — the open mobile menu speaks the site's language: its buttons match the site's CTA set (height,
+ * corner radius, font — from the site-wide signatures `sigs`), and an inset panel's corners match the site's cards
+ * (square on a rounded site reads as a foreign box). Soft: a look, not a breakage.
+ */
+export async function mobileMenuConsistency(page, sigs) {
+    const m = await openMobileMenu(page);
+    if (!m)
+        return { applicable: false, list: [] };
+    const buttons = sigs.filter((s) => s.kind === "button");
+    const site = {
+        heights: [...new Set(buttons.map((s) => s.height))].sort((a, b) => a - b),
+        shapes: buttons.map((s) => ({ radius: s.radius, height: s.height })),
+        fonts: [...new Set(buttons.map((s) => s.font))],
+        cards: sigs.filter((s) => s.kind === "card").map((s) => s.radius).sort((a, b) => a - b),
+    };
+    try {
+        const list = await page.evaluate((site) => {
+            const W = window;
+            const out = [];
+            const panel = document.querySelector("[data-bs-menu-panel]");
+            if (!panel)
+                return out;
+            const at = (e) => ({ where: W.__uiDescribe(e), selector: W.__uiSelector(e), human: W.__uiHuman(e) });
+            const shape = (r, h) => (r >= h / 2 - 1 ? "pill" : r <= 2 ? "square" : "rounded");
+            const font = (cs) => cs.fontFamily.split(",")[0].replace(/["']/g, "").trim().toLowerCase();
+            const CHIP = "[aria-pressed], [aria-selected], [aria-checked], [role=tab], [role=radio], [role=option], [role=switch], [role=checkbox], [role=menuitemradio], [role=menuitemcheckbox], [data-state=on], [data-state=off]";
+            const chipRow = (el) => { const p = el.parentElement; if (!p) return false; const same = Array.from(p.children).filter((k) => k.tagName === el.tagName && k.className === el.className && W.__uiVisible(k)); return same.length >= 3 && new Set(same.map((k) => Math.round(k.getBoundingClientRect().top))).size < same.length; };
+            const parentBg = (el) => { for (let p = el.parentElement; p; p = p.parentElement) { const c = W.__uiRGBA(getComputedStyle(p).backgroundColor); if (c[3] > 0.5) return c.join(); } return "255,255,255,1"; };
+            if (site.heights.length)
+                for (const el of Array.from(panel.querySelectorAll("button, a[href], [role=button], input[type=submit]"))) {
+                    // a dropdown trigger (currency, language) is a field-like control, not a CTA
+                    if (!W.__uiVisible(el) || !(el.textContent || "").trim() || el.matches(CHIP) || el.closest(CHIP) || chipRow(el) || el.matches('[aria-haspopup]:not([aria-haspopup=false]), [role=combobox]'))
+                        continue;
+                    const cs = getComputedStyle(el), r = el.getBoundingClientRect();
+                    const bg = W.__uiRGBA(cs.backgroundColor);
+                    const filled = (bg[3] > 0.5 && bg.join() !== parentBg(el)) || /gradient/.test(cs.backgroundImage);
+                    const outlined = parseFloat(cs.borderTopWidth) > 0 && W.__uiRGBA(cs.borderTopColor)[3] > 0.2;
+                    if (!(filled || outlined) || r.height < 20 || r.height > 80 || parseFloat(cs.paddingLeft) < 8 || (el.matches("a") && !W.__uiButtonLike(el, true)))
+                        continue;
+                    const h = Math.round(r.height), rad = Math.min(Math.round(parseFloat(cs.borderTopLeftRadius)), 999), f = font(cs);
+                    const diffs = [];
+                    const nearest = Math.min(...site.heights.map((x) => Math.abs(x - h)));
+                    if (nearest > 4)
+                        diffs.push(`height ${h}px (site buttons: ${site.heights.join("/")}px)`);
+                    const shapes = new Set(site.shapes.map((s) => shape(s.radius, s.height)));
+                    const mine = shape(rad, h);
+                    if (!shapes.has(mine))
+                        diffs.push(`${mine} corners, ${rad}px (site buttons are ${[...shapes].join("/")})`);
+                    else if (mine !== "pill" && Math.min(...site.shapes.filter((s) => shape(s.radius, s.height) === mine).map((s) => Math.abs(s.radius - rad))) > 3)
+                        diffs.push(`corner radius ${rad}px (site buttons: ${[...new Set(site.shapes.map((s) => s.radius))].join("/")}px)`);
+                    if (site.fonts.length && !site.fonts.includes(f))
+                        diffs.push(`font "${f}" (site buttons: ${site.fonts.join(", ")})`);
+                    if (diffs.length)
+                        out.push({ what: `open mobile menu: button "${(el.textContent || "").trim().replace(/\s+/g, " ").slice(0, 30)}" doesn't match the site's buttons — ${diffs.join("; ")}. Use the kit Button with the site's CTA size [1.3 / 1.16, P04 P46]`, ...at(el) });
+                }
+            // an inset panel's corners vs the site's cards
+            if (site.cards.length) {
+                const pr = panel.getBoundingClientRect();
+                const inset = pr.left > 2 || innerWidth - pr.right > 2 || innerHeight - pr.bottom > 2;
+                const cs = getComputedStyle(panel);
+                const rad = Math.max(...["TopLeft", "TopRight", "BottomLeft", "BottomRight"].map((k) => parseFloat(cs[`border${k}Radius`]) || 0));
+                const med = site.cards[Math.floor(site.cards.length / 2)];
+                if (inset && ((rad <= 2 && med >= 8) || (rad >= 8 && med <= 2)))
+                    out.push({ what: `open mobile menu panel has ${rad <= 2 ? "square" : "rounded"} corners (${Math.round(rad)}px) while the site's cards are ${med <= 2 ? "square" : "rounded"} (${med}px) — an inset panel in another shape reads as a foreign box. Give it the card radius, or make it a full-screen sheet [1.17]`, ...at(panel) });
+            }
+            return out;
+        }, site);
+        return { applicable: true, list };
+    }
+    finally {
+        await closeMobileMenu(page, m);
+    }
+}
+/* ───────────────────────── every interaction animates what it changes: 6.12 P59 ───────────────────────── */
+/**
+ * In-page probe for `interactionMotion`: records, per click, what the page did over the next ~700 ms — elements that
+ * appeared or disappeared (DOM added/removed, hidden/visibility/opacity/display/size flips), the finite animations and
+ * transitions that ran (document.getAnimations each frame), CSS animation/transition events, element.animate() calls,
+ * JS rewriting style= every frame, and the per-frame look of everything the click touched.
+ */
+const ixProbe = () => {
+    const W = window;
+    if (W.__bsIx)
+        return;
+    const P = (W.__bsIx = { run: null });
+    const rec = (e) => { if (P.run && !P.run.done) P.run.events.push(e.target); };
+    for (const t of ["animationstart", "transitionrun", "transitionstart"])
+        document.addEventListener(t, rec, true);
+    const origAnimate = Element.prototype.animate;
+    Element.prototype.animate = function (...args) { if (P.run && !P.run.done) P.run.events.push(this); return origAnimate.apply(this, args); };
+    const writes = new Map();
+    new MutationObserver((list) => {
+        const R = P.run;
+        if (!R || R.done)
+            return;
+        for (const m of list) {
+            if (m.type === "childList") {
+                for (const n of m.addedNodes)
+                    if (n.nodeType === 1)
+                        R.added.add(n);
+                for (const n of m.removedNodes)
+                    if (n.nodeType === 1)
+                        R.removed.add(n);
+                R.touched.add(m.target);
+            }
+            else if (m.type === "characterData") {
+                if (m.target.parentElement)
+                    R.touched.add(m.target.parentElement);
+            }
+            else {
+                R.touched.add(m.target);
+                if (m.attributeName === "style") {
+                    const k = (writes.get(m.target) || 0) + 1;
+                    writes.set(m.target, k);
+                    if (k === 3)
+                        R.events.push(m.target);
+                }
+            }
+        }
+    }).observe(document.documentElement, { childList: true, subtree: true, characterData: true, attributes: true, attributeFilter: ["class", "style", "hidden", "open", "data-state", "aria-expanded", "aria-hidden", "aria-selected", "aria-pressed", "aria-checked", "inert"] });
+    const area = (r) => r.width * r.height;
+    const vis = (el) => {
+        if (!el.isConnected)
+            return false;
+        const r = el.getBoundingClientRect();
+        if (area(r) < 1)
+            return false;
+        return typeof el.checkVisibility === "function" ? el.checkVisibility({ opacityProperty: true, visibilityProperty: true, contentVisibilityAuto: true }) : getComputedStyle(el).visibility !== "hidden";
+    };
+    const skip = (el) => !!el.closest("[data-babysitter], babysitter-studio, nextjs-portal, [data-nextjs-toast], script, style, svg *");
+    const snap = () => { const m = new Map(); for (const el of document.body.querySelectorAll("*")) { if (skip(el)) continue; const r = el.getBoundingClientRect(); if (area(r) >= 1 && vis(el)) m.set(el, { a: area(r), h: Math.round(r.height) }); } return m; };
+    const chain = (el) => { const o = []; for (let n = el.parentElement, i = 0; n && n !== document.body && n !== document.documentElement && i < 8; n = n.parentElement, i++) o.push(n); return o; };
+    const look = (el) => { const cs = getComputedStyle(el); const r = el.getBoundingClientRect(); return [cs.opacity, cs.transform, cs.translate, cs.scale, cs.clipPath, Math.round(r.height), Math.round(r.width), Math.round(r.top), ...chain(el).slice(0, 3).map((n) => { const c = getComputedStyle(n); return c.opacity + c.transform + Math.round(n.getBoundingClientRect().height); })].join("|"); };
+    const STATE = ["backgroundColor", "borderTopColor", "color", "boxShadow", "backgroundImage", "outlineColor"];
+    const finite = (a) => { try { return Number.isFinite(a.effect.getComputedTiming().endTime); } catch { return true; } };
+    P.arm = (trigger) => {
+        const R = (P.run = { trigger, t0: performance.now(), added: new Set(), removed: new Set(), touched: new Set(), events: [], anims: new Set(), looks: new Map(), done: false, before: snap(), state: (() => { const cs = getComputedStyle(trigger); return STATE.map((k) => cs[k]); })() });
+        const step = () => {
+            for (const a of document.getAnimations())
+                if ((a.playState === "running" || a.playState === "pending") && finite(a) && a.effect && a.effect.target)
+                    R.anims.add(a.effect.target);
+            const watch = [...R.added, ...R.touched].filter((n) => n.nodeType === 1).slice(0, 200);
+            for (const el of watch) {
+                if (!R.looks.has(el))
+                    R.looks.set(el, []);
+                R.looks.get(el).push(vis(el) ? look(el) : "gone");
+            }
+            if (performance.now() - R.t0 < 700)
+                requestAnimationFrame(step);
+            else
+                R.done = true;
+        };
+        requestAnimationFrame(step);
+    };
+    /** What the last click changed: { appeared, disappeared } (outermost, ≥1500 px², not the trigger), each with `moved`. */
+    P.result = () => {
+        const R = P.run;
+        const t = R.trigger;
+        const after = new Map();
+        // what may have appeared: anything added, or anything under an element whose attributes/children changed
+        const keys = new Set([...R.before.keys(), ...[...R.added, ...R.touched].flatMap((n) => (n.nodeType === 1 && n.isConnected && n !== document.body && n !== document.documentElement ? [n, ...n.querySelectorAll("*")] : []))]);
+        for (const el of keys)
+            if (el.isConnected && !skip(el) && vis(el))
+                after.set(el, { a: area(el.getBoundingClientRect()), h: Math.round(el.getBoundingClientRect().height) });
+        const mine = (el) => el === t || t.contains(el) || el.contains(t);
+        const outer = (list) => list.filter((el) => !list.some((o) => o !== el && o.contains(el)));
+        const appeared = outer([...after.keys()].filter((el) => !R.before.has(el) && after.get(el).a >= 1500 && !mine(el)));
+        const disappeared = outer([...R.before.keys()].filter((el) => !after.has(el) && R.before.get(el).a >= 1500 && !mine(el)));
+        // sizes from before the click when known: a panel that animated out and was then removed has no box any more
+        const size = (x) => (R.before.get(x) || after.get(x) || { a: x.isConnected && x.getBoundingClientRect ? area(x.getBoundingClientRect()) : 0 }).a;
+        const related = (s, x) => x === s || (x.contains && x.contains(s) && chain(s).includes(x)) || (s.contains(x) && size(x) >= 0.5 * size(s));
+        const moved = (s) => [...R.anims].some((x) => related(s, x)) || R.events.some((x) => x instanceof Element && related(s, x))
+            || new Set((R.looks.get(s) || []).filter((l) => l !== "gone")).size > 1;
+        const desc = (el) => ({ where: W.__uiDescribe(el), selector: W.__uiSelector(el) || "", human: W.__uiHuman(el), positioned: /fixed|absolute/.test(el.isConnected ? getComputedStyle(el).position : "") });
+        const cs = getComputedStyle(t);
+        const now = STATE.map((k) => cs[k]);
+        const changed = STATE.filter((k, i) => now[i] !== R.state[i]);
+        let snaps = false;
+        if (changed.length && !R.anims.has(t)) {
+            const props = cs.transitionProperty.split(",").map((s) => s.trim());
+            const durs = cs.transitionDuration.split(",").map((s) => parseFloat(s) || 0);
+            const css = { backgroundColor: /^(all|background|background-color)$/, borderTopColor: /^(all|border|border-color|border-top-color)$/, color: /^(all|color)$/, boxShadow: /^(all|box-shadow)$/, backgroundImage: /^(all|background|background-image)$/, outlineColor: /^(all|outline|outline-color)$/ };
+            snaps = changed.some((k) => !props.some((p, i) => css[k].test(p) && (durs[i % durs.length] || 0) > 0));
+        }
+        return { appeared: appeared.map((el) => ({ ...desc(el), moved: moved(el) })), disappeared: disappeared.map((el) => ({ ...desc(el), moved: moved(el) })), state: changed, snaps };
+    };
+    P.sig = (el) => [el.tagName, el.getAttribute("role") || "", el.getAttribute("type") || "", (el.getAttribute("class") || "").trim().split(/\s+/).sort().join(" ")].join("|");
+    const label = (el) => ((el.getAttribute("aria-label") || "") + " " + (el.textContent || "")).trim().replace(/\s+/g, " ").slice(0, 60);
+    /** The same control on a reloaded page (selectors with :nth-of-type shift when a cookie banner is gone): same look and label. */
+    P.find = (sig, text, ord) => {
+        for (const e of document.querySelectorAll("[data-bs-ix]"))
+            e.removeAttribute("data-bs-ix");
+        const same = Array.from(document.body.querySelectorAll("*")).filter((e) => P.sig(e) === sig);
+        const el = same.find((e) => label(e) === text) || same[ord];
+        if (el)
+            el.setAttribute("data-bs-ix", "");
+        return !!el;
+    };
+    /** Candidates: everything a person can click on this page, one per component look (signature), with why others were not clicked. */
+    P.candidates = () => {
+        const sel = 'button, a[href], [role=button], [role=tab], [role=switch], [role=menuitem], [role=option], [role=checkbox], [role=radio], summary, [aria-expanded], [aria-controls], [aria-haspopup], [data-state], label[for], [onclick], input[type=checkbox], input[type=radio]';
+        const list = new Set(document.querySelectorAll(sel));
+        // cursor:pointer things with no interactive element around or inside them (a clickable card or div)
+        for (const el of document.body.querySelectorAll("div, span, li, img, article, section, p, h2, h3, h4"))
+            if (getComputedStyle(el).cursor === "pointer" && !el.closest(sel) && !el.querySelector(sel) && !(el.parentElement && getComputedStyle(el.parentElement).cursor === "pointer"))
+                list.add(el);
+        const here = location.href.split("#")[0];
+        const groups = new Map();
+        const skipped = { navigates: [], submits: [], destructive: [] };
+        for (const el of list) {
+            if (skip(el) || !vis(el) || el.matches("[disabled], [aria-disabled=true]") || el.closest("[inert], [aria-hidden=true]"))
+                continue;
+            if (el.matches("a[href]")) {
+                const href = el.getAttribute("href") || "";
+                let target = "";
+                try { target = new URL(el.href, location.href).href.split("#")[0]; } catch { }
+                if (!/^(#|javascript:)/.test(href) && target !== here && !el.matches("[aria-expanded], [aria-controls], [aria-haspopup], [role=button], [role=tab]")) {
+                    skipped.navigates.push(W.__uiDescribe(el));
+                    continue;
+                }
+            }
+            if ((el.matches("button[type=submit], input[type=submit]") || (el.matches("button:not([type])") && el.closest("form"))))
+                if (el.closest("form")) {
+                    skipped.submits.push(W.__uiDescribe(el));
+                    continue;
+                }
+            const text = ((el.getAttribute("aria-label") || "") + " " + (el.textContent || "")).trim();
+            if (/delete|remove|sign ?out|log ?out|unsubscribe|purchase|buy now|checkout|pay now|удал|выйти|оплат/i.test(text)) {
+                skipped.destructive.push(W.__uiDescribe(el));
+                continue;
+            }
+            const sig = P.sig(el);
+            if (!groups.has(sig))
+                groups.set(sig, []);
+            groups.get(sig).push(el);
+        }
+        const active = (el) => el.matches('[aria-selected=true], [aria-pressed=true], [aria-checked=true], [aria-expanded=true], [data-state=active], [data-state=on], [data-state=open], [data-state=checked], [aria-current]') || (el.matches("input") && el.checked);
+        const picks = [];
+        let lookalikes = 0;
+        for (const [sig, els] of groups) {
+            const el = els.find((e) => !active(e)) || els[0];
+            lookalikes += els.length - 1;
+            const all = Array.from(document.body.querySelectorAll("*")).filter((e) => P.sig(e) === sig);
+            picks.push({ sig, text: label(el), ord: all.indexOf(el), selector: W.__uiSelector(el), where: W.__uiDescribe(el), human: W.__uiHuman(el), toggle: el.matches("[aria-expanded], [aria-pressed], [role=switch], [role=checkbox], summary, input, label[for]") });
+        }
+        return { picks, skipped, lookalikes };
+    };
+};
+/**
+ * 6.12 — every interactive element animates what it shows, hides or changes, not only the dropdowns and dialogs
+ * 6.12's `overlayMotion` opens: tabs, accordions, "show more", toggled sections, chips that reveal content, toasts,
+ * popovers, carousels, filters. On the current page (reloaded with `reload()` every `perReload` clicks, after a
+ * navigation, so state does not cascade) every visible clickable — one per component look — is clicked with page
+ * navigations blocked; what appeared or disappeared in one frame with no opacity / transform / height / clip motion
+ * fails, on open and on toggling back. The clicked control's own state change (fill, border, colour) that snaps without
+ * a transition is a soft finding. Links to other pages, form submits and destructive actions are not clicked, and
+ * everything not clicked is returned with the reason (`notTested`) — never dropped silently.
+ * Runs with prefers-reduced-motion: no-preference.
+ */
+export async function interactionMotion(page, { reload, max = 30, perReload = 6 } = {}) {
+    const hard = [], soft = [];
+    const notTested = [];
+    await page.emulateMedia({ reducedMotion: "no-preference" }).catch(() => { });
+    let reloading = false; // our own reloads pass; a click that would leave the page is stopped
+    const blockNav = (route) => (!reloading && route.request().isNavigationRequest() && route.request().frame() === page.mainFrame() ? route.abort() : route.continue());
+    const closePopup = (p) => p.close().catch(() => { });
+    await page.route("**/*", blockNav);
+    page.on("popup", closePopup);
+    try {
+        await page.evaluate(ixProbe);
+        const { picks, skipped, lookalikes } = await page.evaluate(() => window.__bsIx.candidates());
+        const home = page.url();
+        if (skipped.navigates.length)
+            notTested.push({ reason: "link to another page (navigation is not an in-page change)", count: skipped.navigates.length, examples: skipped.navigates.slice(0, 3) });
+        if (skipped.submits.length)
+            notTested.push({ reason: "submits a form to the server", count: skipped.submits.length, examples: skipped.submits.slice(0, 3) });
+        if (skipped.destructive.length)
+            notTested.push({ reason: "destructive or paying action", count: skipped.destructive.length, examples: skipped.destructive.slice(0, 3) });
+        if (lookalikes)
+            notTested.push({ reason: "look-alike of a control that was clicked (same component, judged once)", count: lookalikes, examples: [] });
+        if (picks.length > max)
+            notTested.push({ reason: `over the per-page cap of ${max} clicks (babysitter.config.json → motion.maxClicks)`, count: picks.length - max, examples: picks.slice(max, max + 3).map((p) => p.where) });
+        const fresh = async () => {
+            reloading = true;
+            try {
+                if (reload)
+                    await reload();
+                else
+                    await page.goto(home).catch(() => { });
+            }
+            finally {
+                reloading = false;
+            }
+            await page.evaluate(ixProbe).catch(() => { });
+        };
+        let since = 0;
+        const gone = [];
+        for (const pick of picks.slice(0, max)) {
+            if (since >= perReload || page.url() !== home) {
+                await fresh();
+                since = 0;
+            }
+            const found = await page.evaluate(({ sig, text, ord }) => window.__bsIx.find(sig, text, ord), pick).catch(() => false);
+            const h = found ? await page.$("[data-bs-ix]").catch(() => null) : null;
+            let ok = h && (await h.evaluate((el) => window.__uiVisible(el)).catch(() => false));
+            if (h && !ok) {
+                // after a reload, reveal-on-scroll content is still faded out until it is scrolled to
+                await h.scrollIntoViewIfNeeded().catch(() => { });
+                await page.waitForTimeout(300);
+                await settle(page, 2000);
+                ok = await h.evaluate((el) => window.__uiVisible(el)).catch(() => false);
+            }
+            if (!ok) {
+                gone.push(pick.where);
+                continue;
+            }
+            since++;
+            await h.scrollIntoViewIfNeeded().catch(() => { });
+            await settle(page, 2000); // a reveal set off by the scroll is not the click's motion
+            await uncover(h);
+            await h.hover({ timeout: 1500 }).catch(() => { });
+            await settle(page, 600);
+            await h.evaluate((el) => window.__bsIx.arm(el));
+            await h.click({ timeout: 2000 }).catch(() => { });
+            await page.waitForFunction(() => window.__bsIx && window.__bsIx.run && window.__bsIx.run.done, null, { timeout: 4000 }).catch(() => { });
+            if (page.url().split("#")[0] !== home.split("#")[0]) {
+                notTested.push({ reason: "navigated (client-side routing) when clicked", count: 1, examples: [pick.where] });
+                await fresh();
+                since = 0;
+                continue;
+            }
+            await settle(page, 1200);
+            const r = await page.evaluate(() => window.__bsIx.result()).catch(() => null);
+            if (!r) {
+                await recover(page);
+                continue;
+            }
+            const at = { sig: pick.sig, selector: pick.selector, human: pick.human };
+            const name = (list) => list.slice(0, 2).map((x) => x.where).join(" + ");
+            if (r.appeared.length && !r.appeared.some((x) => x.moved))
+                hard.push({ kind: "open", what: `clicking it shows ${name(r.appeared)} in one frame — no opacity / transform / height / clip motion. Animate it in (fade + 4–8px slide or a height/grid-rows transition, 150–250 ms, motion-reduce:transition-none) [6.12, P59]`, where: pick.where, ...at });
+            else if (!r.appeared.length && r.disappeared.length && !r.disappeared.some((x) => x.moved))
+                hard.push({ kind: "close", what: `clicking it hides ${name(r.disappeared)} in one frame — no exit motion. Animate it out, mirroring the enter [6.12, P59]`, where: pick.where, ...at });
+            if (r.snaps)
+                soft.push({ kind: "state", what: `its own state change (${r.state.join(", ").replace(/TopColor/g, "Color")}) snaps in one frame — add transition-colors (150 ms) so the feedback reads as a response [6.12]`, where: pick.where, ...at });
+            // toggle back: what it opened must leave with motion too
+            if (r.appeared.length) {
+                const positioned = r.appeared.some((x) => x.positioned);
+                let back = null;
+                if (positioned) {
+                    await h.evaluate((el) => window.__bsIx.arm(el)).catch(() => { });
+                    await page.keyboard.press("Escape").catch(() => { });
+                    await page.waitForFunction(() => window.__bsIx.run.done, null, { timeout: 4000 }).catch(() => { });
+                    back = await page.evaluate(() => window.__bsIx.result()).catch(() => null);
+                }
+                const still = (res) => !res || !res.disappeared.length;
+                if (still(back) && (pick.toggle || !positioned) && (await h.evaluate((el) => window.__uiVisible(el)).catch(() => false))) {
+                    await h.evaluate((el) => window.__bsIx.arm(el)).catch(() => { });
+                    await h.click({ timeout: 2000 }).catch(() => { });
+                    await page.waitForFunction(() => window.__bsIx.run.done, null, { timeout: 4000 }).catch(() => { });
+                    await settle(page, 1200);
+                    back = page.url().split("#")[0] === home.split("#")[0] ? await page.evaluate(() => window.__bsIx.result()).catch(() => null) : null;
+                }
+                if (back && back.disappeared.length && !back.appeared.length && !back.disappeared.some((x) => x.moved))
+                    hard.push({ kind: "close", what: `toggling it back hides ${name(back.disappeared)} in one frame — no exit motion. Animate it out, mirroring the enter [6.12, P59]`, where: pick.where, ...at });
+            }
+            await recover(page);
+        }
+        if (gone.length)
+            notTested.push({ reason: "not on the page after a reload (rendered differently, or gone for good after an earlier click — e.g. a remembered cookie choice)", count: gone.length, examples: gone.slice(0, 3) });
+    }
+    finally {
+        page.off("popup", closePopup);
+        await page.unroute("**/*", blockNav).catch(() => { });
+    }
+    return { hard, soft, notTested };
+}

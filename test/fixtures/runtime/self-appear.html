@@ -1,0 +1,48 @@
+<!doctype html>
+<html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<!-- Overlays that appear by themselves (6.12). ?bad = truelogos.pro before the fix (2026-10): the banner is added after
+     1 s with tailwindcss-animate classes and no plugin (no CSS behind them) and removed at once on Accept/Reject.
+     ?good: real enter keyframes + an exit transition. ?enteronly: enters with motion, removed at once.
+     ?ssr: the banner is in the HTML from the first frame (part of the page load). ?spinner: a toast whose only motion
+     is an endless spinner (not an entrance), closed with a fade. -->
+<style>
+  body { margin: 0; font: 16px/1.5 system-ui, sans-serif; background: #0a0f1c; color: #e5e7eb; }
+  main { padding: 80px 16px; min-height: 1400px; }
+  .banner { position: fixed; left: 0; right: 0; bottom: 0; z-index: 50; padding: 12px; }
+  .card { background: #111827; border: 1px solid #334155; border-radius: 16px; padding: 20px; }
+  .card button { height: 44px; padding: 0 20px; border-radius: 999px; border: 1px solid #94a3b8; background: #1d4ed8; color: #fff; font: inherit; margin-right: 8px; }
+  .enter { animation: enter 300ms ease-out both; }
+  @keyframes enter { from { opacity: 0; transform: translateY(16px); } }
+  .leaving { animation: leave 250ms ease-in forwards; }
+  @keyframes leave { to { opacity: 0; transform: translateY(16px); } }
+  .toast { position: fixed; top: 16px; right: 16px; width: 280px; background: #1f2937; border-radius: 12px; padding: 16px; z-index: 60; }
+  .spin { display: inline-block; width: 16px; height: 16px; border: 2px solid #fff; border-top-color: transparent; border-radius: 50%; animation: spin 1s linear infinite; }
+  @keyframes spin { to { transform: rotate(360deg); } }
+  .fade-out { transition: opacity 200ms; opacity: 0; }
+</style></head>
+<body>
+<main><h1>Fixture page</h1><p>Some content under the banner.</p></main>
+<script>
+  const q = location.search;
+  const html = '<div class="card"><h2>We use cookies</h2><p>Necessary cookies run the site.</p><button id="accept">Accept all</button><button id="reject">Reject all</button></div>';
+  function make(cls) {
+    const b = document.createElement("div");
+    b.id = "banner"; b.className = "banner " + cls; b.innerHTML = html;
+    document.body.appendChild(b);
+    for (const id of ["accept", "reject"]) b.querySelector("#" + id).addEventListener("click", () => {
+      if (/good/.test(q)) { b.classList.remove("enter"); b.classList.add("leaving"); setTimeout(() => b.remove(), 260); }
+      else b.remove();
+    });
+  }
+  if (/ssr/.test(q)) make("");
+  if (/bad/.test(q)) setTimeout(() => make("animate-in fade-in slide-in-from-bottom-4 duration-500"), 1000);
+  if (/good|enteronly/.test(q)) setTimeout(() => make("enter"), 1000);
+  if (/spinner/.test(q)) setTimeout(() => {
+    const t = document.createElement("div");
+    t.id = "toast"; t.className = "toast"; t.setAttribute("role", "status");
+    t.innerHTML = '<span class="spin"></span> Saving your preferences… <button id="close" aria-label="Close">×</button>';
+    document.body.appendChild(t);
+    t.querySelector("#close").addEventListener("click", () => { t.classList.add("fade-out"); setTimeout(() => t.remove(), 220); });
+  }, 800);
+</script>
+</body></html>

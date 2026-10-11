@@ -1,0 +1,68 @@
+<!doctype html>
+<html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<!-- Every interaction animates what it changes (6.12, generalised). Bad: tabs that swap panels in one frame, a
+     "show more" that jumps open and shut, a toast that pops in, a chip whose pressed fill snaps. Good: tabs that
+     fade the new panel in, a "show more" with a grid-rows transition, a chip with transition-colors. A link to another
+     page and a form submit are not clicked. -->
+<style>
+  body { margin: 0; padding: 24px; font: 16px/1.5 Arial, sans-serif; background: #fff; color: #111; }
+  section { margin: 0 0 32px; width: 600px; }
+  [role=tab], .btn, .chip { height: 44px; padding: 0 16px; border: 1px solid #555; background: #fff; color: #111; font: inherit; border-radius: 8px; }
+  .panel { padding: 16px; border: 1px solid #ccc; height: 120px; }
+  .fade { animation: fade 200ms ease-out; }
+  @keyframes fade { from { opacity: 0; transform: translateY(6px); } }
+  .more-good { display: grid; grid-template-rows: 0fr; transition: grid-template-rows 250ms ease; }
+  .more-good.open { grid-template-rows: 1fr; }
+  .more-good > div { overflow: hidden; }
+  .more-text { height: 100px; }
+  .toast { position: fixed; right: 16px; bottom: 16px; width: 280px; height: 72px; background: #222; color: #fff; padding: 16px; }
+  .chip[aria-pressed=true] { background: #1d4ed8; color: #fff; }
+  #chip-good { transition: background-color 150ms, color 150ms; }
+</style></head>
+<body>
+<section id="tabs-bad">
+  <div role="tablist"><button role="tab" class="tb" aria-selected="true" aria-controls="b1">One</button> <button role="tab" class="tb" aria-selected="false" aria-controls="b2">Two</button></div>
+  <div class="panel" id="b1" role="tabpanel">Panel one content</div>
+  <div class="panel" id="b2" role="tabpanel" hidden>Panel two content</div>
+</section>
+<section id="tabs-good">
+  <div role="tablist"><button role="tab" class="tg" aria-selected="true" aria-controls="g1">Alpha</button> <button role="tab" class="tg" aria-selected="false" aria-controls="g2">Beta</button></div>
+  <div class="panel" id="g1" role="tabpanel">Panel alpha content</div>
+  <div class="panel" id="g2" role="tabpanel" hidden>Panel beta content</div>
+</section>
+<section>
+  <button class="btn" id="more-bad" aria-expanded="false" aria-controls="mb">Show more</button>
+  <div id="mb" class="more-text" hidden>More text that jumps in.</div>
+</section>
+<section>
+  <button class="btn" id="more-good-btn" aria-expanded="false" aria-controls="mg">Read more</button>
+  <div id="mg" class="more-good"><div><div class="more-text">More text that grows in.</div></div></div>
+</section>
+<section>
+  <button class="btn btn-toast" id="toast-btn">Copy link</button>
+  <button class="chip" id="chip-bad" aria-pressed="false">Bold</button>
+  <button class="chip chip2" id="chip-good" aria-pressed="false">Italic</button>
+</section>
+<section>
+  <a href="https://example.com/other" id="nav">Other page</a>
+  <form action="/subscribe" method="post"><button id="submit">Subscribe</button></form>
+</section>
+<script>
+  function tabs(cls, anim) {
+    const ts = [...document.querySelectorAll("." + cls)];
+    for (const t of ts) t.addEventListener("click", () => {
+      for (const o of ts) { o.setAttribute("aria-selected", String(o === t)); const p = document.getElementById(o.getAttribute("aria-controls")); p.hidden = o !== t; p.classList.remove("fade"); if (o === t && anim) { void p.offsetWidth; p.classList.add("fade"); } }
+    });
+  }
+  tabs("tb", false); tabs("tg", true);
+  const mb = document.getElementById("more-bad");
+  mb.addEventListener("click", () => { const open = mb.getAttribute("aria-expanded") !== "true"; mb.setAttribute("aria-expanded", String(open)); document.getElementById("mb").hidden = !open; });
+  const mgb = document.getElementById("more-good-btn");
+  mgb.addEventListener("click", () => { const open = mgb.getAttribute("aria-expanded") !== "true"; mgb.setAttribute("aria-expanded", String(open)); document.getElementById("mg").classList.toggle("open", open); });
+  document.getElementById("toast-btn").addEventListener("click", () => {
+    const t = document.createElement("div"); t.className = "toast"; t.id = "toast"; t.textContent = "Link copied"; document.body.appendChild(t);
+    setTimeout(() => t.remove(), 4000);
+  });
+  for (const id of ["chip-bad", "chip-good"]) { const c = document.getElementById(id); c.addEventListener("click", () => c.setAttribute("aria-pressed", String(c.getAttribute("aria-pressed") !== "true"))); }
+</script>
+</body></html>

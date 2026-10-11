@@ -7,6 +7,7 @@ import {
 import { noEmoji, imgDimensions } from "./rules/content.js";
 import { uiNoInlineStyle } from "./rules/ui-no-inline-style.js";
 import { overlayMotion } from "./rules/motion.js";
+import { noDeadClasses } from "./rules/dead-classes.js";
 import { kitInteractive } from "./rules/interactive.js";
 import { noDynamicClasses, noCssInJsLiterals } from "./rules/ast.js";
 import { DEFAULT_KIT, DEFAULT_THEME_PATHS } from "./util.js";
@@ -34,6 +35,7 @@ const rules = {
   "no-emoji": noEmoji,
   "img-dimensions": imgDimensions,
   "overlay-motion": overlayMotion,
+  "no-dead-classes": noDeadClasses,
   "kit-interactive": kitInteractive,
 };
 
@@ -78,6 +80,7 @@ plugin.configs.create = (project = {}) => {
         "ui/no-emoji": allow.emoji ? "off" : "error",
         "ui/img-dimensions": "error",
         "ui/overlay-motion": "error",
+        "ui/no-dead-classes": "error",
         "ui/kit-interactive": ["error", { uiKitPaths }],
       },
     },

@@ -334,6 +334,60 @@ tester.run("no-inline-style (3.3 strict)", R["no-inline-style"], {
   });
 }
 
+// 6.12 — dead utility classes: the tailwindcss-animate family without the plugin generates no CSS (truelogos.pro
+// cookie banner, 2026-10: `animate-in fade-in slide-in-from-bottom-4 duration-500` — animation-name none, popped in)
+{
+  const { mkdtempSync, writeFileSync, mkdirSync } = await import("node:fs");
+  const { tmpdir } = await import("node:os");
+  const { join } = await import("node:path");
+  const proj = (pkg, files = {}) => {
+    const d = mkdtempSync(join(tmpdir(), "dead-"));
+    writeFileSync(join(d, "package.json"), JSON.stringify(pkg));
+    for (const [f, text] of Object.entries(files)) { mkdirSync(join(d, f, ".."), { recursive: true }); writeFileSync(join(d, f), text); }
+    return d;
+  };
+  const v4 = { "app/globals.css": '@import "tailwindcss";\n' };
+  const none = proj({ dependencies: { next: "15", tailwindcss: "^4.1.0" } }, v4);
+  const imported = proj({ dependencies: { tailwindcss: "^4.1.0", "tw-animate-css": "^1.3.0" } }, { "app/globals.css": '@import "tailwindcss";\n@import "tw-animate-css";\n' });
+  const v3 = proj({ dependencies: { tailwindcss: "^3.4.0", "tailwindcss-animate": "^1.0.7" } }, { "tailwind.config.ts": 'import animate from "tailwindcss-animate";\nexport default { plugins: [animate] };\n', "app/globals.css": "@tailwind base;\n" });
+  const notImported = proj({ dependencies: { tailwindcss: "^4.1.0", "tw-animate-css": "^1.3.0" } }, v4);
+  const notInPlugins = proj({ dependencies: { tailwindcss: "^3.4.0", "tailwindcss-animate": "^1.0.7" } }, { "tailwind.config.js": "module.exports = { plugins: [] };\n" });
+  const vendored = proj({ dependencies: { tailwindcss: "^4.1.0" } }, { "app/globals.css": '@import "tailwindcss";\n@import "../vendor/tw-animate-css/tw-animate.css";\n' });
+  const own = proj({ dependencies: { tailwindcss: "^4.1.0" } }, { "app/globals.css": '@import "tailwindcss";\n.fade-in { animation: fade .3s ease-out; }\n@theme { --animate-accordion-down: accordion-down .2s ease-out; }\n@keyframes accordion-down { from { height: 0 } }\n' });
+  const banner = '<div className="fixed inset-x-0 bottom-0 z-50 p-3 animate-in fade-in slide-in-from-bottom-4 duration-500">x</div>';
+  const deadErr = { errors: [{ messageId: "dead" }] };
+  tester.run("no-dead-classes", R["no-dead-classes"], {
+    valid: [
+      { code: banner, filename: join(imported, "app/cookie.tsx") },
+      { code: banner, filename: join(v3, "app/cookie.tsx") },
+      { code: banner, filename: join(vendored, "app/cookie.tsx") },
+      // a project's own .fade-in rule and its own accordion keyframes are real CSS
+      { code: '<div className="fade-in" />', filename: join(own, "app/a.tsx") },
+      { code: '<div className="data-[state=open]:animate-accordion-down" />', filename: join(own, "app/a.tsx") },
+      { code: '<div className="data-[state=open]:animate-accordion-down data-[state=closed]:animate-accordion-up" />', filename: join(imported, "app/a.tsx") },
+      // not a class list, or not in the family (core cursor-zoom-in, animate-spin)
+      { code: 'const msg = "animate-in fade-in";', filename: join(none, "app/a.tsx") },
+      { code: '<div className="cursor-zoom-in animate-spin transition-opacity" />', filename: join(none, "app/a.tsx") },
+      // no package.json above the file: nothing to tell from, no guess
+      banner,
+    ],
+    invalid: [
+      { code: banner, filename: join(none, "app/cookie.tsx"), ...deadErr },
+      { code: 'const C = () => <div className={cn("fixed", open && "data-[state=open]:animate-in data-[state=open]:zoom-in-95")} />', filename: join(none, "app/a.tsx"), ...deadErr },
+      { code: 'const sheet = cva("fixed z-50", { variants: { side: { bottom: "slide-in-from-bottom slide-out-to-bottom" } } });', filename: join(none, "components/ui/sheet.tsx"), ...deadErr },
+      { code: 'const bannerClass = `fixed ${pos} animate-out fade-out-0`;', filename: join(none, "app/a.tsx"), ...deadErr },
+      { code: '<div class="spin-in-90" />', filename: join(none, "app/a.tsx"), ...deadErr },
+      // installed but never imported (v4) / not in plugins (v3): still nothing generated
+      { code: banner, filename: join(notImported, "app/cookie.tsx"), ...deadErr },
+      { code: banner, filename: join(notInPlugins, "app/cookie.tsx"), ...deadErr },
+      // own .fade-in is real, animate-in next to it is not
+      { code: '<div className="animate-in fade-in" />', filename: join(own, "app/a.tsx"), ...deadErr },
+      // accordion height classes with no keyframes and no tw-animate-css
+      { code: '<div className="data-[state=open]:animate-accordion-down" />', filename: join(v3, "app/a.tsx"), errors: [{ messageId: "disclosure" }] },
+    ],
+  });
+}
+
 // 1.18 — interactive elements are reusable kit components; one dropdown per site; disclosures animate (6.12)
 {
   const { _resetSelectImpls } = await import("./rules/interactive.js");

@@ -1,0 +1,11 @@
+<!doctype html>
+<html><head><meta charset="utf-8">
+<!-- animate-in classes with and without the plugin's CSS (?plugin adds what tw-animate-css generates for them). -->
+<script>if (/plugin/.test(location.search)) document.write('<style>.animate-in{animation:enter .3s ease-out both}[data-state=open].data-open-in{animation:enter .3s}@keyframes enter{from{opacity:0;transform:translateY(8px)}}</style>');</script>
+<style>body { margin: 0; font: 16px system-ui; } div { padding: 16px; margin: 8px; border: 1px solid #ccc; }</style>
+</head><body>
+<div id="dead" class="animate-in fade-in slide-in-from-bottom-4 duration-500">cookie banner</div>
+<div id="open" data-state="open" class="data-[state=open]:animate-in data-open-in">open popover</div>
+<div id="closed" data-state="closed" class="data-[state=open]:animate-in">closed popover</div>
+<div id="plain" class="fade-in">no animate-in: nothing promised by itself</div>
+</body></html>

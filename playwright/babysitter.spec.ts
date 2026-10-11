@@ -78,12 +78,78 @@ for (const route of ROUTES) {
     test("1.18 tick boxes, radios and switches look checked when checked", async ({ page }) => { await open(page, r); hard(await c.checkedState(page)); });
     test("1.2/5.2 dropdowns, menus and dialogs open on-screen without moving the header [P02 P18 P22]", async ({ page }) => { await open(page, r); hard(await c.interactiveStates(page)); });
     test("6.12 dropdowns, menus, popovers, dialogs and accordions open and close with motion [P59]", async ({ page }) => { await open(page, r); hard(await c.overlayMotion(page)); });
+    test("6.12 overlays that appear by themselves (cookie banner, toast, promo bar, chat bubble) come and go with motion [P59]", async ({ page }) => {
+      // its own fresh load: frames are sampled from the first paint, and nothing dismissed earlier is remembered
+      test.setTimeout(90_000);
+      await c.install(page);
+      hard(await c.selfAppearingMotion(page, r));
+    });
+    test("6.12 animate-in / animate-out classes produce an animation [P59]", async ({ page }) => { await open(page, r); hard(await c.deadAnimationClasses(page)); });
+    test("3.5 the open mobile menu: legible, tappable, uncovered, covers the page, matches the theme [P10]", async ({ page }) => {
+      await open(page, r);
+      const m = await c.mobileMenu(page, !!allow.lightWeights);
+      test.skip(!m.applicable, "no menu toggle at this width (3.5 nav reachability covers that)");
+      if (m.eye.length) test.info().annotations.push({ type: "check by eye", description: fmt(m.eye) });
+      if (m.soft.length) {
+        if (STRICT) expect.soft(m.soft, `open mobile menu\n${fmt(m.soft)}`).toEqual([]);
+        else test.info().annotations.push({ type: "warning", description: `open mobile menu\n${fmt(m.soft)}` });
+      }
+      hard(m.hard);
+    });
     test("2.5 header nav items do not wrap [P35]", async ({ page }) => { await open(page, r); soft(await c.wrappedNavItems(page), "nav items wrap"); });
     test("2.11 text is not covered by other elements [P49]", async ({ page }) => { await open(page, r); soft(await c.overlappingText(page), "overlapping text"); });
     test("6.9 underline only on links [P54]", async ({ page }) => { await open(page, r); soft(await c.fakeLinks(page), "fake link affordance"); });
     test("1.9 keyboard focus is visible [P09]", async ({ page }) => { await open(page, r); soft(await c.focusVisible(page), "missing focus ring"); });
   });
 }
+
+/**
+ * 6.12 — every interactive element animates what it shows, hides or changes (tabs, accordions, show-more, toggled
+ * sections, chips, toasts, popovers, carousels, filters), on open and on toggling back; the clicked control's own state
+ * change should transition too (soft). Site-wide so the same component on many pages is one finding listing the pages.
+ * Not clicked (links to other pages, submits, destructive actions, look-alikes, over the cap) is listed, never dropped.
+ */
+test.describe("site-wide interactions", () => {
+  test("6.12 every interactive element animates what it shows, hides or changes [P59]", async ({ browser }, info) => {
+    test.skip(!/mobile-390|desktop-1440/.test(info.project.name), "run at one mobile and one desktop width");
+    const max = Number(cfg.motion?.maxClicks ?? 30);
+    test.setTimeout(120_000 + Math.ceil(ROUTES.length / 3) * (30_000 + max * 4_000));
+    const hardG = new Map<string, { what: string; where: string; pages: string[] }>();
+    const softG = new Map<string, { what: string; where: string; pages: string[] }>();
+    const notTested: string[] = [];
+    const add = (g: typeof hardG, f: { kind: string; sig: string; what: string; where: string }, route: string) => {
+      const k = `${f.kind}|${f.sig}`;
+      const e = g.get(k) || { what: f.what, where: f.where, pages: [] };
+      if (!e.pages.includes(route)) e.pages.push(route);
+      g.set(k, e);
+    };
+    const queue = [...ROUTES];
+    const worker = async () => {
+      for (let route = queue.shift(); route; route = queue.shift()) {
+        const ctx = await browser.newContext({ ...info.project.use, storageState: route.auth ? STORAGE : undefined, baseURL: info.project.use.baseURL });
+        const page = await ctx.newPage();
+        try {
+          await open(page, route.path);
+          const reload = async () => { await page.goto(route.path, { waitUntil: "networkidle" }).catch(() => page.goto(route.path, { waitUntil: "load" }).catch(() => {})); await page.waitForTimeout(500); if (await c.applyColorScheme(page)) await page.waitForTimeout(300); };
+          const r = await c.interactionMotion(page, { reload, max });
+          for (const f of r.hard) add(hardG, f, route.path);
+          for (const f of r.soft) add(softG, f, route.path);
+          for (const n of r.notTested) notTested.push(`${route.path}: ${n.count} not tested — ${n.reason}${n.examples.length ? ` (e.g. ${n.examples.join("; ")})` : ""}`);
+        } catch (e) {
+          notTested.push(`${route.path}: not tested — the check failed on this page: ${String((e as Error).message || e).split("\n")[0]}`);
+        } finally { await ctx.close(); }
+      }
+    };
+    await Promise.all([worker(), worker(), worker()]);
+    const show = (g: typeof hardG) => [...g.values()].map((e) => `  • ${e.what} — ${e.where} — on ${e.pages.join(", ")}`).join("\n");
+    if (notTested.length) test.info().annotations.push({ type: "not tested", description: notTested.join("\n") });
+    if (softG.size) {
+      if (STRICT) expect.soft([...softG.values()], `control state changes that snap\n${show(softG)}`).toEqual([]);
+      else test.info().annotations.push({ type: "warning", description: `control state changes that snap\n${show(softG)}` });
+    }
+    expect([...hardG.values()], `${show(hardG)}${notTested.length ? `\n\nNot tested:\n${notTested.map((x) => `  ${x}`).join("\n")}` : ""}`).toEqual([]);
+  });
+});
 
 /**
  * 1.3 / 1.16 — one look per role across the whole site. Collects every rendered button, input and card
@@ -115,6 +181,19 @@ test.describe("site-wide consistency", () => {
     check("input corner radius", c.variety(sigs, "input", "radius"), lim.inputRadii);
     check("card corner radius", c.variety(sigs, "card", "radius"), lim.cardRadii);
     check("card style (radius + fill + border + shadow + padding)", c.variety(sigs, "card", "skin"), lim.cardStyles);
+    // 3.5 — the open mobile menu speaks the site's language: its buttons vs the CTA set above, its corners vs the cards
+    if (/mobile/.test(info.project.name)) {
+      const home = ROUTES.find((x) => !x.auth && x.path === "/") || ROUTES.find((x) => !x.auth) || ROUTES[0];
+      const ctx = await browser.newContext({ ...info.project.use, storageState: home.auth ? STORAGE : undefined, baseURL: info.project.use.baseURL });
+      const page = await ctx.newPage();
+      await open(page, home.path);
+      const menu = await c.mobileMenuConsistency(page, sigs);
+      await ctx.close();
+      if (menu.list.length) {
+        if (STRICT) expect.soft(menu.list, `open mobile menu does not match the site\n${fmt(menu.list)}`).toEqual([]);
+        else test.info().annotations.push({ type: "warning", description: `open mobile menu does not match the site\n${fmt(menu.list)}` });
+      }
+    }
     expect(problems, problems.join("\n\n")).toEqual([]);
   });
 });

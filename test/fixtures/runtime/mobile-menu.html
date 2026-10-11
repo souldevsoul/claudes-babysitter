@@ -1,0 +1,94 @@
+<!doctype html>
+<html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<!-- The open mobile menu (3.5). ?bad = truelogos.pro before the fix (2026-10): a navy site (white body, navy sections),
+     a transparent fixed header, and a WHITE square-cornered panel inset 16px inside it, 32 px buttons while the site's
+     CTAs are 52 px pills, the page showing below and at its sides.
+     ?good: a full-height navy panel with the site's pill buttons. ?sheet: a navy side sheet over a dimming backdrop.
+     ?light: a light site with a navy header and a full-height white panel (its own surface: no mismatch).
+     ?covered: the good panel with a fixed cookie banner over its last button. -->
+<style>
+  * { box-sizing: border-box; }
+  body { margin: 0; font: 16px/1.5 Arial, sans-serif; background: #fff; color: #e5e7eb; }
+  header { position: fixed; top: 0; left: 0; right: 0; z-index: 50; }
+  .bar { height: 64px; display: flex; align-items: center; justify-content: space-between; padding: 0 16px; }
+  .logo { color: #fff; font-weight: 700; text-decoration: none; display: inline-flex; align-items: center; height: 44px; }
+  .links { display: none; }
+  @media (min-width: 1024px) { .links { display: flex; gap: 16px; } .burger { display: none; } }
+  .links a { color: #fff; text-decoration: none; }
+  .burger { width: 44px; height: 44px; border: 0; background: transparent; color: #fff; display: inline-flex; align-items: center; justify-content: center; }
+  section { background: #0a0f1c; padding: 96px 16px 48px; min-height: 700px; }
+  .light section { background: #f8fafc; color: #0f172a; }
+  .light header .bar { background: #0a0f1c; }
+  .cta { display: inline-flex; align-items: center; height: 52px; padding: 0 28px; border-radius: 999px; background: #2563eb; color: #fff; text-decoration: none; font: 600 16px Arial, sans-serif; margin: 8px 8px 8px 0; }
+  .card { border: 1px solid #334155; border-radius: 16px; padding: 24px; margin: 16px 0; min-height: 140px; width: 300px; background: #111827; }
+  .light .card { background: #fff; border-color: #cbd5e1; }
+  #panel[hidden], #sheet[hidden], #backdrop[hidden] { display: none; }
+  /* ?bad: white, square, inset, not full height */
+  .p-bad { background: rgba(255,255,255,.95); margin: 0 16px; padding: 16px; border-top: 1px solid #e4e4e7; }
+  .p-bad a.item { display: block; padding: 12px 16px; height: 48px; color: #3f3f46; text-decoration: none; }
+  .p-bad .chips { display: flex; gap: 8px; flex-wrap: wrap; margin: 12px 0; }
+  .p-bad .chip { height: 32px; padding: 0 12px; border-radius: 999px; border: 0; background: #eef2ff; color: #3730a3; font: inherit; }
+  .p-bad .btn { display: inline-flex; align-items: center; height: 32px; padding: 0 12px; border-radius: 6px; border: 1px solid #a1a1aa; background: #fff; color: #18181b; font: 14px Georgia, serif; margin-right: 8px; }
+  .p-bad .btn.primary { background: #18181b; color: #fff; }
+  /* ?good / ?covered / ?light: full height under the bar */
+  .p-full { position: fixed; top: 64px; left: 0; right: 0; bottom: 0; background: #0a0f1c; padding: 16px; overflow-y: auto; }
+  .light .p-full { background: #fff; }
+  .p-full a.item, #sheet a.item { display: block; height: 48px; padding: 12px 0; color: #fff; text-decoration: none; }
+  .light .p-full a.item { color: #0f172a; }
+  #sheet { position: fixed; top: 0; right: 0; bottom: 0; width: 300px; background: #0a0f1c; padding: 72px 16px 16px; z-index: 60; }
+  #backdrop { position: fixed; inset: 0; background: rgba(0,0,0,.5); z-index: 55; }
+  .cur { height: 44px; min-width: 88px; padding: 0 12px; border: 1px solid #94a3b8; border-radius: 4px; background: transparent; color: #fff; font: 14px Georgia, serif; }
+  .spacer { height: 440px; }
+  #cookie { position: fixed; left: 0; right: 0; bottom: 0; z-index: 70; background: #111827; color: #fff; padding: 16px; height: 120px; }
+  #cookie button { height: 44px; padding: 0 20px; border-radius: 999px; }
+</style></head>
+<body>
+<header>
+  <div class="bar">
+    <a class="logo" href="/" aria-label="Acme home"><svg width="24" height="24" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10" fill="#fff"/></svg>&nbsp;Acme</a>
+    <nav class="links" aria-label="Main"><a href="/designers">Designers</a><a href="/features">Features</a><a href="/pricing">Pricing</a><a href="/faq">FAQ</a></nav>
+    <button class="burger" id="burger" aria-label="Open menu" aria-expanded="false"><svg width="24" height="24" viewBox="0 0 24 24"><path d="M3 6h18M3 12h18M3 18h18" stroke="currentColor" stroke-width="2"/></svg></button>
+  </div>
+  <div id="panel" hidden></div>
+</header>
+<div id="backdrop" hidden></div>
+<div id="sheet" hidden></div>
+<main>
+  <section>
+    <h1>Logos by real designers</h1>
+    <a class="cta" href="/designers">Browse designers</a><a class="cta" href="/pricing">View pricing</a>
+    <div class="card"><h3>Fast</h3><p>Three concepts in 48 hours.</p></div>
+    <div class="card"><h3>Fair</h3><p>Pay once, own it.</p></div>
+  </section>
+  <section><h2>More</h2><p>Page content that should not show around an open menu.</p></section>
+</main>
+<script>
+  const q = location.search;
+  if (/light/.test(q)) document.body.classList.add("light");
+  const items = '<a class="item" href="/designers">Designers</a><a class="item" href="/features">Features</a><a class="item" href="/pricing">Pricing</a><a class="item" href="/faq">FAQ</a>';
+  const panel = document.getElementById("panel"), sheet = document.getElementById("sheet"), backdrop = document.getElementById("backdrop");
+  let target = panel;
+  if (/bad/.test(q)) {
+    panel.className = "p-bad";
+    panel.innerHTML = items + '<div class="chips"><button class="chip" aria-pressed="true">€ EUR</button><button class="chip" aria-pressed="false">$ USD</button><button class="chip" aria-pressed="false">£ GBP</button></div>' +
+      '<a class="btn" href="/auth/signin">Sign in</a><a class="btn primary" href="/auth/signup">Get started</a>';
+  } else if (/sheet/.test(q)) {
+    target = sheet;
+    sheet.innerHTML = items + '<a class="cta" href="/auth/signup">Get started</a>';
+  } else {
+    panel.className = "p-full";
+    panel.innerHTML = items + (/covered/.test(q) ? '<div class="spacer"></div>' : '') + '<a class="cta" href="/auth/signin">Sign in</a><a class="cta" href="/auth/signup">Get started</a><button class="cur" aria-haspopup="listbox">$ USD</button>';
+  }
+  if (/covered/.test(q)) document.body.insertAdjacentHTML("beforeend", '<div id="cookie"><p>We use cookies.</p></div>');
+  const burger = document.getElementById("burger");
+  const set = (open) => {
+    target.hidden = !open;
+    if (/sheet/.test(q)) backdrop.hidden = !open;
+    burger.setAttribute("aria-expanded", String(open));
+    burger.setAttribute("aria-label", open ? "Close menu" : "Open menu");
+  };
+  burger.addEventListener("click", () => set(burger.getAttribute("aria-expanded") !== "true"));
+  backdrop.addEventListener("click", () => set(false));
+  document.addEventListener("keydown", (e) => { if (e.key === "Escape") set(false); });
+</script>
+</body></html>
