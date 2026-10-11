@@ -59,6 +59,7 @@ for (const route of ROUTES) {
       test.skip(!a.applicable, "no nav link points to this route");
       expect(a.ok, `nav link(s) for ${r} lack aria-current="page": ${a.where}`).toBe(true);
     });
+    test("3.5 every width has navigation: hidden nav links come with a menu button [P10]", async ({ page }) => { await open(page, r); hard(await c.navReachable(page)); });
     test("3.8 page loads scrolled to top [P52]", async ({ page }) => { await open(page, r); expect(await c.scrollY(page)).toBe(0); });
     test("4.6 cookie banner does not cover navigation [P57]", async ({ page }) => { await open(page, r); hard(await c.cookieCovers(page)); });
     test("4.6 cookie settings replace the banner, panel fits [P19 P18]", async ({ page }) => { await open(page, r); hard(await c.cookieFlow(page)); });
@@ -68,7 +69,13 @@ for (const route of ROUTES) {
     test("2.3 tables keep every column on mobile [P16]", async ({ page }) => { await open(page, r); hard(await c.tableClipping(page)); });
     test("5.1 scroll containers are not rounded [P21]", async ({ page }) => { await open(page, r); hard(await c.scrollbarRadius(page)); });
     test("1.9 inputs visible at rest [P09]", async ({ page }) => { await open(page, r); hard(await c.inputVisibility(page)); });
-    test("1.4 button label stays readable on hover [P06]", async ({ page }) => { await open(page, r); hard(await c.hoverContrast(page)); });
+    test("1.4 button label stays readable on hover [P06]", async ({ page }) => {
+      await open(page, r);
+      const { hard: list, eye } = await c.hoverContrastDetailed(page);
+      if (eye.length) test.info().annotations.push({ type: "check by eye", description: fmt(eye) });
+      hard(list);
+    });
+    test("1.18 tick boxes, radios and switches look checked when checked", async ({ page }) => { await open(page, r); hard(await c.checkedState(page)); });
     test("1.2/5.2 dropdowns, menus and dialogs open on-screen without moving the header [P02 P18 P22]", async ({ page }) => { await open(page, r); hard(await c.interactiveStates(page)); });
     test("6.12 dropdowns, menus, popovers, dialogs and accordions open and close with motion [P59]", async ({ page }) => { await open(page, r); hard(await c.overlayMotion(page)); });
     test("2.5 header nav items do not wrap [P35]", async ({ page }) => { await open(page, r); soft(await c.wrappedNavItems(page), "nav items wrap"); });

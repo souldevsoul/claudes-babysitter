@@ -280,3 +280,62 @@ export const variantBudget = {
     };
   },
 };
+
+/**
+ * 6.5 — a Tailwind arbitrary value never contains a literal space. The class list is split on whitespace, so
+ * `bg-[url("data:image/svg+xml,<svg xmlns='…' width='8'>…")]` becomes several junk classes: none is generated, the
+ * style silently does not exist, and cn()/twMerge() can treat the fragments as conflicts and drop the classes next to
+ * them (Vertex, 2026-10: a checkbox's checked tick was a data-URI with spaces — it never rendered).
+ * Checked wherever class lists are written: className / class, and the arguments of cn, clsx, classnames, twMerge,
+ * twJoin, cva, tv, cx (including cva variant maps).
+ */
+const CLASS_HELPERS = new Set(["cn", "clsx", "classnames", "classNames", "twMerge", "twJoin", "cva", "tv", "cx"]);
+const inClassContext = (node) => {
+  for (let p = node.parent, i = 0; p && i < 10; p = p.parent, i++) {
+    if (p.type === "JSXAttribute") return !!p.name && ["className", "class"].includes(p.name.name);
+    if (p.type === "CallExpression") {
+      const c = p.callee;
+      const name = c.type === "Identifier" ? c.name : c.type === "MemberExpression" && c.property ? c.property.name : "";
+      if (CLASS_HELPERS.has(name)) return true;
+    }
+    if (p.type === "TaggedTemplateExpression" && p.tag && p.tag.type === "Identifier" && p.tag.name === "tw") return true;
+  }
+  return false;
+};
+/** Each arbitrary value ("[" opened at a class start or after "-" / ":") whose matching "]" is in this string and which holds whitespace. */
+export function spacedArbitraryValues(s) {
+  const out = [];
+  for (let i = 0; i < s.length; i++) {
+    if (s[i] !== "[" || !(i === 0 || /[\s\-:]/.test(s[i - 1]))) continue;
+    let depth = 0, end = -1;
+    for (let j = i; j < s.length; j++) {
+      if (s[j] === "[") depth++;
+      else if (s[j] === "]" && --depth === 0) { end = j; break; }
+    }
+    if (end < 0) break; // closes in another template chunk: not judged
+    const inner = s.slice(i + 1, end);
+    if (/\s/.test(inner)) {
+      let start = i;
+      while (start > 0 && !/\s/.test(s[start - 1])) start--;
+      const tok = s.slice(start, end + 1);
+      out.push(tok.length > 70 ? tok.slice(0, 40) + " … " + tok.slice(-20) : tok);
+    }
+    i = end;
+  }
+  return out;
+}
+export const noSpacedArbitraryValue = {
+  meta: meta("Tailwind arbitrary values contain no spaces", "6.5", "P33", {
+    messages: { bad: '"{{token}}" has a space inside an arbitrary value. Tailwind splits class lists on whitespace, so this class is never generated, and cn()/twMerge() may drop the classes next to its fragments. Write spaces as underscores (grid-cols-[1fr_2fr], content-[\'a_b\']), or move the value (a data-URI background, a long shadow) to plain CSS or a theme token. [6.5]' },
+  }),
+  create(context) {
+    const check = (node, text) => {
+      if (!text || !text.includes("[") || !inClassContext(node)) return;
+      for (const token of spacedArbitraryValues(text)) context.report({ node, messageId: "bad", data: { token } });
+    };
+    return {
+      Literal(node) { if (typeof node.value === "string") check(node, node.value); },
+      TemplateElement(node) { check(node, node.value.cooked || ""); },
+    };
+  },
+};

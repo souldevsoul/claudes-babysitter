@@ -1,0 +1,12 @@
+<!doctype html><meta charset="utf-8"><title>3.5 nav</title>
+<!-- 3.5: below 768px the header links hide; with no menu button that width has no navigation. ?toggle adds a burger. -->
+<style>body{margin:0;font:16px sans-serif} header{display:flex;justify-content:space-between;padding:16px} @media (max-width:767px){ .links{display:none} }</style>
+<body>
+<header>
+  <a href="/" class="logo"><svg width="24" height="24"><rect width="24" height="24"/></svg></a>
+  <nav class="links"><a href="nav.html" aria-current="page">Home</a> <a href="/pricing">Pricing</a> <a href="/about">About</a> <a href="/blog">Blog</a></nav>
+  <span id="slot"></span>
+</header>
+<main><h1>Page</h1></main>
+<script>if (location.search.includes("toggle")) document.getElementById("slot").innerHTML = '<button aria-label="Open menu" aria-expanded="false" aria-controls="m"><svg width="20" height="20"><path d="M2 5h16M2 10h16M2 15h16" stroke="#000"/></svg></button>';</script>
+</body>

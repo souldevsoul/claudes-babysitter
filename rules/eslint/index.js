@@ -2,7 +2,7 @@
 import { noNativeControls, noNativeDialogs, noAuthLibraryPages, noAdhocButton } from "./rules/controls.js";
 import {
   noVisualClassnameOverride, noTransitionAll, noCssTransitionOnMotion, noArbitrarySpacing, noIllegibleText, noScrollRail,
-  noArbitraryValues, noThinKitWrapper, noRawPalette, noStylesOutsideKit, variantBudget,
+  noArbitraryValues, noThinKitWrapper, noRawPalette, noStylesOutsideKit, variantBudget, noSpacedArbitraryValue,
 } from "./rules/classes.js";
 import { noEmoji, imgDimensions } from "./rules/content.js";
 import { uiNoInlineStyle } from "./rules/ui-no-inline-style.js";
@@ -20,6 +20,7 @@ const rules = {
   "no-thin-kit-wrapper": noThinKitWrapper,
   "no-inline-style": uiNoInlineStyle,
   "no-arbitrary-values": noArbitraryValues,
+  "no-spaced-arbitrary-value": noSpacedArbitraryValue,
   "no-raw-palette": noRawPalette,
   "no-styles-outside-kit": noStylesOutsideKit,
   "variant-budget": variantBudget,
@@ -63,6 +64,7 @@ plugin.configs.create = (project = {}) => {
         "ui/no-thin-kit-wrapper": ["error", { components: kit }],
         "ui/no-inline-style": "error",
         "ui/no-arbitrary-values": ["error", { themePaths }],
+        "ui/no-spaced-arbitrary-value": "error",
         "ui/no-raw-palette": allow.palette ? "off" : ["error", { themePaths }],
         "ui/no-styles-outside-kit": ["error", { themePaths }],
         "ui/variant-budget": ["error", { themePaths, max: project.variantBudget || 10 }],

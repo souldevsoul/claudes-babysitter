@@ -64,6 +64,22 @@ Or install it as a dev dependency: `npm i -D github:souldevsoul/claudes-babysitt
 | `docs/` | The guidelines the rules enforce |
 | `test/`, `fixtures/` | `npm test`: RuleTester, Stylelint fixtures, end-to-end cases |
 
+## What changed in 4.8.0 (measured against what is painted; two new checks; nothing dropped)
+
+From live runs on truelogos.pro and sprout.boutique, checked by hand.
+
+- **Hover contrast is measured against the pixels behind the label.** When the colour arithmetic says < 3:1, the label is hidden for one frame, the area under it is captured and the label colour is composited over every pixel (the worst 10% decide). A white label on a `bg-gradient-to-r` button, a gradient footer, or a `bg-white/10` pill over a dark hero that is a *sibling* layer (not an ancestor) was measured against the white page (1.00:1). A fixed or sticky layer that covers the button is hidden while it is hovered and captured, and shown again afterwards; on a phone the cookie banner covered half the screen and its white panel was measured. If the pixels still cannot be read, an image/gradient case is a "check by eye" annotation, not a failure. Disabled controls (`disabled`, `aria-disabled="true"`, `inert`) are skipped, as WCAG exempts them.
+- **Translucent text fails only on its effective contrast.** `opacity < 0.95` on readable text (a muted caption at 9:1) is no longer a 6.4 finding. Group opacity is now composited exactly: an ancestor's opacity fades its own fill and the text inside it over what is behind.
+- **No silent caps.** 6.4 stopped after 40 findings and kept only 20 "check by eye" notes. Overlapping text checked only the first 400 elements. Row, column, field, underline, scrollbar, inline-style and palette checks stopped at 10–30. Every finding is now listed. Horizontal overflow, where one wide container drags all its descendants past the edge, lists 15 elements and then says how many more there are.
+- **A field's edge may be drawn by its wrapper.** A `div.border-4` around a bare input, or an icon + input box, counts as the field's boundary (1.9) when it hugs the input and holds no other field.
+- **Rows of cards are cards.** 2.6 skips page panels: a split screen (marketing panel + form in a `min-h-screen` flex), a form beside a sticky summary, and rows where one child shows nothing at this width or is parked off-screen. CTA links, fixed/sticky layers (the cookie banner) and image-dominated tiles (logo walls) are not cards. A per-item fill colour is not a style variant, either in a row or site-wide; filled vs clear, border, shadow, radius and padding still are.
+- **Button height counts buttons.** Site-wide button signatures leave out nav and footer links, filter chips and segmented options (`aria-pressed`, tabs, radios, three or more look-alike siblings), and link-cards. A link counts only when it is dressed as a button.
+- **New: every width has navigation (3.5).** On a phone, header links hidden with `hidden md:flex` and no visible menu button (aria-expanded / aria-controls / aria-haspopup, a "menu" label, an icon-only header button) is a finding. The aria-current check now reads the nav links in a closed menu too, instead of skipping.
+- **New: checked looks checked (1.18).** Every checkbox, radio and switch (native or `role=`) is toggled by a DOM click, with no focus ring and no hover, and captured before and after, then put back. Covering fixed layers are moved out of the way first. It fails when nothing changes, or when only the edge changes colour. That was the Vertex bug: an `appearance:none` box whose `checked:` styles were never generated. Look-alike controls are toggled once and reported together.
+- **Emoji are found where they hide (1.12).** Emoji in `aria-hidden` icon spans, in reveals that faded out again (`whileInView` without `once`), and in CSS `::before`/`::after` content are reported. Only `display:none`, `[hidden]` and sr-only clips hide them.
+- **New rule `ui/no-spaced-arbitrary-value`.** It flags a space inside a Tailwind arbitrary value, for example `bg-[url("data:image/svg+xml,<svg xmlns='…' viewBox='0 0 16 16'>…")]` or `grid-cols-[1fr 2fr]`. The class list splits at the space, the class is never generated, and `cn()`/`twMerge()` may drop the classes next to the fragments. Write spaces as underscores, or move the value to plain CSS. The rule runs on `className`, `class` and `cn`/`clsx`/`twMerge`/`cva`/`tv` arguments.
+- `test/checks-fp.test.mjs` pins each case with a fixture page in `test/fixtures/runtime/`: the false positive stays gone and the true positive still fires.
+
 ## What changed in 4.7.4 (the site-wide shapes count only fields and cards)
 
 - **Input height and radius count text fields only.** A range slider (4 px tall), colour well, file picker or input-button was grouped with the text fields and reported as a sixth input height.
@@ -395,6 +411,7 @@ Some rules encode design choices rather than bugs. A project can opt out explici
 | `no-visual-classname-override`: visual/state classes, `style`, or variable `className` on kit components | 1.3 / 1.4 / 1.15 | P04 P06 P46 |
 | `no-thin-kit-wrapper`: `HeroButton = p => <Button {...p}/>` | 1.16 | P46 P47 |
 | `no-inline-style`: colour/type/spacing/z-index in `style={{}}` (geometry and CSS variables are fine) | 1.15 / 6.5 / 5.3 | P22 P33 P46 |
+| `no-spaced-arbitrary-value`: a space inside `[…]` (`grid-cols-[1fr 2fr]`, a data-URI with spaces) — the class is never generated | 6.5 | P33 |
 | `no-arbitrary-values`: `text-[#…]`, `rounded-[…]`, `shadow-[…]`, `text-[15px]`, `tracking-[…]` outside theme paths | 6.3 / 6.5 / 1.16 | P04 P33 P46 P47 |
 | `no-raw-palette`: `bg-blue-600`, `text-zinc-900`, `border-slate-200` outside the kit (white/black allowed) | 6.3 / 6.5 / 1.16 | P04 P33 P46 P47 |
 | `no-styles-outside-kit`: `cva()` / `tv()` in page or feature code | 1.15 / 1.16 | P04 P46 P47 |
@@ -430,8 +447,10 @@ Some rules encode design choices rather than bugs. A project can opt out explici
 | Cards in a row: same radius and padding; same fill/border/shadow (one featured card may differ); offer cards (with price/CTA) equal height; CTAs and prices aligned; no double seams. Bento/masonry tiles without price/CTA may differ in height | 2.6 / 1.7 / 1.16 | P27 P46 P55 |
 | Repeated rows keep column positions | 2.12 | P48 |
 | Scroll containers not rounded | 5.1 | P21 |
-| Inputs visible at rest (border ≥3:1 or distinct fill); the finding names the lightest edge that passes, so the fix does not overshoot | 1.9 | P09 |
-| Button label readable on hover (≥3:1) | 1.4 | P06 |
+| Inputs visible at rest (border ≥3:1 or distinct fill, on the input or on a wrapper that hugs it); the finding names the lightest edge that passes, so the fix does not overshoot | 1.9 | P09 |
+| Button label readable on hover (≥3:1), measured against the pixels behind it when colours alone cannot tell (gradients, images, translucent pills over sibling layers); disabled controls exempt | 1.4 | P06 |
+| Checkboxes, radios and switches look different when checked (not only a border colour) | 1.18 | — |
+| Every width has navigation: hidden nav links come with a visible menu button | 3.5 | P10 |
 | Every dropdown/menu/dialog trigger is opened: popup on-screen, content scrolls, header doesn't move, no overflow | 1.2 / 5.2 / 5.3 | P02 P18 P22 |
 | Cookie settings replace the banner (one "Accept"), panel fits | 4.6 | P19 P18 |
 | Cookie banner does not cover navigation | 4.6 | P57 |
@@ -456,7 +475,7 @@ These need review or the design system itself:
 ## Self-test
 
 ```bash
-npm install && npm test        # RuleTester for 17 rules + Stylelint fixtures
+npm install && npm test        # RuleTester for 23 rules, Stylelint fixtures, runtime fixtures
 npx eslint fixtures/bad.jsx    # 17 errors
 npx eslint fixtures/good.jsx   # clean
 ```

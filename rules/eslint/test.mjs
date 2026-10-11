@@ -94,6 +94,24 @@ tester.run("no-css-transition-on-motion", R["no-css-transition-on-motion"], {
   ],
 });
 
+// Vertex 2026-10: the checked tick was bg-[url("data:image/svg+xml,<svg … >")] with spaces: never generated
+tester.run("no-spaced-arbitrary-value", R["no-spaced-arbitrary-value"], {
+  valid: [
+    '<div className="grid-cols-[1fr_2fr] bg-[url(/tick.svg)] content-[\'a_b\'] [&>svg]:size-4" />',
+    '<div className={`w-[${w}px] text-sm`} />', // the bracket closes in another chunk: not judged
+    'const label = "Pick [one of] these";', // not a class list
+    '<input placeholder="Search [beta] here" className="px-2" />',
+    'const v = cva("rounded-md", { variants: { size: { sm: "h-[calc(100%_-_2px)]" } } });',
+  ],
+  invalid: [
+    { code: '<input className="appearance-none checked:bg-[url(\'data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 16 16%22><path d=%22M4 8l3 3 5-6%22/></svg>\')] size-4" />', ...err("bad") },
+    { code: '<div className="grid grid-cols-[1fr 2fr] gap-4" />', ...err("bad") },
+    { code: 'const c = cn("rounded", "shadow-[0 1px 2px rgba(0,0,0,.1)]");', ...err("bad") },
+    { code: 'const v = cva("base", { variants: { tone: { soft: "bg-[color-mix(in oklab, red 20%, white)]" } } });', ...err("bad") },
+    { code: '<p className={`text-sm ${x} before:content-[\'New badge\']`} />', ...err("bad") },
+  ],
+});
+
 tester.run("no-arbitrary-spacing", R["no-arbitrary-spacing"], {
   valid: ['<div className="p-4 gap-6 mt-8" />', { code: '<div className="-mt-24" />', options: [{ allowNegative: true }] }],
   invalid: [{ code: '<div className="-mt-2" />', ...err("bad") }],

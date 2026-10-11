@@ -1,0 +1,17 @@
+<!doctype html><meta charset="utf-8"><title>1.9 wrapper</title>
+<!-- 1.9: the field edge drawn by a wrapper (div with border-4, icon + input box) counts; a bare faint field still fails. -->
+<body style="margin:0;background:#fff;font:16px/1.4 sans-serif;padding:24px">
+<form>
+  <div id="wrap" style="border:4px solid #111;border-radius:8px;display:flex;padding:2px;width:320px">
+    <input id="in1" placeholder="Wrapped" style="border:0;outline:0;background:transparent;flex:1;height:36px">
+  </div>
+  <div id="wrap2" style="display:flex;align-items:center;gap:8px;border:1px solid #767676;border-radius:8px;padding:0 12px;width:320px;margin-top:16px">
+    <svg width="16" height="16" viewBox="0 0 16 16"><circle cx="8" cy="8" r="6" fill="none" stroke="#333"/></svg>
+    <input id="in2" placeholder="Search" style="border:0;outline:0;background:transparent;flex:1;height:36px">
+  </div>
+  <input id="bare" placeholder="Bare faint field" style="display:block;margin-top:16px;border:1px solid #eee;background:#fff;width:300px;height:36px">
+  <div id="loose" style="border:2px solid #111;padding:40px;margin-top:16px;width:600px">
+    <input id="in3" placeholder="Far inside a bordered section" style="border:1px solid #f0f0f0;background:#fff;width:300px;height:36px">
+  </div>
+</form>
+</body>

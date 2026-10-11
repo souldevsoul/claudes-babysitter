@@ -1,0 +1,48 @@
+<!doctype html><meta charset="utf-8"><title>2.6 rows</title>
+<!-- 2.6: page layout panels (split screen marketing + form; calculator form + sticky summary), a row whose second column
+     shows nothing at this width, CTA links, a logo wall and per-item tints are not "cards in a row". Pricing cards of
+     different heights and a row of cards with three different looks still fail. -->
+<style>
+  body{margin:0;font:16px/1.4 sans-serif;background:#fff}
+  .btn{display:inline-block;padding:20px 32px;border-radius:8px;text-decoration:none;min-width:160px;text-align:center}
+  .card{border:1px solid #ddd;border-radius:12px;padding:24px}
+</style>
+<body>
+<div id="split" style="display:flex;min-height:100vh">
+  <div style="flex:1;background:#0f172a;color:#fff;padding:40px"><h2>Grow faster</h2><p>Everything you need.</p><a class="btn" href="#" style="background:#fff;color:#0f172a">Learn more</a></div>
+  <div style="flex:1;padding:120px 40px;border:1px solid #ddd"><form><h2>Sign in</h2><input placeholder="Email"><input placeholder="Password"><button style="padding:10px 16px">Sign in</button></form></div>
+</div>
+<div id="calc" style="display:flex;gap:24px;padding:24px;align-items:flex-start">
+  <div style="flex:1;border:1px solid #ddd;padding:24px"><h3>Calculator</h3><input placeholder="Amount"><input placeholder="Term"><input placeholder="Rate"><p>Lots of fields</p><p>more</p><p>more</p><button style="padding:10px 16px">Recalculate</button></div>
+  <aside style="flex:1"><div style="position:sticky;top:0;background:#f8fafc;padding:24px"><h3>Summary</h3><button style="padding:10px 16px">Continue</button></div></aside>
+</div>
+<div id="halfhidden" style="display:grid;grid-template-columns:1fr 1fr;gap:24px;padding:24px">
+  <div class="card"><h3>Feature</h3><p>Text</p><a href="#" style="display:inline-block;padding:10px">Read more</a></div>
+  <div style="background:#f1f5f9;min-height:200px"><img src="x.png" alt="" style="display:none"></div>
+</div>
+<div id="ctas" style="display:flex;gap:16px;padding:24px">
+  <a class="btn" href="#" style="background:#2563eb;color:#fff">Start free trial</a>
+  <a class="btn" href="#" style="border:2px solid #2563eb;color:#2563eb">Book a demo</a>
+</div>
+<div id="logos" style="display:grid;grid-template-columns:repeat(3,1fr);gap:16px;padding:24px">
+  <div style="background:#fde68a;padding:12px;height:100px"><svg width="100%" height="100%" viewBox="0 0 10 4"><rect width="10" height="4" fill="#000"/></svg></div>
+  <div style="background:#bbf7d0;padding:12px;height:100px;border:1px solid #16a34a"><svg width="100%" height="100%" viewBox="0 0 10 4"><rect width="10" height="4" fill="#000"/></svg></div>
+  <div style="background:#bfdbfe;padding:12px;height:100px;box-shadow:0 1px 3px #0003"><svg width="100%" height="100%" viewBox="0 0 10 4"><rect width="10" height="4" fill="#000"/></svg></div>
+</div>
+<div id="tints" style="display:grid;grid-template-columns:repeat(3,1fr);gap:16px;padding:24px">
+  <div class="card" style="background:#fef3c7"><h3>Design</h3><p>Category text</p></div>
+  <div class="card" style="background:#dcfce7"><h3>Build</h3><p>Category text</p></div>
+  <div class="card" style="background:#dbeafe"><h3>Ship</h3><p>Category text</p></div>
+</div>
+<div id="pricing" style="display:grid;grid-template-columns:repeat(3,1fr);gap:16px;padding:24px;align-items:start">
+  <div class="card"><h3>Free</h3><p style="font-size:28px">$0/mo</p><a href="#" style="display:inline-block;padding:10px">Choose</a></div>
+  <div class="card"><h3>Pro</h3><p style="font-size:28px">$19/mo</p><p>One</p><p>Two</p><a href="#" style="display:inline-block;padding:10px">Choose</a></div>
+  <div class="card"><h3>Team</h3><p style="font-size:28px">$49/mo</p><p>One</p><a href="#" style="display:inline-block;padding:10px">Choose</a></div>
+</div>
+<div id="mixed" style="display:grid;grid-template-columns:repeat(3,1fr);gap:16px;padding:24px">
+  <div style="border:1px solid #ddd;padding:24px"><h3>A</h3><p>Text</p></div>
+  <div style="box-shadow:0 2px 8px #0003;padding:24px"><h3>B</h3><p>Text</p></div>
+  <div style="border:3px dashed #999;box-shadow:0 2px 8px #0003;padding:24px"><h3>C</h3><p>Text</p></div>
+</div>
+<div id="cookie" style="position:fixed;left:16px;bottom:16px;width:360px;padding:20px;border:1px solid #ccc;background:#fff;box-shadow:0 4px 20px #0003">We use cookies. <button>Accept</button></div>
+</body>

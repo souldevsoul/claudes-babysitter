@@ -1,0 +1,11 @@
+<!doctype html><meta charset="utf-8"><title>1.12 emoji</title>
+<!-- 1.12: emoji chips in aria-hidden spans inside a reveal that has faded out again (whileInView without once), and a
+     CSS ::before emoji, are emoji used as icons. display:none / [hidden] ones are not on the page. -->
+<style>body{margin:0;font:16px sans-serif} .hot::before{content:"🔥 "} .reveal{opacity:0;transform:translateY(24px)}</style>
+<body>
+<section class="reveal"><span class="chip"><span id="rocket" aria-hidden="true">🚀</span> Fast setup</span></section>
+<p class="hot" id="hot">Trending</p>
+<p style="display:none" id="gone">✨ hidden</p>
+<p hidden id="gone2">🎉 hidden</p>
+<p id="plain">© 2026 Plain text ™</p>
+</body>

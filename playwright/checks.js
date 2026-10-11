@@ -47,22 +47,73 @@ window.__uiImageBehind = (el, sib) => {
     return !!bi && bi !== 'none';
   });
 };
+// Group opacity is composited exactly: an ancestor with opacity 0.5 fades its own fill AND the text inside it over
+// whatever is behind it. The background behind the text and the text pixel are both affine in the colour behind
+// the current element (result = a·X + c); each ancestor (fill, then group opacity) transforms that map, up to the page.
 window.__uiContrast = (el) => {
-  const layers = []; let overImage = false; let opacity = 1;
+  let overImage = false; let opacity = 1;
+  const fg = window.__uiRGBA(getComputedStyle(el).color);
+  // B: background right behind the glyphs, T: the glyph pixel; both as functions of the colour under the current layer
+  let B = { a: 1, c: [0, 0, 0] };
+  let T = { a: 1 - fg[3], c: [fg[0] * fg[3], fg[1] * fg[3], fg[2] * fg[3]] };
+  const step = (m, bg, op) => ({ a: op * m.a * (1 - bg[3]) + (1 - op), c: [0, 1, 2].map((i) => op * (m.a * bg[3] * bg[i] + m.c[i])) });
   for (let e = el; e; e = e.parentElement) {
     const cs = getComputedStyle(e);
-    opacity *= Number(cs.opacity);
-    const bg = window.__uiRGBA(cs.backgroundColor);
-    if (cs.backgroundImage && cs.backgroundImage !== 'none') overImage = true;
-    if (bg[3] > 0) { layers.push(bg); if (bg[3] >= 1) break; }
-    if (!overImage && e.parentElement) for (const s of e.parentElement.children) if (s !== e && window.__uiImageBehind(el, s)) { overImage = true; break; }
+    const op = Number(cs.opacity);
+    opacity *= op;
+    // an image/gradient on a layer the text can still see through counts; one under an opaque fill does not
+    if (B.a > 0.01 && cs.backgroundImage && cs.backgroundImage !== 'none') overImage = true;
+    B = step(B, window.__uiRGBA(cs.backgroundColor), op);
+    T = step(T, window.__uiRGBA(cs.backgroundColor), op);
+    if (!overImage && B.a > 0.01 && e.parentElement) for (const s of e.parentElement.children) if (s !== e && window.__uiImageBehind(el, s)) { overImage = true; break; }
+    if (B.a < 0.001 && T.a < 0.001) break;
   }
-  let base = [255, 255, 255, 1];
-  for (let i = layers.length - 1; i >= 0; i--) base = __mix(layers[i], base);
-  const fg = window.__uiRGBA(getComputedStyle(el).color);
-  const text = __mix([fg[0], fg[1], fg[2], fg[3] * opacity], base);
+  const at = (m) => [0, 1, 2].map((i) => m.a * 255 + m.c[i]);
+  const base = at(B), text = at(T);
   const L1 = __lum(text), L2 = __lum(base);
-  return { ratio: (Math.max(L1, L2) + 0.05) / (Math.min(L1, L2) + 0.05), overImage, opacity };
+  return { ratio: (Math.max(L1, L2) + 0.05) / (Math.min(L1, L2) + 0.05), overImage, opacity, fg: [fg[0], fg[1], fg[2], fg[3] * opacity] };
+};
+const __ratio = (a, b) => { const x = __lum(a), y = __lum(b); return (Math.max(x, y) + 0.05) / (Math.min(x, y) + 0.05); };
+window.__uiRatio = __ratio;
+// A link or button dressed as a button (a CTA): button-sized, padded, filled or boxed, a short label, no card content.
+// loose: any height (a CTA whose label wraps on a phone is still a CTA, not a card).
+window.__uiButtonLike = (el, loose) => {
+  if (!el.matches('a[href], button, [role=button], input[type=submit], input[type=button]')) return false;
+  const cs = getComputedStyle(el), r = el.getBoundingClientRect();
+  if ((!loose && (r.height < 24 || r.height > 80)) || parseFloat(cs.paddingLeft) < 8) return false;
+  if ((el.textContent || '').trim().length > 40 || el.querySelector('h1, h2, h3, h4, h5, h6, p, img, picture, video, ul, ol, table')) return false;
+  let parentBg = '255,255,255';
+  for (let p = el.parentElement; p; p = p.parentElement) { const c = window.__uiRGBA(getComputedStyle(p).backgroundColor); if (c[3] > 0.5) { parentBg = c.slice(0, 3).join(); break; } }
+  const bg = window.__uiRGBA(cs.backgroundColor);
+  const filled = (bg[3] > 0.08 && bg.slice(0, 3).join() !== parentBg) || /gradient/.test(cs.backgroundImage);
+  const boxed = ['Top', 'Right', 'Bottom', 'Left'].every((s) => parseFloat(cs['border' + s + 'Width']) > 0 && window.__uiRGBA(cs['border' + s + 'Color'])[3] > 0.15);
+  return filled || boxed;
+};
+// Fixed or sticky layers (cookie banner, toasts, sticky bars) float over the page: they are not part of its grid.
+window.__uiOverlay = (el) => { for (let e = el; e && e !== document.body; e = e.parentElement) { const p = getComputedStyle(e).position; if (p === 'fixed' || p === 'sticky') return true; } return false; };
+// A tile that is mostly a picture (logo wall, gallery): its fill is a frame for the image, not a card look.
+window.__uiMediaTile = (el) => {
+  const r = el.getBoundingClientRect(); const area = r.width * r.height; if (!area) return false;
+  const cs = getComputedStyle(el);
+  if (/url\\(/.test(cs.backgroundImage) && (el.innerText || '').trim().length < 60) return true;
+  let media = 0;
+  for (const m of el.querySelectorAll('img, video, canvas, svg')) {
+    if (m.tagName.toLowerCase() === 'svg' && m.parentElement && m.parentElement.closest('svg')) continue;
+    if (!window.__uiVisible(m)) continue;
+    const b = m.getBoundingClientRect();
+    const w = Math.max(0, Math.min(b.right, r.right) - Math.max(b.left, r.left)), h = Math.max(0, Math.min(b.bottom, r.bottom) - Math.max(b.top, r.top));
+    media += w * h;
+  }
+  return media / area >= 0.4 && (el.innerText || '').trim().length < 80;
+};
+// Decode a PNG (base64) into ImageData without a network request (a Blob is not subject to the page's img-src CSP).
+window.__uiDecode = async (b64) => {
+  const bin = atob(b64); const u = new Uint8Array(bin.length);
+  for (let i = 0; i < bin.length; i++) u[i] = bin.charCodeAt(i);
+  const bmp = await createImageBitmap(new Blob([u], { type: 'image/png' }));
+  const cv = document.createElement('canvas'); cv.width = bmp.width; cv.height = bmp.height;
+  const cx = cv.getContext('2d', { willReadFrequently: true }); cx.drawImage(bmp, 0, 0);
+  return cx.getImageData(0, 0, cv.width, cv.height);
 };
 // A CSS selector that matches exactly this element (for Babysitter Studio overlays).
 window.__uiSelector = (el) => {
@@ -198,9 +249,10 @@ export const horizontalOverflow = (page) => page.evaluate(() => {
             if (!clipped)
                 out.push({ what: `extends to x=${Math.round(r.left)}..${Math.round(r.right)} (viewport ${vw})`, where: window.__uiDescribe(el), selector: window.__uiSelector(el), human: window.__uiHuman(el) });
         }
-        if (out.length > 15)
-            break;
     }
+    // one wide container drags all its descendants past the edge: list 15, count the rest out loud (never drop them)
+    if (out.length > 16)
+        return [...out.slice(0, 15), { what: `+${out.length - 15} more elements extend past the viewport (not listed one by one)`, where: "page" }];
     return out;
 });
 /**
@@ -249,34 +301,54 @@ export const illegibleText = (page, allowLightWeights = false) => page.evaluate(
         // nobody can read it, so there is no contrast to judge — visibility is not this check's question
         if (opacity < 0.01)
             continue;
-        if (opacity < 0.95)
-            bad.push(`opacity ${opacity.toFixed(2)} on text`);
+        // translucency is judged by what it does to legibility: the ratio below already has the opacity of the text
+        // and of every ancestor composited in (an opacity-80 caption at 9:1 is fine; one at 3.9:1 fails on contrast)
         if (ratio < (large ? 3 : 4.5)) {
             if (clipText || overImage)
                 eye.push({ what: `contrast ${clipText ? "of gradient-filled text" : "over image/gradient"} cannot be measured (${ratio.toFixed(2)}:1 vs solid) — check by eye`, where: window.__uiDescribe(el), selector: window.__uiSelector(el), human: window.__uiHuman(el) });
             else
-                bad.push(`contrast ${ratio.toFixed(2)}:1`);
+                bad.push(`contrast ${ratio.toFixed(2)}:1${opacity < 0.95 ? ` (opacity ${opacity.toFixed(2)} included)` : ""}`);
         }
         if (bad.length)
             out.push({ what: bad.join(", "), where: window.__uiDescribe(el), selector: window.__uiSelector(el), human: window.__uiHuman(el) });
-        if (out.length > 40)
-            break;
     }
-    return { hard: out, eye: eye.slice(0, 20) };
+    // every finding is reported: a dense page with 60 faint captions has 60 findings, not the first 40
+    return { hard: out, eye };
 }, allowLightWeights);
 /** 1.12 — no emoji in visible text. */
+// An emoji is on the page whether or not a reveal has faded it in yet, and an aria-hidden "icon" span is exactly
+// how emoji-as-icons are written: only display:none / visibility:hidden / no box / [hidden] / sr-only clips hide it.
+// (truelogos.pro, 2026-10: emoji chips in aria-hidden spans inside whileInView reveals that replay were missed.)
 export const emoji = (page) => page.evaluate(() => {
     const re = /\p{Extended_Pictographic}/u;
     const ok = new Set(["©", "®", "™"]);
     const out = [];
+    const present = (el) => {
+        if (el.closest("[hidden], .sr-only, script, style, noscript, template"))
+            return false;
+        const cs = getComputedStyle(el);
+        if (cs.display === "none" || cs.visibility === "hidden")
+            return false;
+        const r = el.getBoundingClientRect(); // 0×0 under a display:none ancestor
+        return !(r.width <= 1 && r.height <= 1);
+    };
+    const first = (t) => [...(t || "")].find((c) => re.test(c) && !ok.has(c));
     const walker = document.createTreeWalker(document.body, NodeFilter.SHOW_TEXT);
     for (let n = walker.nextNode(); n; n = walker.nextNode()) {
-        const t = n.textContent || "";
-        const ch = [...t].find((c) => re.test(c) && !ok.has(c));
-        if (ch && n.parentElement && window.__uiVisible(n.parentElement))
+        const ch = first(n.textContent);
+        if (ch && n.parentElement && present(n.parentElement))
             out.push({ what: `emoji ${ch}`, where: window.__uiDescribe(n.parentElement), selector: window.__uiSelector(n.parentElement), human: window.__uiHuman(n.parentElement) });
     }
-    return out.slice(0, 20);
+    // CSS-generated ones: content: "🔥" on ::before / ::after
+    for (const el of Array.from(document.body.querySelectorAll("*"))) {
+        for (const pseudo of ["::before", "::after"]) {
+            const c = getComputedStyle(el, pseudo).content;
+            const ch = c && c !== "none" && c !== "normal" ? first(c) : null;
+            if (ch && present(el))
+                out.push({ what: `emoji ${ch} (CSS ${pseudo})`, where: window.__uiDescribe(el), selector: window.__uiSelector(el), human: window.__uiHuman(el) });
+        }
+    }
+    return out;
 });
 /** 6.10 — raster images delivered at ≥2× their rendered size (≥1.5× tolerated). Run with deviceScaleFactor 2 so srcset picks the retina candidate. */
 export const lowResImages = (page) => page.evaluate(async () => {
@@ -310,17 +382,65 @@ export const activeNav = (page) => page.evaluate(() => {
     const path = location.pathname.replace(/\/$/, "") || "/";
     // the brand/logo link points to "/" but is not a nav item; a "/" link counts only inside <nav>
     const isLogo = (a) => !!a.querySelector("img, svg") || /logo|brand/i.test(a.className + " " + (a.getAttribute("aria-label") || "")) || (new URL(a.href).pathname === "/" && !a.closest("nav"));
-    const links = Array.from(document.querySelectorAll("header a[href], nav a[href]")).filter((a) => window.__uiVisible(a) && !isLogo(a));
-    const match = links.filter((a) => { try {
+    const toHere = (a) => { try {
         const u = new URL(a.href);
         return u.origin === location.origin && ((u.pathname.replace(/\/$/, "") || "/") === path) && !u.hash;
     }
     catch {
         return false;
-    } });
+    } };
+    const all = Array.from(document.querySelectorAll("header a[href], nav a[href]")).filter((a) => !isLogo(a) && toHere(a));
+    let match = all.filter((a) => window.__uiVisible(a));
+    // on a narrow screen the nav sits in a closed menu: aria-current is an attribute, it is checked there all the same
+    // (before, a hidden nav made this test skip as "no nav link points to this route")
+    if (!match.length)
+        match = all;
     if (!match.length)
         return { applicable: false, ok: true, where: "" };
     return { applicable: true, ok: match.some((a) => a.getAttribute("aria-current") === "page"), where: match.map((a) => window.__uiDescribe(a)).join(" | ") };
+});
+/**
+ * 3.5 — every width has navigation. On a narrow screen the header links are often hidden (`hidden md:flex`); then a
+ * visible menu button must open them (aria-expanded / aria-controls / aria-haspopup, a "menu" label, a burger icon).
+ * Hidden links with no such button leave the page with no way to the other sections on that width.
+ */
+export const navReachable = (page) => page.evaluate(() => {
+    const W = window;
+    if (Math.min(innerWidth, screen.width) >= 768)
+        return [];
+    const here = location.pathname.replace(/\/$/, "") || "/";
+    const dest = (a) => { try {
+        const u = new URL(a.href, location.href);
+        return u.origin === location.origin ? (u.pathname.replace(/\/$/, "") || "/") : u.href;
+    }
+    catch {
+        return null;
+    } };
+    const isLogo = (a) => (dest(a) === "/" && !!a.querySelector("img, svg")) || /logo|brand/i.test(a.className + " " + (a.getAttribute("aria-label") || ""));
+    const links = Array.from(document.querySelectorAll("header a[href], nav a[href], [role=navigation] a[href]"))
+        .filter((a) => !a.closest("footer, [role=contentinfo]") && !isLogo(a) && dest(a) && !/^(mailto|tel):/.test(a.getAttribute("href") || ""));
+    const shown = new Set(links.filter((a) => W.__uiVisible(a)).map(dest));
+    const hidden = new Map();
+    for (const a of links)
+        if (!W.__uiVisible(a) && !shown.has(dest(a)) && dest(a) !== here && !hidden.has(dest(a)))
+            hidden.set(dest(a), (a.textContent || a.getAttribute("aria-label") || dest(a)).trim().replace(/\s+/g, " "));
+    if (hidden.size < 2)
+        return [];
+    const toggle = Array.from(document.querySelectorAll("button, [role=button], summary, label[for], a[href^='#'], [aria-expanded], [aria-controls], [aria-haspopup]")).find((el) => {
+        if (!W.__uiVisible(el) || el.closest("footer"))
+            return false;
+        if (el.matches("[aria-expanded], [aria-controls], [aria-haspopup]:not([aria-haspopup=false])"))
+            return true;
+        const label = [el.getAttribute("aria-label"), el.getAttribute("title"), el.textContent, typeof el.className === "string" ? el.className : "", el.id].join(" ");
+        if (/menu|navigation|\bnav\b|burger|drawer|меню|навигац/i.test(label))
+            return true;
+        // an icon-only button in the header (three bars)
+        return !!el.closest("header, [role=banner]") && !!el.querySelector("svg, img") && !(el.textContent || "").trim();
+    });
+    if (toggle)
+        return [];
+    const names = [...hidden.values()];
+    return [{ what: `${names.length} nav links are hidden at ${innerWidth}px (${names.slice(0, 6).join(", ")}${names.length > 6 ? ", …" : ""}) and there is no visible menu button — this width has no navigation [3.5, P10]`, where: "header / nav" }];
 });
 /** 3.8 — a fresh navigation lands at the top. */
 export const scrollY = (page) => page.evaluate(() => window.scrollY);
@@ -349,8 +469,7 @@ export const wrappedNavItems = (page) => page.evaluate(() => {
 /** 2.12 — text blocks must not overlap each other (sampled). */
 export const overlappingText = (page) => page.evaluate(() => {
     const els = Array.from(document.querySelectorAll("h1,h2,h3,h4,p,li,a,button,label,span"))
-        .filter((el) => window.__uiVisible(el) && el.children.length === 0 && (el.textContent || "").trim().length > 1)
-        .slice(0, 400);
+        .filter((el) => window.__uiVisible(el) && el.children.length === 0 && (el.textContent || "").trim().length > 1);
     const out = [];
     for (const el of els) {
         const r = el.getBoundingClientRect();
@@ -373,8 +492,6 @@ export const overlappingText = (page) => page.evaluate(() => {
         }
         if (covering && !layered && !top.closest("header, [role=dialog]"))
             out.push({ what: "text covered by another element", where: `${window.__uiDescribe(el)} under ${window.__uiDescribe(top)}` });
-        if (out.length > 10)
-            break;
     }
     return out;
 });
@@ -393,7 +510,6 @@ export const cookieCovers = (page) => page.evaluate(() => {
 export const fakeLinks = (page) => page.evaluate(() => Array.from(document.querySelectorAll("body *"))
     .filter((el) => window.__uiVisible(el) && el.children.length === 0 && (el.textContent || "").trim())
     .filter((el) => getComputedStyle(el).textDecorationLine.includes("underline") && !el.closest("a, button, [role=button], [role=link], abbr, summary, label"))
-    .slice(0, 10)
     .map((el) => ({ what: "underlined text that is not a link", where: window.__uiDescribe(el), selector: window.__uiSelector(el), human: window.__uiHuman(el) })));
 /** 2.13 — cumulative layout shift. */
 export const cls = (page) => page.evaluate(() => window.__cls);
@@ -484,8 +600,41 @@ export const rowAlignment = (page) => page.evaluate(() => {
         return (d.includes("grid") || d.includes("flex")) && W.__uiVisible(el);
     });
     const seen = new Set();
+    // a child that is on screen for real: mostly inside the viewport horizontally (not a carousel slide parked off to
+    // the side) and showing something (a panel whose content is all hidden at this width is an empty frame)
+    const onScreen = (k) => {
+        const r = k.getBoundingClientRect();
+        const vis = Math.min(r.right, innerWidth) - Math.max(r.left, 0);
+        if (vis < r.width * 0.5)
+            return false;
+        if ((k.innerText || "").trim())
+            return true;
+        return Array.from(k.querySelectorAll("img, svg, video, canvas, picture, input, button")).some((m) => W.__uiVisible(m));
+    };
+    // page-level layout: a split screen (marketing panel + form in a min-h-screen flex), a form beside a sticky
+    // summary — panels of the page, not a row of cards
+    const fields = (k) => k.querySelectorAll("input:not([type=hidden]), textarea, select, [role=combobox]").length;
+    const layoutRow = (row) => {
+        if (row.length > 3)
+            return false;
+        const rects = row.map((k) => k.getBoundingClientRect());
+        const span = Math.max(...rects.map((r) => r.right)) - Math.min(...rects.map((r) => r.left));
+        if (span < innerWidth * 0.6)
+            return false;
+        // a sticky panel (the aside itself or the box inside it) is a sidebar
+        const sticky = (k) => [k, ...Array.from(k.children), ...Array.from(k.children).flatMap((x) => Array.from(x.children))].some((n) => getComputedStyle(n).position === "sticky");
+        if (row.some(sticky))
+            return true;
+        // screen-tall panels side by side; tall pricing cards (each with a price) stay a row of offers
+        if (rects.every((r) => r.width >= innerWidth * 0.3) && rects.some((r) => r.height >= innerHeight * 0.9) && !row.every((k) => firstMatch(k, isPrice)))
+            return true;
+        const f = row.map(fields);
+        return f.some((n) => n >= 2) && f.some((n) => n === 0);
+    };
     for (const c of containers) {
-        const kids = Array.from(c.children).filter((k) => W.__uiVisible(k) && k.getBoundingClientRect().width >= 140 && k.getBoundingClientRect().height >= 60);
+        const kids = Array.from(c.children).filter((k) => W.__uiVisible(k) && k.getBoundingClientRect().width >= 140 && k.getBoundingClientRect().height >= 60
+            // floating layers and CTA buttons are not cards
+            && !W.__uiOverlay(k) && !W.__uiButtonLike(k, true) && onScreen(k));
         if (kids.length < 2)
             continue;
         // group into visual rows by top edge
@@ -502,6 +651,8 @@ export const rowAlignment = (page) => page.evaluate(() => {
             const widths = rects.map((r) => r.width);
             if (Math.max(...widths) / Math.min(...widths) > 1.3)
                 continue; // not a row of peers
+            if (layoutRow(row))
+                continue; // page panels, not cards
             const where = W.__uiDescribe(c);
             // the row itself gets the frame in Studio (and a Before/After for its fix)
             const at = { selector: W.__uiSelector(c), human: W.__uiHuman(c) };
@@ -516,13 +667,16 @@ export const rowAlignment = (page) => page.evaluate(() => {
                 out.push({ what: `offer cards in one row have different heights (${rects.map((r) => Math.round(r.height)).join("/")}px) [2.6, P27]`, where, ...at });
                 seen.add(where);
             }
-            // peers must share one look: radius + padding always; fill/border/shadow may differ on ONE card (featured)
-            if (cardish) {
+            // peers must share one look: radius + padding always; filled-or-clear/border/shadow may differ on ONE card
+            // (featured). The fill's hue is not a look: per-item colours (category tiles, a logo wall) are content.
+            // Tiles that are mostly a picture frame it, so their box is not compared.
+            if (cardish && !row.some((k) => W.__uiMediaTile(k))) {
                 const st = row.map((k) => {
                     const cs = getComputedStyle(k);
+                    const bw = ["Top", "Right", "Bottom", "Left"].map((s) => (W.__uiRGBA(cs[`border${s}Color`])[3] > 0.05 ? cs[`border${s}Width`] : "0px")).join(" ");
                     return {
                         shape: `radius ${cs.borderTopLeftRadius} / padding ${cs.paddingTop} ${cs.paddingLeft}`,
-                        skin: `bg ${W.__uiRGBA(cs.backgroundColor).map((x) => Math.round(x * 100) / 100).join(",")} / border ${cs.borderTopWidth} ${cs.borderTopColor} / shadow ${cs.boxShadow === "none" ? "none" : "yes"}`,
+                        skin: `${W.__uiRGBA(cs.backgroundColor)[3] > 0.02 || /gradient/.test(cs.backgroundImage) ? "filled" : "clear"} / border ${bw} / shadow ${cs.boxShadow === "none" ? "none" : "yes"}`,
                     };
                 });
                 const shapes = new Set(st.map((x) => x.shape));
@@ -574,8 +728,6 @@ export const rowAlignment = (page) => page.evaluate(() => {
                 break;
             }
         }
-        if (out.length > 20)
-            break;
     }
     return out;
 });
@@ -608,8 +760,6 @@ export const repeatedRowColumns = (page) => page.evaluate(() => {
                 break;
             }
         }
-        if (out.length > 10)
-            break;
     }
     return out;
 });
@@ -626,7 +776,6 @@ export const scrollbarRadius = (page) => page.evaluate(() => {
             el.offsetHeight - el.clientHeight - parseFloat(cs.borderTopWidth) - parseFloat(cs.borderBottomWidth) > 0;
         return scrolls && bar && parseFloat(cs.borderTopRightRadius) > 0;
     })
-        .slice(0, 10)
         .map((el) => ({ what: "scroll container has rounded corners — the scrollbar cuts the radius [5.1, P21]", where: W.__uiDescribe(el), selector: W.__uiSelector(el), human: W.__uiHuman(el) }));
 });
 /** 1.9 — inputs visible at rest: border ≥3:1 against the surface, or a distinct fill (P09). */
@@ -654,6 +803,23 @@ export const inputVisibility = (page) => page.evaluate(() => {
         const borderOk = bw > 0 && ratio(border, bg) >= 3;
         const fillOk = ratio(fill, bg) >= 1.25;
         if (borderOk || fillOk) return null;
+        // the edge is often drawn by a wrapper (div.border-4 around a bare input, an icon + input "field" box with
+        // focus-within): an ancestor that hugs the input (a few px taller, a little wider for an icon or a button)
+        // and holds no other text field is the field's visible boundary
+        const ir = el.getBoundingClientRect();
+        for (let p = el.parentElement, i = 0; p && p !== document.body && i < 4; p = p.parentElement, i++) {
+            const pr = p.getBoundingClientRect();
+            if (pr.height - ir.height > 24 || pr.width - ir.width > Math.max(96, ir.width * 0.5))
+                break;
+            if (p.querySelectorAll("input:not([type=hidden]):not([type=checkbox]):not([type=radio]), textarea, select").length > 1)
+                break;
+            const pcs = getComputedStyle(p);
+            const pbg = surface(p);
+            const pfill = mix(W.__uiRGBA(pcs.backgroundColor), pbg);
+            const edge = ["Top", "Right", "Bottom", "Left"].some((s) => parseFloat(pcs[`border${s}Width`]) > 0 && ratio(mix(W.__uiRGBA(pcs[`border${s}Color`]), pfill), pbg) >= 3);
+            if (edge || ratio(pfill, pbg) >= 1.25)
+                return null;
+        }
         // the lightest edge that passes: the same colour moved toward the text side only as far as 3:1 needs —
         // a much darker edge passes too, but reads harsh (the fix should not overshoot)
         const target = lum(bg) > 0.4 ? [0, 0, 0] : [255, 255, 255];
@@ -663,22 +829,34 @@ export const inputVisibility = (page) => page.evaluate(() => {
         const hex = "#" + start.map((v, i) => Math.round(v + (target[i] - v) * hi).toString(16).padStart(2, "0")).join("");
         return { what: `input barely visible at rest (border ${bw ? ratio(border, bg).toFixed(2) + ":1" : "none"}, fill ${ratio(fill, bg).toFixed(2)}:1; lightest passing edge ${hex}) [1.9, P09]`, where: W.__uiDescribe(el), selector: W.__uiSelector(el), human: W.__uiHuman(el) };
     })
-        .filter(Boolean)
-        .slice(0, 10);
+        .filter(Boolean);
 });
 /** 1.4 — hovering a button keeps its label readable (P06). */
 export async function hoverContrast(page, max = 12) {
-    const out = [];
-    const handles = await page.$$("button, a[role=button], [class*=btn], [data-slot=button]");
+    return (await hoverContrastDetailed(page, max)).hard;
+}
+/**
+ * 1.4 with the cases colours alone cannot settle: a label over a gradient or a picture, or over a translucent pill
+ * whose backdrop is a sibling layer (a dark hero), not an ancestor. When the colour arithmetic says < 3:1, the
+ * label is hidden for one frame, the pixels behind it are captured and the label colour is measured against them
+ * (the worst 10% of them decide). Only when the pixels cannot be read does an image/gradient case go to `eye`
+ * ("check by eye") instead of failing. Disabled controls are exempt (WCAG 1.4.3).
+ */
+export async function hoverContrastDetailed(page, max = 12) {
+    const hard = [], eye = [];
+    const handles = await page.$$("button, a[role=button], [role=button], [class*=btn], [data-slot=button]");
     let n = 0;
     for (const h of handles) {
         if (n >= max)
             break;
-        const ok = await h.evaluate((el) => el.getRootNode() === document && window.__uiVisible(el) && (el.textContent || "").trim().length > 0 && el.getBoundingClientRect().top < innerHeight * 3).catch(() => false);
+        const ok = await h.evaluate((el) => el.getRootNode() === document && window.__uiVisible(el) && (el.textContent || "").trim().length > 0 && el.getBoundingClientRect().top < innerHeight * 3
+            && !el.matches(":disabled") && !el.closest('[disabled], [aria-disabled="true"], [inert]')).catch(() => false);
         if (!ok)
             continue;
         n++;
-        await h.scrollIntoViewIfNeeded().catch(() => { });
+        // centred, so a fixed header or cookie banner is not sitting on it (it would take the hover and the pixels)
+        await h.evaluate((el) => el.scrollIntoView({ block: "center", inline: "nearest", behavior: "instant" })).catch(() => { });
+        await uncover(h);
         await h.hover({ timeout: 1500 }).catch(() => { });
         await page.waitForTimeout(100);
         await settle(page, 1000); // let colour transitions finish (some run 500 ms)
@@ -692,13 +870,123 @@ export async function hoverContrast(page, max = 12) {
                     break;
                 }
             const c = W.__uiContrast(t);
-            return c.ratio < 3 ? { what: `label contrast on hover ${c.ratio.toFixed(2)}:1 [1.4, P06]`, where: W.__uiDescribe(el), selector: W.__uiSelector(el), human: W.__uiHuman(el) } : null;
+            return c.ratio < 3 ? { ratio: c.ratio, overImage: c.overImage, where: W.__uiDescribe(el), selector: W.__uiSelector(el), human: W.__uiHuman(el) } : null;
         }).catch(() => null);
-        if (r)
-            out.push(r);
+        if (!r)
+            continue;
+        const px = await pixelContrast(page, h).catch(() => null);
+        const at = { where: r.where, selector: r.selector, human: r.human };
+        if (px != null) {
+            if (px < 3)
+                hard.push({ what: `label contrast on hover ${px.toFixed(2)}:1 against the pixels behind it [1.4, P06]`, ...at });
+        }
+        else if (r.overImage)
+            eye.push({ what: `label on hover sits over an image/gradient (${r.ratio.toFixed(2)}:1 vs solid) — check by eye [1.4, P06]`, ...at });
+        else
+            hard.push({ what: `label contrast on hover ${r.ratio.toFixed(2)}:1 [1.4, P06]`, ...at });
     }
+    await recover(page);
     await page.mouse.move(0, 0);
-    return out;
+    return { hard, eye };
+}
+/**
+ * Fixed/sticky layers (a cookie banner over half a phone screen, a sticky header) that sit on top of an element are
+ * hidden while it is hovered and captured — otherwise they take the hover and their pixels are measured instead.
+ * `recover` shows them again.
+ */
+async function uncover(handle) {
+    await handle.evaluate((el) => {
+        if (!document.getElementById("bs-hide-style")) {
+            const st = document.createElement("style");
+            st.id = "bs-hide-style";
+            st.textContent = "[data-bs-hide] { visibility: hidden !important; }";
+            document.head.appendChild(st);
+        }
+        const r = el.getBoundingClientRect();
+        for (const [fx, fy] of [[0.1, 0.5], [0.5, 0.5], [0.9, 0.5], [0.5, 0.15], [0.5, 0.85]]) {
+            for (let i = 0; i < 5; i++) {
+                const top = document.elementFromPoint(r.left + r.width * fx, r.top + r.height * fy);
+                if (!top || el.contains(top) || top.contains(el))
+                    break;
+                let layer = null;
+                for (let e = top; e && e !== document.body; e = e.parentElement) {
+                    const pos = getComputedStyle(e).position;
+                    if ((pos === "fixed" || pos === "sticky") && !e.contains(el))
+                        layer = e;
+                }
+                if (!layer)
+                    break;
+                layer.setAttribute("data-bs-hide", "");
+            }
+        }
+    }).catch(() => { });
+}
+const recover = (page) => page.evaluate(() => { for (const e of document.querySelectorAll("[data-bs-hide]")) e.removeAttribute("data-bs-hide"); document.getElementById("bs-hide-style")?.remove(); }).catch(() => { });
+/**
+ * Contrast of an element's text against what is actually painted behind it: the text is made transparent for a
+ * frame, the area under the glyphs is captured, and the text colour (its alpha and opacity included) is composited
+ * over each pixel. Returns the 10th-percentile ratio (the darkest/lightest part the text crosses, not one stray
+ * anti-aliased pixel), or null when nothing could be captured.
+ */
+async function pixelContrast(page, handle) {
+    const box = await handle.evaluate((el) => {
+        const W = window;
+        let t = el;
+        const rects = [];
+        const w = document.createTreeWalker(el, NodeFilter.SHOW_TEXT);
+        for (let n = w.nextNode(); n; n = w.nextNode()) {
+            if (!(n.textContent || "").trim())
+                continue;
+            if (t === el)
+                t = n.parentElement;
+            const rg = document.createRange();
+            rg.selectNodeContents(n);
+            rects.push(...Array.from(rg.getClientRects()).filter((x) => x.width > 0 && x.height > 0));
+        }
+        if (!rects.length)
+            return null;
+        const L = Math.max(0, Math.min(...rects.map((x) => x.left))), T = Math.max(0, Math.min(...rects.map((x) => x.top)));
+        const R = Math.min(innerWidth, Math.max(...rects.map((x) => x.right))), B = Math.min(innerHeight, Math.max(...rects.map((x) => x.bottom)));
+        if (R - L < 2 || B - T < 2)
+            return null;
+        // the pixels say something about this label only where it is on top: a fixed cookie banner or header over it
+        // would be measured instead (truelogos, 2026-10: "1.00:1" was the banner's white panel)
+        const mine = (x, y) => { const top = document.elementFromPoint(x, y); return !!top && (el.contains(top) || top.contains(el)); };
+        for (const x of rects)
+            for (const [fx, fy] of [[0.1, 0.5], [0.5, 0.5], [0.9, 0.5]])
+                if (!mine(x.left + x.width * fx, x.top + x.height * fy))
+                    return null;
+        const fg = W.__uiContrast(t).fg;
+        el.setAttribute("data-bs-px", "");
+        const st = document.createElement("style");
+        st.id = "bs-px-style";
+        st.textContent = "[data-bs-px], [data-bs-px] * { color: transparent !important; -webkit-text-fill-color: transparent !important; text-shadow: none !important; text-decoration-color: transparent !important; transition: none !important; }";
+        document.head.appendChild(st);
+        return { x: L, y: T, width: R - L, height: B - T, fg };
+    });
+    if (!box)
+        return null;
+    let png;
+    try {
+        await page.evaluate(() => new Promise((r) => requestAnimationFrame(() => requestAnimationFrame(r))));
+        png = await page.screenshot({ clip: { x: box.x, y: box.y, width: box.width, height: box.height }, scale: "css" });
+    }
+    finally {
+        await page.evaluate(() => { document.getElementById("bs-px-style")?.remove(); document.querySelector("[data-bs-px]")?.removeAttribute("data-bs-px"); }).catch(() => { });
+    }
+    return page.evaluate(async ({ b64, fg }) => {
+        const img = await window.__uiDecode(b64);
+        const d = img.data, ratios = [];
+        for (let i = 0; i < d.length; i += 4) {
+            const P = [d[i], d[i + 1], d[i + 2]];
+            const T = [0, 1, 2].map((k) => fg[k] * fg[3] + P[k] * (1 - fg[3]));
+            ratios.push(window.__uiRatio(T, P));
+        }
+        if (!ratios.length)
+            return null;
+        ratios.sort((a, b) => a - b);
+        return ratios[Math.floor(ratios.length * 0.1)];
+    }, { b64: png.toString("base64"), fg: box.fg });
 }
 /**
  * Waits until the finite animations and transitions running on the page have finished (at most `cap` ms), so an
@@ -965,6 +1253,150 @@ export async function cookieFlow(page) {
     }
     return out;
 }
+/**
+ * 1.18 — a tick box, radio or switch looks checked when it is checked. Each one (native, or role=checkbox / switch /
+ * radio) is toggled with a DOM click (no focus ring, no hover), captured before and after, and put back. It fails when
+ * nothing visible changes, or when only the edge changes colour (Vertex, 2026-10: an `appearance:none` box whose
+ * `checked:` styles were never generated — the border went from grey to blue and the box stayed empty).
+ * Controls that look alike (same classes) are toggled once and reported together.
+ */
+export async function checkedState(page) {
+    const out = [];
+    await page.mouse.move(0, 0).catch(() => { });
+    const handles = await page.$$('input[type=checkbox], input[type=radio], [role=checkbox], [role=switch], [role=radio]');
+    const groups = new Map(); // look signature → { handle, count }
+    for (const h of handles) {
+        const info = await h.evaluate((el) => {
+            const W = window;
+            if (el.matches(":disabled") || el.closest('[disabled], [aria-disabled="true"], [inert]'))
+                return null;
+            const native = el.matches("input");
+            const checked = native ? el.checked : el.getAttribute("aria-checked") === "true" || el.getAttribute("data-state") === "checked";
+            const radio = native ? el.type === "radio" : el.getAttribute("role") === "radio";
+            if (radio && checked)
+                return null; // a checked radio cannot be unchecked; its unchecked siblings are toggled instead
+            const label = el.closest("label") || (el.id && document.querySelector(`label[for="${CSS.escape(el.id)}"]`));
+            const visual = W.__uiVisible(el) ? el : label && W.__uiVisible(label) ? label : null;
+            if (!visual)
+                return null;
+            const cls = (n) => (n && typeof n.className === "string" ? n.className : "");
+            return { sig: [el.tagName, el.type || el.getAttribute("role"), cls(el), cls(visual), cls(el.parentElement)].join("|"), where: W.__uiDescribe(visual), selector: W.__uiSelector(el), human: W.__uiHuman(el) };
+        }).catch(() => null);
+        if (!info)
+            continue;
+        const g = groups.get(info.sig);
+        if (g)
+            g.count++;
+        else
+            groups.set(info.sig, { h, info, count: 1 });
+    }
+    for (const { h, info, count } of groups.values()) {
+        await h.evaluate((el) => (el.matches("input") && !window.__uiVisible(el) && (el.closest("label") || el.parentElement) || el).scrollIntoView({ block: "center", behavior: "instant" })).catch(() => { });
+        await recover(page);
+        // a cookie banner over the box would be captured twice, unchanged, as "nothing changes"
+        await h.evaluate((el) => { const v = window.__uiVisible(el) ? el : el.closest("label") || (el.id && document.querySelector(`label[for="${CSS.escape(el.id)}"]`)) || el; v.setAttribute("data-bs-uncover", ""); }).catch(() => { });
+        const target = await page.$("[data-bs-uncover]");
+        if (target) {
+            await uncover(target);
+            await target.evaluate((el) => el.removeAttribute("data-bs-uncover")).catch(() => { });
+        }
+        const url = page.url();
+        // the region to compare, and the styles of everything that can draw the state
+        const prep = await h.evaluate((el) => {
+            const W = window;
+            const native = el.matches("input");
+            const label = el.closest("label") || (el.id && document.querySelector(`label[for="${CSS.escape(el.id)}"]`));
+            const own = W.__uiVisible(el);
+            const visual = own ? el : label;
+            const r = visual.getBoundingClientRect();
+            const cs = getComputedStyle(visual);
+            // what may change: the control, its label, the siblings a peer-checked: box lives in, and their insides
+            const scope = new Set([visual, ...visual.querySelectorAll("*")]);
+            if (el.parentElement)
+                for (const s of el.parentElement.querySelectorAll("*"))
+                    scope.add(s);
+            scope.add(el);
+            const PROPS = ["backgroundColor", "backgroundImage", "boxShadow", "color", "opacity", "transform", "translate", "scale", "visibility", "display", "fill", "stroke", "content", "width", "height", "maskImage", "webkitMaskImage", "outlineStyle", "borderTopWidth", "borderRightWidth", "borderBottomWidth", "borderLeftWidth"];
+            const BORDER = ["borderTopColor", "borderRightColor", "borderBottomColor", "borderLeftColor", "outlineColor"];
+            W.__bsCheckedLook = () => {
+                const look = [];
+                for (const n of scope) {
+                    if (!n.isConnected)
+                        continue;
+                    for (const pseudo of [null, "::before", "::after"]) {
+                        const c = getComputedStyle(n, pseudo);
+                        look.push({ other: PROPS.map((p) => c[p]).join("|"), border: BORDER.map((p) => c[p]).join("|") });
+                    }
+                }
+                return { look, html: (visual.innerHTML || "").length + ":" + visual.querySelectorAll("*").length };
+            };
+            W.__bsCheckedBefore = W.__bsCheckedLook();
+            W.__bsCheckedRestore = native && el.type === "radio" ? document.querySelector(`input[type=radio][name="${CSS.escape(el.name)}"]:checked`) : el.getAttribute("role") === "radio" ? (el.closest("[role=radiogroup]") || document).querySelector("[role=radio][aria-checked=true]") : null;
+            const bw = own ? Math.max(...["Top", "Right", "Bottom", "Left"].map((s) => parseFloat(cs[`border${s}Width`]) || 0)) : 0;
+            return { x: Math.max(0, r.left - 2), y: Math.max(0, r.top - 2), width: Math.min(innerWidth, r.right + 2) - Math.max(0, r.left - 2), height: Math.min(innerHeight, r.bottom + 2) - Math.max(0, r.top - 2), band: own ? bw + 3 : 0, own };
+        }).catch(() => null);
+        if (!prep || prep.width < 2 || prep.height < 2)
+            continue;
+        const shot = () => page.screenshot({ clip: { x: prep.x, y: prep.y, width: prep.width, height: prep.height }, scale: "css" }).then((b) => b.toString("base64"));
+        const before = await shot().catch(() => null);
+        await h.evaluate((el) => el.click()).catch(() => { });
+        await page.waitForTimeout(50);
+        await settle(page, 800);
+        if (page.url() !== url) {
+            await page.goBack().catch(() => { });
+            continue;
+        }
+        const after = await shot().catch(() => null);
+        const styles = await page.evaluate(() => {
+            const a = window.__bsCheckedBefore, b = window.__bsCheckedLook();
+            const other = a.html !== b.html || a.look.length !== b.look.length || a.look.some((x, i) => x.other !== b.look[i].other);
+            const border = a.look.some((x, i) => b.look[i] && x.border !== b.look[i].border);
+            return { other, border };
+        }).catch(() => null);
+        // put it back the way it was
+        await h.evaluate((el) => {
+            const prev = window.__bsCheckedRestore;
+            if (prev && prev !== el)
+                prev.click();
+            else if (el.matches("input[type=radio]"))
+                el.checked = false;
+            else
+                el.click();
+        }).catch(() => { });
+        await settle(page, 800);
+        if (!before || !after || !styles)
+            continue;
+        // pixels: how many changed, and how many of them inside the edge band of the control's own box
+        const px = await page.evaluate(async ({ before, after, band }) => {
+            const A = await window.__uiDecode(before), B = await window.__uiDecode(after);
+            if (A.width !== B.width || A.height !== B.height)
+                return { changed: 1, inner: 1 };
+            let changed = 0, inner = 0;
+            const w = A.width, h = A.height, edge = band + 2; // +2: the 2px margin captured around the box
+            for (let y = 0; y < h; y++)
+                for (let x = 0; x < w; x++) {
+                    const i = (y * w + x) * 4;
+                    const d = Math.abs(A.data[i] - B.data[i]) + Math.abs(A.data[i + 1] - B.data[i + 1]) + Math.abs(A.data[i + 2] - B.data[i + 2]);
+                    if (d < 24)
+                        continue;
+                    changed++;
+                    if (!band || (x >= edge && y >= edge && x < w - edge && y < h - edge))
+                        inner++;
+                }
+            return { changed, inner };
+        }, { before, after, band: prep.band }).catch(() => null);
+        if (!px)
+            continue;
+        const many = count > 1 ? ` (and ${count - 1} more like it)` : "";
+        const at = { where: info.where + many, selector: info.selector, human: info.human };
+        if (px.changed <= 2)
+            out.push({ what: `checking it changes nothing visible — checked and unchecked look the same [1.18]`, ...at });
+        else if (prep.own ? px.inner <= 2 : styles.border && !styles.other)
+            out.push({ what: `checked state only changes the border colour — the box stays empty (no fill, tick or dot) [1.18]`, ...at });
+    }
+    await recover(page);
+    return out;
+}
 /** Rendered signatures of buttons, cards and inputs on the current page, for site-wide comparison. */
 export const collectSignatures = (page, route) => page.evaluate((route) => {
     const W = window;
@@ -975,8 +1407,20 @@ export const collectSignatures = (page, route) => page.evaluate((route) => {
         if (c[3] > 0.5)
             return c.join();
     } return "255,255,255,1"; };
-    for (const el of Array.from(document.querySelectorAll("button, a, [role=button]"))) {
-        if (!W.__uiVisible(el) || !(el.textContent || "").trim())
+    // Real buttons only: a CTA, a form button, a dialog action. Not nav links, footer controls, link-cards, nor the
+    // pressed/selected pieces of a control group (filter chips, segmented options, tabs) — those are other roles with
+    // their own sizes, and counting them made "button height" report 6-8 variants on a site with two button sizes.
+    const CHIP = "[aria-pressed], [aria-selected], [aria-checked], [role=tab], [role=radio], [role=option], [role=switch], [role=checkbox], [role=menuitem], [role=menuitemradio], [role=menuitemcheckbox], [data-state=on], [data-state=off]";
+    const chipRow = (el) => {
+        // three or more look-alike siblings in one row: a chip/filter/segment group
+        const p = el.parentElement;
+        if (!p)
+            return false;
+        const same = Array.from(p.children).filter((k) => k.tagName === el.tagName && k.className === el.className && W.__uiVisible(k));
+        return same.length >= 3 && new Set(same.map((k) => Math.round(k.getBoundingClientRect().top))).size < same.length;
+    };
+    for (const el of Array.from(document.querySelectorAll("button, a, [role=button], input[type=submit], input[type=button]"))) {
+        if (!W.__uiVisible(el) || !((el.textContent || "").trim() || el.value))
             continue;
         const cs = getComputedStyle(el);
         const r = el.getBoundingClientRect();
@@ -986,7 +1430,10 @@ export const collectSignatures = (page, route) => page.evaluate((route) => {
         // only things that look like buttons: filled or outlined, padded, button-sized
         if (!(filled || outlined) || r.height < 28 || r.height > 72 || parseFloat(cs.paddingLeft) < 8)
             continue;
-        if (el.closest("nav") && !filled)
+        if (el.closest("nav, [role=navigation], footer, [role=contentinfo], [role=tablist], [role=radiogroup], [role=toolbar]") || el.matches(CHIP) || chipRow(el))
+            continue;
+        // a link counts only when it is dressed as a button (short label, no card content)
+        if (el.matches("a") && !W.__uiButtonLike(el))
             continue;
         const variant = filled ? `filled ${W.__uiRGBA(cs.backgroundColor).slice(0, 3).map((x) => Math.round(x / 8)).join(",")}` : "outlined";
         sigs.push({ kind: "button", filled, variant, radius: Math.min(Math.round(parseFloat(cs.borderTopLeftRadius)), 999), height: Math.round(r.height), font: font(cs), size: Math.round(parseFloat(cs.fontSize)), weight: Number(cs.fontWeight), route, where: W.__uiDescribe(el), selector: W.__uiSelector(el), human: W.__uiHuman(el) });
@@ -1009,12 +1456,17 @@ export const collectSignatures = (page, route) => page.evaluate((route) => {
         // a form control is not a card; a one-sided rule (border-top between sections) is a divider, not a card's edge
         if (el.matches("input, textarea, select, button, [role=combobox]"))
             continue;
+        // a CTA link, a fixed/sticky layer (cookie banner, toast) or a picture frame (logo tile) is not a card
+        if (W.__uiButtonLike(el, true) || W.__uiOverlay(el) || W.__uiMediaTile(el))
+            continue;
         const side = (k) => parseFloat(cs[`border${k}Width`]) > 0 && W.__uiRGBA(cs[`border${k}Color`])[3] > 0.05;
         const border = side("Top") && side("Right") && side("Bottom") && side("Left");
         const shadow = cs.boxShadow !== "none";
         if (!(border || shadow) || parseFloat(cs.paddingTop) < 12)
             continue;
-        const skin = `r${Math.round(parseFloat(cs.borderTopLeftRadius))} bg(${W.__uiRGBA(cs.backgroundColor).map((x) => Math.round(x * 20) / 20).join(",")}) b${cs.borderTopWidth} ${shadow ? "shadow" : "flat"} p${cs.paddingTop}`;
+        // filled vs clear is a look; which colour fills it is not (per-item tints are content, not a card variant)
+        const fill = W.__uiRGBA(cs.backgroundColor)[3] > 0.05 || /gradient/.test(cs.backgroundImage) ? "filled" : "clear";
+        const skin = `r${Math.round(parseFloat(cs.borderTopLeftRadius))} ${fill} b${cs.borderTopWidth} ${shadow ? "shadow" : "flat"} p${cs.paddingTop}`;
         sigs.push({ kind: "card", skin, radius: Math.round(parseFloat(cs.borderTopLeftRadius)), height: 0, font: "", size: 0, weight: 0, route, where: W.__uiDescribe(el), selector: W.__uiSelector(el), human: W.__uiHuman(el) });
     }
     return sigs;
@@ -1103,8 +1555,6 @@ export const inlineStyles = (page, allowProps = [], skip = [], strict = false) =
             continue;
         const tag = el.tagName.toLowerCase();
         out.push({ tag, props, what: `<${tag}> has inline ${props.join(", ")}`, where: W.__uiDescribe ? W.__uiDescribe(el) : tag, selector: W.__uiSelector ? W.__uiSelector(el) : undefined, human: W.__uiHuman ? W.__uiHuman(el) : undefined });
-        if (out.length > 30)
-            break;
     }
     return out;
 }, { allowProps: strict ? allowProps : [...SNIPER_MOTION_PROPS, ...allowProps], skip: strict ? skip : [...SNIPER_SKIP, ...skip], strict });
@@ -1283,8 +1733,6 @@ export const offPalette = (page, extra = [], tolerance = 0.045) => page.evaluate
     const seen = new Set();
     const els = Array.from(document.querySelectorAll('button, [role=button], a, input:not([type=hidden]), textarea, select, [role=combobox], [role=tab], h1, h2, h3, h4, label, p, li, span, td, th'));
     for (const el of els) {
-        if (offenders.length >= 20)
-            break;
         if (!W.__uiVisible(el) || el.closest("svg, picture, video, canvas, [data-babysitter-ignore], iframe"))
             continue;
         const cs = getComputedStyle(el);

@@ -1,0 +1,10 @@
+<!doctype html><meta charset="utf-8"><title>6.4 opacity</title>
+<!-- 6.4: translucent text that still reads (opacity .8, 11:1) is fine; one that does not (opacity .35) fails on contrast;
+     a dense page reports every faint line (60 here), not the first 40. -->
+<body style="margin:0;background:#fff;font:16px/1.4 sans-serif">
+<p id="ok" style="color:#111;opacity:.8">Muted caption that is still perfectly readable</p>
+<div style="opacity:.9"><p id="ok2" style="color:#222;opacity:.85">Nested translucency that still reads</p></div>
+<p id="faint" style="color:#111;opacity:.35">Ghost text nobody can read</p>
+<div id="dense"></div>
+<script>for (let i = 0; i < 60; i++) { const p = document.createElement("p"); p.className = "faint-line"; p.style.color = "#c8c8c8"; p.textContent = "Faint line number " + (i + 1); document.getElementById("dense").appendChild(p); }</script>
+</body>
