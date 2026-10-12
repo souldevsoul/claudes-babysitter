@@ -19,12 +19,24 @@ tester.run("no-native-controls", R["no-native-controls"], {
     '<Button type="submit">Save</Button>',
     '<DatePicker type="date" />',
     '<Checkbox type="checkbox" />',
+    // drawn by the site: the native input only holds state (TrueLogos, 2026-10)
+    '<input type="checkbox" className="sr-only peer" />',
+    '<input type="checkbox" className={cn("appearance-none size-4 rounded border", x)} />',
+    '<input type="file" className="hidden" />',
+    '<input type="file" className="absolute inset-0 opacity-0" />',
   ],
   invalid: [
     { code: "<select><option>a</option></select>", ...err("select") },
     { code: '<input type="date" />', ...err("input") },
     { code: '<input type="file" />', ...err("input") },
     { code: '<input type="checkbox" />', ...err("input") },
+    { code: '<input type="range" />', ...err("input") },
+    { code: '<input type="color" />', ...err("input") },
+    // appearance-none restyles the closed box only: the open list is still the OS one
+    { code: '<select className="appearance-none pr-10" />', ...err("select") },
+    // a hidden date input is still a native date picker when it opens
+    { code: '<input type="date" className="sr-only" />', ...err("input") },
+    { code: '<input type="checkbox" className="h-4 w-4" />', ...err("input") },
     { code: '<button onClick={go}>Go</button>', filename: "/app/src/app/page.jsx", ...err("button") },
     // a plain kit input forwarding a native picker type (kiln request-modal, 2026-10)
     { code: '<Input type="datetime-local" value={v} />', ...err("wrapped") },

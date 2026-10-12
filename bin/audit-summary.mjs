@@ -18,6 +18,16 @@ const pad = (s, n) => String(s).padEnd(n);
 console.log(`\nClaude's Babysitter — audit of ${repo}  (mode: ${projectMode(repo)})\n`);
 for (const [label, list] of counted) console.log(`  ${list.length ? "✗" : "✓"} ${pad(label, 46)} ${list.length}`);
 console.log(`  ${"─".repeat(52)}\n    ${pad("Total", 46)} ${problems.length}\n`);
+// Native selects and pickers first, by file:line. On TrueLogos the native <select> in the "Cancel this
+// project?" dialog was one of 137 no-native-controls hits inside 4,700 findings and nobody looked (2026-10);
+// a visual audit cannot see it either, because the dialog only exists after a click on a signed-in page.
+const pickers = problems.filter((p) => p.rule === "ui/no-native-controls" && /Native <select>|type="(date|datetime-local|month|week|time|range|color)"|native (date|time|datetime-local|month|week|range|color) picker/.test(p.message || ""));
+if (pickers.length) {
+  console.log(`  ✗ Native selects / pickers — fix these first (${pickers.length}). The OS draws their open list; inside a dialog no screenshot shows them:`);
+  for (const p of pickers.slice(0, 40)) console.log(`    ${p.file}:${p.line}  ${(p.message || "").split(":")[0].split(" is forbidden")[0]}`);
+  if (pickers.length > 40) console.log(`    … and ${pickers.length - 40} more`);
+  console.log("");
+}
 if (problems.length) {
   console.log("  Most affected files:");
   for (const [f, n] of topFiles) console.log(`    ${pad(n, 5)} ${f}`);

@@ -260,10 +260,20 @@ export const horizontalOverflow = (page) => page.evaluate(() => {
  * `appearance: none` is drawn by the product (a kit tick box keeps the real input for forms and the keyboard), so it
  * is not the operating system's control; date and file inputs open system pickers whatever they look like.
  */
-export const nativeControls = (page) => page.evaluate(() => Array.from(document.querySelectorAll('select, input[type=date], input[type=datetime-local], input[type=month], input[type=time], input[type=file], input[type=checkbox], input[type=radio]'))
-    .filter((el) => window.__uiVisible(el))
-    .filter((el) => !(el.matches("select, input[type=checkbox], input[type=radio]") && getComputedStyle(el).appearance === "none"))
-    .map((el) => ({ what: `native <${el.tagName.toLowerCase()}${el.type ? ` type=${el.type}` : ""}>`, where: window.__uiDescribe(el), selector: window.__uiSelector(el), human: window.__uiHuman(el) })));
+// root: scope to part of the page (an open dialog). <select> always counts: appearance:none only restyles
+// the closed box, its open list is still drawn by the OS (TrueLogos /contact, 2026-10). A checkbox/radio
+// with appearance:none is drawn by the site and does not count.
+const NATIVE_SEL = 'select, input[type=date], input[type=datetime-local], input[type=month], input[type=week], input[type=time], input[type=file], input[type=checkbox], input[type=radio], input[type=range], input[type=color]';
+export const nativeControls = (page, root = null) => page.evaluate(({ sel, root }) => {
+    const scopes = root ? Array.from(document.querySelectorAll(root)) : [document];
+    return scopes.flatMap((sc) => Array.from(sc.querySelectorAll(sel)))
+        .filter((el) => window.__uiVisible(el))
+        .filter((el) => !(el.matches("input[type=checkbox], input[type=radio], input[type=range]") && getComputedStyle(el).appearance === "none"))
+        .map((el) => ({
+        what: `native <${el.tagName.toLowerCase()}${el.tagName === "INPUT" ? ` type=${el.type}` : ""}>${root ? " inside an open dialog/popover" : ""}`,
+        where: window.__uiDescribe(el), selector: window.__uiSelector(el), human: window.__uiHuman(el),
+    }));
+}, { sel: NATIVE_SEL, root });
 /** 6.4 — text ≥12px, weight ≥400, not translucent. */
 // root: a selector to scope the check to one part of the page (the open mobile menu panel)
 export const illegibleText = (page, allowLightWeights = false, root = null) => page.evaluate(({ allowLightWeights, root }) => {
@@ -1045,6 +1055,10 @@ export async function interactiveStates(page, max = 8) {
         const after = await headerRect(page);
         if (before && after && before !== after)
             out.push({ what: `opening it moves the header (${before} → ${after}) [5.3/5.4, P22]`, where: info.where });
+        // 1.1 inside what just opened: a dialog's form is not in the DOM at load, so the page-level
+        // native-control check never sees it (TrueLogos "Cancel this project?" <select>, 2026-10).
+        for (const n of await nativeControls(page, '[role=dialog], [role=alertdialog], [data-radix-popper-content-wrapper]'))
+            out.push({ what: `${n.what} [1.1, P01]`, where: n.where });
         for (const p of await openPopups(page)) {
             if (p.clipped)
                 out.push({ what: `open ${p.role} goes off-screen (top/bottom/left/right ${p.rect.join("/")}) [1.2, P02]`, where: p.where });

@@ -26,6 +26,18 @@ export const noNativeControls = {
       file: ["FileUpload", "P50"],
       checkbox: ["Checkbox", "P01"],
       radio: ["RadioGroup", "P01"],
+      range: ["Slider", "P01"],
+      color: ["ColorPicker", "P01"],
+    };
+    // A control the site draws itself: the native element is only the accessible state holder,
+    // hidden (sr-only / hidden / opacity-0 under a drop zone) or stripped (appearance-none) and
+    // painted by its own classes. 113 of 137 hits on TrueLogos were raw <button>s and most of the
+    // rest were such drawn checkboxes, so the 8 real native <select>s drowned (2026-10).
+    const DRAWN = new Set(["sr-only", "hidden", "opacity-0", "appearance-none"]);
+    const drawn = (node, type) => {
+      if (node.type !== "JSXOpeningElement" || !["checkbox", "radio", "file", "range"].includes(type)) return false;
+      const cls = getAttr(node, "className") || getAttr(node, "class");
+      return !!cls && classTokens(cls, context).map(base).some((t) => DRAWN.has(t));
     };
     // static value of an expression: literals, "da" + "te", cond ? "a" : "b", const bindings → set of strings (or null)
     const values = (e, depth = 0) => {
@@ -42,7 +54,7 @@ export const noNativeControls = {
       if (name === "select") context.report({ node, messageId: "select" });
       else if (name === "button") context.report({ node, messageId: "button" });
       else if (name === "input") for (const type of (typeValues || []).map((t) => t.toLowerCase())) {
-        if (INPUTS[type]) { const [replacement, pattern] = INPUTS[type]; context.report({ node, messageId: "input", data: { type, replacement, pattern } }); break; }
+        if (INPUTS[type] && !drawn(node, type)) { const [replacement, pattern] = INPUTS[type]; context.report({ node, messageId: "input", data: { type, replacement, pattern } }); break; }
       }
     };
     return {
