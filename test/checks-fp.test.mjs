@@ -245,6 +245,34 @@ try {
     assert.ok(!has(r.soft, /got-it|Got it/), `a detached control reads "" for every style — not a snap: ${JSON.stringify(r.soft.map((f) => f.where))}`);
     assert.ok(has(r.soft, /#snap|Filter/), `a pressed fill that snaps on a control that stays is still soft: ${JSON.stringify(r.soft)}`);
   });
+  await test("2.10 escapesBox: a button run out of its card, one clipped by an overflow:hidden section and a dropdown that widens its form fail; a corner close button, carousel slides, a full-bleed band and a fitting button pass", async (page) => {
+    await page.goto(url("escape.html"));
+    const out = await checks.escapesBox(page);
+    const by = (id) => out.find((f) => f.selector === id);
+    assert.ok(by("#see-all") && /sticks out of its card/.test(by("#see-all").what), `Praxis: the button past its card (still on screen) fails: ${JSON.stringify(out)}`);
+    assert.ok(by("#see-all-clipped"), `inside an overflow:hidden section the card still catches it: ${JSON.stringify(out)}`);
+    assert.ok(by("#bare-clipped") && /cut off by its container/.test(by("#bare-clipped").what), `a link the section clips is not "decorative bleed": ${JSON.stringify(out)}`);
+    assert.ok(by("#topic") && /sticks out of its card/.test(by("#topic").what), `Relaygpu: the dropdown that widens its grid column fails: ${JSON.stringify(out)}`);
+    for (const id of ["#topic-ok", "#close", "#fits", "#slide1", "#slide2", "#slide3", "#band"]) assert.ok(!by(id), `${id} passes: ${JSON.stringify(by(id))}`);
+  });
+
+  await test("1.18 toggleGeometry: a thumb past its track and an off thumb on the on side fail, disabled included; a left-anchored thumb and an rtl one pass", async (page) => {
+    await page.goto(url("switch.html"));
+    const out = await checks.toggleGeometry(page);
+    const by = (id) => out.filter((f) => f.selector === id);
+    assert.ok(by("#bad-on").some((f) => /outside the track/.test(f.what)), `Mise "Necessary": thumb past the edge, disabled: ${JSON.stringify(out)}`);
+    assert.ok(by("#bad-off").some((f) => /sits on the on side/.test(f.what)), `Mise "Analytics": off reads as on: ${JSON.stringify(out)}`);
+    for (const id of ["#good-on", "#good-off", "#rtl-off"]) assert.equal(by(id).length, 0, `${id} passes: ${JSON.stringify(by(id))}`);
+    const viaChecked = await checks.checkedState(page);
+    assert.ok(viaChecked.some((f) => f.selector === "#bad-on"), "checkedState reports the geometry too");
+  });
+
+  await test("4.6 cookieFlow: a banner named only by aria-label is found, its settings opened, and the panel's broken switches reported", async (page) => {
+    await page.goto(url("cookie-region.html"));
+    const out = await checks.cookieFlow(page);
+    assert.ok(out.some((f) => f.selector === "#nec" && /outside the track/.test(f.what) && /cookie settings panel/.test(f.what)), `the disabled "Necessary" switch: ${JSON.stringify(out)}`);
+    assert.ok(out.some((f) => f.selector === "#ana" && /on side/.test(f.what)), `the off "Analytics" switch that reads as on: ${JSON.stringify(out)}`);
+  });
 } finally {
   await browser.close();
 }
