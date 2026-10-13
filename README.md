@@ -64,6 +64,15 @@ Or install it as a dev dependency: `npm i -D github:souldevsoul/claudes-babysitt
 | `docs/` | The guidelines the rules enforce |
 | `test/`, `fixtures/` | `npm test`: RuleTester, Stylelint fixtures, end-to-end cases |
 
+## What changed in 4.10.0 (controls inside their card; switch thumbs in their track; the cookie banner found by its name)
+
+From four products the babysitter had already been run on (Oct 5–7, 2026), where a person still found the bugs by eye.
+
+- **New: a control stays inside the card it sits in, and no container cuts it off (2.10).** `horizontalOverflow` measured against the viewport only, and treated anything an `overflow:hidden` ancestor clipped as decorative bleed. On Praxis, "See all example profiles" ran 73 px past its hero card at 1440 px. It was still on screen, so nothing was reported. At 390 px it ran 169 px past the card, and the hero's `overflow:hidden` clipped it, so the check called it bleed. On Relaygpu's contact form at 390 px, a long topic widened the grid's implicit `auto` column, and the card clipped the dropdown and the fields under it by 43 px. `escapesBox` takes every control (links, buttons, fields, `role=button|combobox|switch|tab|link`). Its card is the nearest ancestor that paints a box (a fill, all four borders or a shadow) and is narrower than the viewport. The control must fit inside that card, and a clipping ancestor must not cut it. It skips anything absolutely or fixed placed on purpose (a close button hung on a corner, a skip link), scrollers, and carousel slides: `aria-hidden`/`inert` slides, or a clipper whose content runs a slide or more past it. Look-alikes are reported once with a count. It runs in the suite and in micro-check at every width.
+- **New: a switch's thumb sits inside its track, on the side its state says (1.18).** The checked-state check only asked whether toggling changes something. On Mise the thumb was absolute with no `left`, so it started at the centre of its `<button>`: "off" drew it in the right half and read as on, and "on" drew it 20 px past the track. Toggling still changed something. `toggleGeometry` finds the thumb (the largest roughly square visible element inside a `role=switch`). It must be inside the track: left of centre when off, right of centre when on, and the reverse for `rtl`. Disabled switches are measured too, because nothing is toggled; Mise's broken "Necessary — always on" switch is disabled. It runs inside the 1.18 check.
+- **Fix (miss): the cookie banner is found by its accessible name and by its text, not only by class or id.** Mise's banner is `<div role="region" aria-label="Cookie consent" class="presence …">`, with no "cookie" or "consent" in any class or id. The 4.6 flow never found it, never opened its settings, and never saw the panel's switches. Matching now also uses `aria-label`/`aria-labelledby` and a fixed or sticky box that mentions cookies and holds a control. With the panel open, its switches are measured with `toggleGeometry`, disabled ones included. Once the banner was found, Mise also failed the existing "settings replace the banner" rule: the panel opened over the banner, with two "Accept" buttons on screen.
+- Fixture pages pin every case in `test/fixtures/runtime/`: `escape.html`, `switch.html` and `cookie-region.html`. Run against the live sites before their fixes, the new checks report all three bugs. After the fixes, and on the other routes of the same sites, they report nothing.
+
 ## What changed in 4.9.1 (the site-wide motion check finishes; no snap for a control the click removes)
 
 From a live run on vertex.boutique, where the 4.9.0 site-wide check "every interactive element animates what it shows, hides or changes" timed out at 390 px after 17 min and lost every page's findings.
@@ -467,6 +476,7 @@ Some rules encode design choices rather than bugs. A project can opt out explici
 | Check | Guideline | Patterns |
 |---|---|---|
 | No horizontal scroll / nothing outside the viewport (decorative bleed clipped by `body { overflow-x: hidden }` is fine) | 2.1 | P15 P16 |
+| Controls stay inside the card they sit in, and no container clips them (corner-hung, scrolling and carousel content exempt) | 2.10 | P16 |
 | No native controls in the DOM | 1.1 | P01 P03 P50 |
 | Text ≥12px, legible weight, **measured** contrast ≥4.5:1 (≥3:1 large). Alpha is blended; `lab()`/`oklab()` are resolved via canvas. Gradient-filled text and text over images are reported as "check by eye" annotations, not failures | 6.4 | P11 P34 |
 | Cards in a row: same radius and padding; same fill/border/shadow (one featured card may differ); offer cards (with price/CTA) equal height; CTAs and prices aligned; no double seams. Bento/masonry tiles without price/CTA may differ in height | 2.6 / 1.7 / 1.16 | P27 P46 P55 |
@@ -474,14 +484,14 @@ Some rules encode design choices rather than bugs. A project can opt out explici
 | Scroll containers not rounded | 5.1 | P21 |
 | Inputs visible at rest (border ≥3:1 or distinct fill, on the input or on a wrapper that hugs it); the finding names the lightest edge that passes, so the fix does not overshoot | 1.9 | P09 |
 | Button label readable on hover (≥3:1), measured against the pixels behind it when colours alone cannot tell (gradients, images, translucent pills over sibling layers); disabled controls exempt | 1.4 | P06 |
-| Checkboxes, radios and switches look different when checked (not only a border colour) | 1.18 | — |
+| Checkboxes, radios and switches look different when checked (not only a border colour); a switch's thumb sits inside its track, on the side its state says (disabled switches included) | 1.18 | — |
 | Every width has navigation: hidden nav links come with a visible menu button | 3.5 | P10 |
 | Every dropdown/menu/dialog trigger is opened: popup on-screen, content scrolls, header doesn't move, no overflow | 1.2 / 5.2 / 5.3 | P02 P18 P22 |
 | Overlays that appear by themselves (cookie banner, toast, promo bar, chat bubble) appear and leave with motion; `animate-in` classes produce an animation | 6.12 | P59 |
 | The open mobile menu: legible, uncovered, on-screen (hard); 44 px targets, full height or a dimming backdrop, a surface that matches the theme (soft) | 3.5 / 6.4 | P10 |
 | **Site-wide:** every interactive element animates what it shows/hides/changes, both ways; the clicked control's state change transitions (soft); not-clicked controls listed | 6.12 | P59 |
 | **Site-wide:** the open mobile menu's buttons match the site's CTAs (height, shape, font); an inset panel's corners match the cards (soft) | 3.5 / 1.3 / 1.16 | P04 P46 |
-| Cookie settings replace the banner (one "Accept"), panel fits | 4.6 | P19 P18 |
+| Cookie settings replace the banner (one "Accept"), panel fits, its switches are drawn right; the banner is found by class/id, accessible name or text | 4.6 | P19 P18 |
 | Cookie banner does not cover navigation | 4.6 | P57 |
 | One `h1`; `aria-current` on the active nav item; load at top; CLS < 0.1 | 3.3 / 3.5 / 3.8 / 2.13 | P26 P10 P52 P43 |
 | Images ≥1.5× (target 2×) in real file pixels | 6.10 | P56 |

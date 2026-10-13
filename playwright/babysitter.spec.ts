@@ -43,6 +43,7 @@ for (const route of ROUTES) {
     const r = route.path;
 
     test("2.1 no horizontal scroll, nothing outside the viewport [P15 P16]", async ({ page }) => { await open(page, r); hard(await c.horizontalOverflow(page)); });
+    test("2.10 controls stay inside their card, and no container cuts them off [P16]", async ({ page }) => { await open(page, r); hard(await c.escapesBox(page)); });
     test("1.1 no native select/date/file/checkbox/radio [P01 P03 P50]", async ({ page }) => { await open(page, r); hard(await c.nativeControls(page)); });
     test("6.4 text ≥12px, legible weight, contrast ≥4.5:1 (3:1 large) [P11 P34]", async ({ page }) => {
       await open(page, r);
@@ -71,7 +72,7 @@ for (const route of ROUTES) {
     test("3.5 every width has navigation: hidden nav links come with a menu button [P10]", async ({ page }) => { await open(page, r); hard(await c.navReachable(page)); });
     test("3.8 page loads scrolled to top [P52]", async ({ page }) => { await open(page, r); expect(await c.scrollY(page)).toBe(0); });
     test("4.6 cookie banner does not cover navigation [P57]", async ({ page }) => { await open(page, r); hard(await c.cookieCovers(page)); });
-    test("4.6 cookie settings replace the banner, panel fits [P19 P18]", async ({ page }) => { await open(page, r); hard(await c.cookieFlow(page)); });
+    test("4.6 cookie settings replace the banner, panel fits, its switches are drawn right [P19 P18]", async ({ page }) => { await open(page, r); hard(await c.cookieFlow(page)); });
     test("1.11 logo link hugs the logo [P58]", async ({ page }) => { await open(page, r); hard(await c.logoLink(page)); });
     test("2.6 cards in a row: equal height, CTAs and prices aligned, no double seams [P27 P55]", async ({ page }) => { await open(page, r); hard(await c.rowAlignment(page)); });
     test("2.12 repeated rows keep column positions [P48]", async ({ page }) => { await open(page, r); soft(await c.repeatedRowColumns(page), "row columns shift"); });
@@ -84,7 +85,7 @@ for (const route of ROUTES) {
       if (eye.length) test.info().annotations.push({ type: "check by eye", description: fmt(eye) });
       hard(list);
     });
-    test("1.18 tick boxes, radios and switches look checked when checked", async ({ page }) => { await open(page, r); hard(await c.checkedState(page)); });
+    test("1.18 tick boxes, radios and switches look checked when checked; switch thumbs sit in the track", async ({ page }) => { await open(page, r); hard(await c.checkedState(page)); });
     test("1.2/5.2 dropdowns, menus and dialogs open on-screen without moving the header [P02 P18 P22]", async ({ page }) => { await open(page, r); hard(await c.interactiveStates(page)); });
     test("6.12 dropdowns, menus, popovers, dialogs and accordions open and close with motion [P59]", async ({ page }) => { await open(page, r); hard(await c.overlayMotion(page)); });
     test("6.12 overlays that appear by themselves (cookie banner, toast, promo bar, chat bubble) come and go with motion [P59]", async ({ page }) => {

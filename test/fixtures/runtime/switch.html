@@ -1,0 +1,21 @@
+<!doctype html><meta charset="utf-8"><title>1.18 switch geometry</title>
+<!-- 1.18: Mise (2026-10) — the thumb is absolute with no left offset, so it starts at the centre of the <button> track:
+     off draws it in the right half (reads as on), on draws it past the right edge; the disabled "always on" one too.
+     Passes: the same switch with left:0, on and off; an rtl switch on its own side. -->
+<style>
+  body{margin:0;font:16px sans-serif;padding:24px}
+  .sw{position:relative;width:44px;height:24px;border-radius:12px;border:0;padding:0;background:#ccc}
+  .sw[aria-checked=true]{background:#a04f31}
+  .sw span{position:absolute;top:2px;width:20px;height:20px;border-radius:50%;background:#fff;box-shadow:0 1px 2px #0004}
+  .bad span{transform:translateX(2px)} .bad[aria-checked=true] span{transform:translateX(22px)}
+  .good span{left:0;transform:translateX(2px)} .good[aria-checked=true] span{transform:translateX(22px)}
+  .rtl span{right:0;transform:translateX(-2px)} .rtl[aria-checked=true] span{transform:translateX(-22px)}
+  p{margin:12px 0}
+</style>
+<body>
+<p><button role="switch" aria-checked="true" aria-label="Necessary" class="sw bad" id="bad-on" disabled><span></span></button> Necessary</p>
+<p><button role="switch" aria-checked="false" aria-label="Analytics" class="sw bad" id="bad-off"><span></span></button> Analytics</p>
+<p><button role="switch" aria-checked="true" aria-label="Good on" class="sw good" id="good-on"><span></span></button> Good on</p>
+<p><button role="switch" aria-checked="false" aria-label="Good off" class="sw good" id="good-off"><span></span></button> Good off</p>
+<p dir="rtl"><button role="switch" aria-checked="false" aria-label="RTL off" class="sw rtl" id="rtl-off"><span></span></button> RTL off</p>
+</body>

@@ -1,0 +1,22 @@
+<!doctype html><meta charset="utf-8"><title>4.6 cookie banner found by its name</title>
+<!-- 4.6: Mise (2026-10) — the banner is <div role="region" aria-label="Cookie consent"> with no "cookie" or "consent"
+     in any class or id. Its Manage button opens a dialog whose switches are drawn wrong (see switch.html). -->
+<style>
+  body{margin:0;font:16px sans-serif}
+  .presence{position:fixed;left:0;right:0;bottom:0;padding:16px;background:#fff;border-top:1px solid #ccc}
+  .dlg{position:fixed;left:50%;top:20%;transform:translateX(-50%);width:420px;background:#fff;border:1px solid #ccc;padding:24px}
+  .sw{position:relative;width:44px;height:24px;border-radius:12px;border:0;padding:0;background:#ccc}
+  .sw[aria-checked=true]{background:#a04f31}
+  .sw span{position:absolute;top:2px;width:20px;height:20px;border-radius:50%;background:#fff}
+  .sw span{transform:translateX(2px)} .sw[aria-checked=true] span{transform:translateX(22px)}
+</style>
+<body>
+<main><h1>Recipes</h1></main>
+<div role="region" aria-label="Cookie consent" class="presence" id="banner"><p>We keep a little information in your browser.</p>
+  <button id="manage" onclick="document.getElementById('banner').hidden=true;document.getElementById('prefs').hidden=false">Manage</button> <button>Accept</button></div>
+<div role="dialog" aria-label="Manage cookie preferences" class="dlg" id="prefs" hidden>
+  <p>Necessary <button role="switch" aria-checked="true" aria-label="Necessary" class="sw" id="nec" disabled><span></span></button></p>
+  <p>Analytics <button role="switch" aria-checked="false" aria-label="Analytics" class="sw" id="ana"><span></span></button></p>
+  <button>Save preferences</button>
+</div>
+</body>

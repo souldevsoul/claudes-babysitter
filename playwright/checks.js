@@ -256,6 +256,80 @@ export const horizontalOverflow = (page) => page.evaluate(() => {
     return out;
 });
 /**
+ * 2.10 — a control stays inside the card it sits in, and no container cuts it off.
+ *
+ * horizontalOverflow measures against the viewport only, and passes anything a clipping ancestor cuts off as
+ * decorative bleed. A button wider than its card is neither: Praxis (2026-10) had "See all example profiles" 73 px
+ * past its hero card at 1440 — still on screen, so not reported — and 200 px past it at 390, where the hero's
+ * overflow:hidden clipped it and the check called that bleed. Relaygpu's contact form let a long topic push its
+ * dropdown 43 px past the card on a phone.
+ *
+ * For every control: the nearest ancestor that paints a box (a fill, all four borders, or a shadow) narrower than the
+ * viewport is its card, and the control must fit inside it; an ancestor that clips must not cut it. Skipped as
+ * deliberate: anything absolutely/fixed placed between the control and the box (a close button hung on a corner, a
+ * skip link), scrollers, inactive carousel slides (aria-hidden, or a clipper whose content runs a slide or more past
+ * it). Controls that look alike (same tag, classes and overflow) are reported once with a count.
+ */
+export const escapesBox = (page) => page.evaluate(() => {
+    const W = window;
+    const out = [];
+    const vw = document.documentElement.clientWidth;
+    const clear = (c) => !c || c === "transparent" || /^rgba\(.*,\s*0\)$/.test(c);
+    const paints = (el) => {
+        const cs = getComputedStyle(el);
+        if (!clear(cs.backgroundColor) || cs.backgroundImage !== "none" || cs.boxShadow !== "none")
+            return true;
+        return ["Top", "Right", "Bottom", "Left"].every((s) => parseFloat(cs[`border${s}Width`]) > 0 && !clear(cs[`border${s}Color`]));
+    };
+    const CONTROL = 'a[href], button, input:not([type=hidden]), textarea, select, [role=button], [role=combobox], [role=switch], [role=tab], [role=link]';
+    const groups = new Map();
+    for (const el of Array.from(document.querySelectorAll(CONTROL))) {
+        if (!W.__uiVisible(el) || el.closest('[aria-hidden="true"], [inert]'))
+            continue;
+        if (el.parentElement && el.parentElement.closest(CONTROL))
+            continue; // the outer control is the one measured
+        const r = el.getBoundingClientRect();
+        if (r.width < 4 || r.height < 4)
+            continue;
+        let finding = null;
+        for (let child = el, a = el.parentElement; a && a !== document.body && a !== document.documentElement; child = a, a = a.parentElement) {
+            // placed on purpose: whatever hangs off a box by absolute/fixed position is not escaping it
+            if (/^(absolute|fixed)$/.test(getComputedStyle(child).position))
+                break;
+            const cs = getComputedStyle(a);
+            if (/(auto|scroll)/.test(cs.overflowX) || /(auto|scroll)/.test(cs.overflowY))
+                break; // a scroller: its content is meant to run past it
+            const q = a.getBoundingClientRect();
+            const past = Math.round(Math.max(r.right - q.right, q.left - r.left, r.bottom - q.bottom, q.top - r.top));
+            const clips = /(hidden|clip)/.test(cs.overflowX) || /(hidden|clip)/.test(cs.overflowY);
+            if (clips && past > 1) {
+                // a carousel's viewport: its track runs a slide or more past it, and the slide outside it is not cut by mistake
+                if (a.scrollWidth - a.clientWidth >= r.width || a.scrollHeight - a.clientHeight >= r.height)
+                    break;
+                finding = { what: `is cut off by its container: ${past}px of it is clipped (${Math.round(r.width)}px wide in a ${Math.round(q.width)}px box) [2.10, P16]`, box: a };
+                break;
+            }
+            if (paints(a) && q.width < vw - 2) {
+                if (past > 2)
+                    finding = { what: `sticks out of its card by ${past}px (${Math.round(r.width)}px wide in a ${Math.round(q.width)}px card) [2.10, P16]`, box: a };
+                break; // the card it sits in fits it
+            }
+        }
+        if (!finding)
+            continue;
+        const sig = [el.tagName, typeof el.className === "string" ? el.className : "", finding.what.replace(/\d+px/g, "")].join("|");
+        const g = groups.get(sig);
+        if (g) {
+            g.count++;
+            continue;
+        }
+        groups.set(sig, { count: 1, f: { what: finding.what, where: `${W.__uiDescribe(el)} in ${W.__uiDescribe(finding.box)}`, selector: W.__uiSelector(el), human: W.__uiHuman(el) } });
+    }
+    for (const { count, f } of groups.values())
+        out.push(count > 1 ? { ...f, where: `${f.where} (and ${count - 1} more like it)` } : f);
+    return out;
+});
+/**
  * 1.1 — no native select / date / file / checkbox / radio rendered. A select, checkbox or radio with
  * `appearance: none` is drawn by the product (a kit tick box keeps the real input for forms and the keyboard), so it
  * is not the operating system's control; date and file inputs open system pickers whatever they look like.
@@ -1252,14 +1326,46 @@ export async function overlayMotion(page, max = 10) {
     return out;
 }
 /** 4.6 — cookie settings replace the banner (never two "Accept" buttons), the panel fits and scrolls (P19 P18). */
+/**
+ * The cookie banner, marked with data-bs-cookie. Found by class or id, by an accessible name (Mise, 2026-10:
+ * `<div role="region" aria-label="Cookie consent" class="presence …">` has neither "cookie" nor "consent" in a class
+ * or id, so the settings panel was never opened and its broken switches never seen), or as a fixed/sticky box that
+ * talks about cookies.
+ */
+const markCookieBanner = (page) => page.evaluate(() => {
+    const W = window;
+    for (const el of Array.from(document.querySelectorAll("[data-bs-cookie]")))
+        el.removeAttribute("data-bs-cookie");
+    const named = (el) => {
+        const label = el.getAttribute("aria-label") || (el.getAttribute("aria-labelledby") || "").split(/\s+/).map((id) => document.getElementById(id)?.textContent || "").join(" ");
+        return /cookie|consent|куки|cookies/i.test(label);
+    };
+    const byName = Array.from(document.querySelectorAll('[class*=cookie i], [id*=cookie i], [class*=consent i], [id*=consent i], [aria-label], [aria-labelledby]'))
+        .filter((el) => W.__uiVisible(el) && (/cookie|consent/i.test(`${typeof el.className === "string" ? el.className : ""} ${el.id}`) || named(el)));
+    const byText = Array.from(document.querySelectorAll("body *")).filter((el) => {
+        const cs = getComputedStyle(el);
+        return /^(fixed|sticky)$/.test(cs.position) && W.__uiVisible(el) && /cookie|куки/i.test(el.textContent || "") && el.querySelector("button, a, [role=button]");
+    });
+    const found = [...byName, ...byText];
+    for (const el of found)
+        el.setAttribute("data-bs-cookie", "");
+    return found.length;
+});
 export async function cookieFlow(page) {
     const out = [];
-    const manage = page.locator('[class*=cookie i] button, [id*=cookie i] button, [class*=consent i] button, [id*=consent i] button, [class*=cookie i] a, [class*=consent i] a')
+    if (!(await markCookieBanner(page).catch(() => 0)))
+        return out;
+    const manage = page.locator("[data-bs-cookie] button, [data-bs-cookie] a, [data-bs-cookie] [role=button]")
         .filter({ hasText: /manage|settings|preferences|customi[sz]e|options|настро|параметр/i }).first();
     if (!(await manage.isVisible().catch(() => false)))
         return out;
     await manage.click().catch(() => { });
     await page.waitForTimeout(400);
+    await settle(page, 800);
+    // the panel's switches are only in the page while it is open, so they are measured here, disabled ones included
+    // ("Necessary — always on" is disabled, and was the one drawn past its track)
+    for (const f of await toggleGeometry(page))
+        out.push({ ...f, what: `${f.what} — in the cookie settings panel` });
     const accepts = await page.evaluate(() => Array.from(document.querySelectorAll("button, a")).filter((b) => window.__uiVisible(b) && /^(accept( all)?|allow all|agree|принять( все)?)$/i.test((b.textContent || "").trim())).length);
     if (accepts > 1)
         out.push({ what: `${accepts} "Accept" buttons visible after opening cookie settings — banner and panel are shown together [4.6, P19]`, where: "cookie banner + settings" });
@@ -1272,6 +1378,63 @@ export async function cookieFlow(page) {
     return out;
 }
 /**
+ * 1.18 — a switch's thumb sits inside its track, on the side its state says: left when off, right when on (mirrored
+ * for rtl). checkedState only asks whether toggling changes something, and a thumb that slides from the wrong place
+ * to past the edge still changes something. Mise (2026-10): the thumb was absolute with no left offset, so it started
+ * at the centre of its <button> track — "off" drew it in the right half (reading as on), "on" drew it 20 px past the
+ * track's right edge. Disabled switches are measured too: nothing is toggled here.
+ *
+ * The thumb is the largest roughly-square visible element inside the switch, smaller than the track. Switches drawn
+ * entirely with ::before/::after, or as a sr-only input with a sibling box, are not measured.
+ */
+export const toggleGeometry = (page) => page.evaluate(() => {
+    const W = window;
+    const out = [];
+    const seen = new Set();
+    for (const sw of Array.from(document.querySelectorAll("[role=switch]"))) {
+        if (!W.__uiVisible(sw))
+            continue;
+        const t = sw.getBoundingClientRect();
+        if (t.width < 16 || t.height < 8)
+            continue;
+        let thumb = null, area = 0;
+        for (const n of Array.from(sw.querySelectorAll("*"))) {
+            if (!W.__uiVisible(n))
+                continue;
+            const q = n.getBoundingClientRect();
+            if (q.width < 4 || q.height < 4 || q.width > t.width * 0.75 || q.height > t.height + 2)
+                continue;
+            if (Math.abs(q.width - q.height) > Math.max(2, q.height * 0.3))
+                continue; // a label or an icon strip, not a thumb
+            if (q.width * q.height > area) {
+                thumb = q;
+                area = q.width * q.height;
+            }
+        }
+        if (!thumb)
+            continue;
+        const on = sw.getAttribute("aria-checked") === "true" || sw.getAttribute("data-state") === "checked" || (sw.matches("input") && sw.checked);
+        const rtl = getComputedStyle(sw).direction === "rtl";
+        const x0 = Math.round(thumb.left - t.left), x1 = Math.round(thumb.right - t.left), w = Math.round(t.width);
+        const problems = [];
+        if (thumb.left < t.left - 1 || thumb.right > t.right + 1 || thumb.top < t.top - 1 || thumb.bottom > t.bottom + 1)
+            problems.push(`its thumb is drawn outside the track (thumb at x ${x0}..${x1}, track 0..${w})`);
+        const centre = (thumb.left + thumb.right) / 2 - t.left;
+        const onSide = rtl ? centre < t.width / 2 : centre > t.width / 2;
+        if (Math.abs(centre - t.width / 2) > 1 && onSide !== on)
+            problems.push(`it is ${on ? "on" : "off"} but its thumb sits on the ${on ? "off" : "on"} side (thumb at x ${x0}..${x1}, track 0..${w}), so it reads as ${on ? "off" : "on"}`);
+        if (!problems.length)
+            continue;
+        const sig = `${typeof sw.className === "string" ? sw.className : ""}|${on}|${problems.join()}`;
+        if (seen.has(sig))
+            continue;
+        seen.add(sig);
+        for (const what of problems)
+            out.push({ what: `switch ${what} [1.18]`, where: W.__uiDescribe(sw), selector: W.__uiSelector(sw), human: W.__uiHuman(sw) });
+    }
+    return out;
+});
+/**
  * 1.18 — a tick box, radio or switch looks checked when it is checked. Each one (native, or role=checkbox / switch /
  * radio) is toggled with a DOM click (no focus ring, no hover), captured before and after, and put back. It fails when
  * nothing visible changes, or when only the edge changes colour (Vertex, 2026-10: an `appearance:none` box whose
@@ -1279,7 +1442,7 @@ export async function cookieFlow(page) {
  * Controls that look alike (same classes) are toggled once and reported together.
  */
 export async function checkedState(page) {
-    const out = [];
+    const out = [...await toggleGeometry(page).catch(() => [])];
     await page.mouse.move(0, 0).catch(() => { });
     const handles = await page.$$('input[type=checkbox], input[type=radio], [role=checkbox], [role=switch], [role=radio]');
     const groups = new Map(); // look signature → { handle, count }

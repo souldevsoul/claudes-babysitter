@@ -113,6 +113,7 @@ for (const route of routes) {
     for (const o of hard.filter((x) => /contrast/.test(x.what))) problems.push({ route, viewport: v.name, check: "contrast [6.4]", ...o });
     for (const o of await c.rowAlignment(page)) problems.push({ route, viewport: v.name, check: "row alignment [2.6]", ...o });
     if (v.mobile) for (const o of await c.horizontalOverflow(page)) problems.push({ route, viewport: v.name, check: "horizontal overflow [2.1]", ...o });
+    for (const o of await c.escapesBox(page)) problems.push({ route, viewport: v.name, check: "control outside its card [2.10]", ...o });
     if (v.mobile) for (const o of await c.tableClipping(page)) problems.push({ route, viewport: v.name, check: "mobile table [2.3]", ...o });
     for (const o of await c.inputVisibility(page)) problems.push({ route, viewport: v.name, check: "control boundary [1.9]", ...o });
     if (!v.mobile) for (const o of await c.nativeControls(page)) problems.push({ route, viewport: v.name, check: "native control [1.1]", ...o });

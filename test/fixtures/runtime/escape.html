@@ -1,0 +1,34 @@
+<!doctype html><meta charset="utf-8"><title>2.10 controls inside their card</title>
+<!-- 2.10: Praxis (2026-10) — a nowrap button beside a price in a card too narrow for both runs out of the card; inside a
+     section with overflow:hidden it is clipped as well. Relaygpu — a grid with no column template lets a long dropdown
+     value widen the column past the form card. Passes: a close button hung on the corner on purpose, a carousel
+     whose slides run past an overflow:hidden viewport, a full-bleed band, a button that fits. -->
+<style>
+  body{margin:0;font:16px sans-serif;padding:24px}
+  .card{background:#fff;border:1px solid #ccc;border-radius:16px;padding:24px;width:320px;margin:24px 0}
+  .row{display:flex;justify-content:space-between;gap:16px;border-top:1px solid #ccc;padding-top:16px}
+  .btn{display:inline-flex;flex-shrink:0;white-space:nowrap;height:44px;align-items:center;padding:0 24px;border:1px solid #333;border-radius:22px;font:14px monospace;letter-spacing:.1em;text-transform:uppercase;color:#000;text-decoration:none}
+  .clip{overflow:hidden;width:360px}
+  .grid{display:grid;gap:16px}
+  .trigger{display:flex;width:100%;white-space:nowrap;height:40px;align-items:center;padding:0 12px;border:1px solid #333;background:#111;color:#eee;font:13px monospace}
+  .carousel{overflow:hidden;width:320px;background:#f4f4f4}
+  .track{display:flex;gap:16px;width:max-content}
+  .slide{width:300px;flex:none;padding:16px;background:#fff}
+  .band{background:#222;padding:24px}
+</style>
+<body>
+<div class="card" id="praxis-card"><div class="row"><span style="white-space:nowrap">250 credits / task</span><a class="btn" id="see-all" href="#">See all example profiles</a></div></div>
+
+<section class="clip"><div style="padding:0 20px"><div class="card" style="width:auto;background:#fff"><div class="row"><span style="white-space:nowrap">250 credits</span><a class="btn in-clip" id="see-all-clipped" href="#">See all example profiles</a></div></div></div></section>
+
+<section style="overflow:hidden;width:300px"><a class="btn" id="bare-clipped" href="#">A link the section cuts off</a></section>
+
+<form class="card" id="contact" style="width:240px;background:#0d1116"><div class="grid"><div><button type="button" role="combobox" class="trigger" id="topic">Support: product, endpoints, the API</button></div></div></form>
+<form class="card" style="width:240px;background:#0d1116"><div class="grid" style="grid-template-columns:minmax(0,1fr)"><div><button type="button" role="combobox" class="trigger" id="topic-ok" style="overflow:hidden;text-overflow:ellipsis">Support: product, endpoints, the API</button></div></div></form>
+
+<div class="card" style="position:relative"><button id="close" aria-label="Close" style="position:absolute;top:-12px;right:-12px;width:32px;height:32px;border-radius:50%;border:1px solid #333;background:#fff">x</button><p>A card with its close button hung on the corner.</p><a class="btn" id="fits" href="#">Fits</a></div>
+
+<div class="carousel" aria-roledescription="carousel"><div class="track"><div class="slide"><a class="btn" id="slide1" href="#">One</a></div><div class="slide"><a class="btn" id="slide2" href="#">Two</a></div><div class="slide"><a class="btn" id="slide3" href="#">Three</a></div></div></div>
+
+<div class="band"><a class="btn" id="band" style="color:#fff;border-color:#fff" href="#">In a full-bleed band</a></div>
+</body>
