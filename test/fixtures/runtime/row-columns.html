@@ -1,0 +1,17 @@
+<!doctype html><meta charset="utf-8"><title>2.12 row columns</title>
+<!-- 2.12: a page column of different sections (heading bar, stats grid, two-panel grid, CTA banner) is not a list of
+     repeated rows (Kindred /dashboard, 2026-10). A real list whose second column wanders still fails. -->
+<style>body{margin:0;font:16px/1.4 sans-serif;width:1200px}</style>
+<body>
+<div id="sections" style="width:1100px;padding:0 20px">
+  <div class="mb-8 flex items-end justify-between" style="display:flex;justify-content:space-between"><div><h1>Dashboard</h1></div><span>14.10.2026</span></div>
+  <div class="grid grid-cols-3 gap-3 mb-3" style="display:grid;grid-template-columns:1fr 2fr;gap:12px"><div style="height:120px;border:1px solid #ccc">Balance</div><div style="height:120px;border:1px solid #ccc">Stats</div></div>
+  <div class="grid grid-cols-3 gap-3" style="display:grid;grid-template-columns:2fr 1fr;gap:12px"><div style="height:200px;border:1px solid #ccc">Orders</div><div style="height:200px;border:1px solid #ccc">Quick actions</div></div>
+  <div class="card-default mt-3 flex justify-between" style="display:flex;justify-content:space-between;padding:24px;border:1px solid #ccc"><div>Open your next case</div><button>Open a case</button></div>
+</div>
+<div id="list" style="width:600px">
+  <div class="row flex" style="display:flex"><span style="width:200px">Alpha</span><span>12 credits</span></div>
+  <div class="row flex" style="display:flex"><span style="width:120px">Beta</span><span>8 credits</span></div>
+  <div class="row flex" style="display:flex"><span style="width:260px">Gamma longer</span><span>30 credits</span></div>
+</div>
+</body>

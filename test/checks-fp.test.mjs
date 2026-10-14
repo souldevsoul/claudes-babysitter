@@ -125,6 +125,13 @@ try {
     assert.ok(out.some((f) => /#mixed/.test(f.where) && /styled differently/.test(f.what)), "a row of three different looks fails");
   });
 
+  await test("2.12 row columns: a column of different page sections is not a list; a real list with a wandering column still fails", async (page) => {
+    await page.goto(url("row-columns.html"));
+    const out = await checks.repeatedRowColumns(page);
+    assert.ok(!has(out, /#sections\b/), `page sections are not repeated rows: ${JSON.stringify(out)}`);
+    assert.ok(has(out, /#list\b/), `a list whose second column shifts still fails: ${JSON.stringify(out)}`);
+  });
+
   await test("site-wide: nav links, chips, footer controls, link-cards, a cookie banner, logo tiles and tints are not button/card variants", async (page) => {
     await page.goto(url("signatures.html"));
     const sigs = await checks.collectSignatures(page, "/");

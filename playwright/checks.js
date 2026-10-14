@@ -857,7 +857,16 @@ export const repeatedRowColumns = (page) => page.evaluate(() => {
     const W = window;
     const out = [];
     for (const list of Array.from(document.querySelectorAll("body *"))) {
-        const rows = Array.from(list.children).filter((r) => { const d = getComputedStyle(r).display; return W.__uiVisible(r) && (d.includes("flex") || d.includes("grid")); });
+        const flexRows = Array.from(list.children).filter((r) => { const d = getComputedStyle(r).display; return W.__uiVisible(r) && (d.includes("flex") || d.includes("grid")); });
+        if (flexRows.length < 3)
+            continue;
+        // REPEATED rows: the same component rendered again (a .map), so they share their tag and most of their
+        // classes. A page column of different sections — a heading bar, a stats grid, a two-panel grid, a CTA banner
+        // — is not a list, and its "column 2" is a different thing in every section (Kindred /dashboard, 2026-10:
+        // a date, a stats grid, a quick-actions panel and a button, reported "column 2 shifts Δ747px").
+        const cls = (r) => new Set(Array.from(r.classList));
+        const alike = (a, b) => { if (a.tagName !== b.tagName) return false; const x = cls(a), y = cls(b); if (!x.size && !y.size) return true; let n = 0; for (const k of x) if (y.has(k)) n++; return n / (x.size + y.size - n) >= 0.5; };
+        const rows = flexRows.map((seed) => flexRows.filter((r) => alike(seed, r))).sort((a, b) => b.length - a.length)[0];
         if (rows.length < 3)
             continue;
         const cols = rows.map((r) => Array.from(r.children).filter((k) => W.__uiVisible(k)));
