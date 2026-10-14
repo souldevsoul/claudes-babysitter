@@ -64,6 +64,19 @@ Or install it as a dev dependency: `npm i -D github:souldevsoul/claudes-babysitt
 | `docs/` | The guidelines the rules enforce |
 | `test/`, `fixtures/` | `npm test`: RuleTester, Stylelint fixtures, end-to-end cases |
 
+## What changed in 4.11.0 (sign-in behind a cookie banner; a focus check that survives re-renders; the cookie panel's own controls; a translated page; fewer false alarms)
+
+From a full run on forge.actor, cipher.builders and facetai.space (Oct 13–14, 2026): what the babysitter could not do, and where it was wrong.
+
+- **New: a page translated by the browser survives its controls (4.8, P60).** With Chrome / Edge / Yandex "Translate this page" on, forge and cipher crashed on "Get my price" with `insertBefore: not a child of this node`. React kept a reference to a text node the translator had replaced, and Next showed "Application error" until a reload. Russian-speaking visitors on an English site hit this all the time; no check translated the page. `translationSurvives` wraps every text node the way Google Translate does (`<font><font>…</font></font>`), then presses the page's buttons, form submits first, because the crash came from the submitting state. Every request other than GET is aborted for the duration, so nothing is sent or created. Empty fields get placeholder values so validation does not block the submit. A DOM-mismatch page error or the "Application error" screen fails the check and names the control. The fix it suggests: wrap swapped labels in `<span>`, mark the control `translate="no"`, or install a `removeChild`/`insertBefore` guard before hydration.
+- **Fix: sign-in works when a cookie banner covers the form.** On forge the fixed banner sat over "Sign in", and the login click timed out, so no signed-in page was checked. `prepare` now answers the banner first, preferring "Reject all" / "Only necessary" over "Accept" (`playwright/consent.mjs`). It then presses the submit of the form that holds the password field, not the banner's own submit buttons. If something still covers it, it submits with Enter.
+- **Fix (crash): the focus check survives an element that re-renders.** On 8 cipher pages, 1.9 threw `getComputedStyle: parameter 1 is not of type 'Element'` or `reading 'removeAttribute' of null`, so focus was never judged there. The probed element was replaced when it lost focus. Every sample now tolerates a missing probe and skips that element; the others are still judged.
+- **Fix (miss): OS controls inside a cookie panel that expands in place.** forge's analytics/marketing boxes were native checkboxes. The 1.1 sweep for overlays looked only inside `role=dialog`, and the banner is not a dialog. `cookieFlow` now sweeps the opened banner too. Kit boxes (`appearance:none`) still pass.
+- **Fix (false positive): a field box 28 px taller than its input is the field's edge.** The wrapper rule allowed 24 px; forge's hourly-rate field (`py-3` + `border-2` around `$ · input · /hour`) is 28 px taller. The limit is 32 px.
+- **Fix (false positive): an endlessly pulsing caret is decoration.** facet ends headings in a blinking `_` (`animate-pulse`). Sampled mid-pulse it read 2.4:1. Text under an infinite opacity animation is no longer failed on a random frame: a 1–2 character caret is skipped, and longer pulsing text goes to "check by eye". A faint static `_` still fails.
+- **Clearer message: a Radix Select list that closes in one frame names the upgrade.** It was reported as "add an exit animation", and the description printed the list's injected `<style>` (`"[data-radix-select-viewport]{scrollbar-w…"`). `@radix-ui/react-select` before 2.3 unmounts the list at once, so the exit classes never play; all three sites were on 2.2.6. The finding now says to update it, and element descriptions skip `<style>`/`<script>` text. This was a true finding all along: the static `ui/overlay-motion` rule reports the same thing.
+- Fixtures: `translate.html` (with and without the guard), `focus-rerender.html`, `cookie-native.html`, `input-wrapper-tall.html`, `caret.html` and `login-banner.html`. Run against 4.10.0, the four check tests fail (the focus one with the exact cipher error); against 4.11.0 they pass.
+
 ## What changed in 4.10.0 (controls inside their card; switch thumbs in their track; the cookie banner found by its name)
 
 From four products the babysitter had already been run on (Oct 5–7, 2026), where a person still found the bugs by eye.
@@ -493,6 +506,7 @@ Some rules encode design choices rather than bugs. A project can opt out explici
 | **Site-wide:** the open mobile menu's buttons match the site's CTAs (height, shape, font); an inset panel's corners match the cards (soft) | 3.5 / 1.3 / 1.16 | P04 P46 |
 | Cookie settings replace the banner (one "Accept"), panel fits, its switches are drawn right; the banner is found by class/id, accessible name or text | 4.6 | P19 P18 |
 | Cookie banner does not cover navigation | 4.6 | P57 |
+| A page translated by the browser (text nodes swapped for `<font>`) survives its buttons and form submits; non-GET requests aborted during the check | 4.8 | P60 |
 | One `h1`; `aria-current` on the active nav item; load at top; CLS < 0.1 | 3.3 / 3.5 / 3.8 / 2.13 | P26 P10 P52 P43 |
 | Images ≥1.5× (target 2×) in real file pixels | 6.10 | P56 |
 | Logo link hugs the logo | 1.11 | P58 |

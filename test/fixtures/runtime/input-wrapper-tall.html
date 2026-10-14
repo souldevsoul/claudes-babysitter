@@ -1,0 +1,11 @@
+<!doctype html><meta charset="utf-8"><title>1.9 tall field box</title>
+<!-- 1.9: forge onboarding (2026-10) — the hourly-rate field is a py-3 + border-2 box ($ · bare input · /hr), 28px taller
+     than its input: it is the field's edge. A faint bare input with no box still fails. -->
+<style>body{margin:0;font:16px sans-serif;padding:24px;background:#0b0b0f;color:#eee}
+  .box{display:flex;align-items:center;padding:12px 16px;border:2px solid #8a6a4a;border-radius:12px;width:360px;margin-bottom:24px}
+  .box input{flex:1;background:transparent;border:0;color:#eee;outline:none;font:inherit}
+  #bare{background:transparent;border:1px solid #222;color:#eee;padding:6px;width:300px}</style>
+<body>
+<div class="box"><span>$</span><input id="rate" value="50"><span>/hour</span></div>
+<input id="bare" placeholder="faint">
+</body>

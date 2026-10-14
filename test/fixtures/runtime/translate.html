@@ -1,0 +1,29 @@
+<!doctype html><meta charset="utf-8"><title>4.8 translated page</title>
+<!-- 4.8: forge/cipher /request (2026-10) — with the page translated by the browser, pressing the estimate button threw
+     "insertBefore: not a child of this node" (React keeps a reference to the text node the translator replaced).
+     ?guard=1 installs the removeChild/insertBefore guard the sites shipped: the same press survives. -->
+<script>
+  if (location.search.includes("guard=1")) (() => {
+    const remove = Node.prototype.removeChild, insert = Node.prototype.insertBefore;
+    Node.prototype.removeChild = function (c) { return c.parentNode !== this ? c : remove.call(this, c); };
+    Node.prototype.insertBefore = function (n, r) { if (r && r.parentNode !== this) { let a = r.parentNode; while (a && a.parentNode !== this) a = a.parentNode; return insert.call(this, n, a || null); } return insert.call(this, n, r); };
+  })();
+</script>
+<style>body{margin:0;font:16px sans-serif;padding:24px} button{padding:10px 16px} textarea{display:block;width:320px;height:80px;margin-bottom:12px}</style>
+<body>
+<form id="f" onsubmit="event.preventDefault()">
+  <textarea id="brief" required placeholder="Describe your task"></textarea>
+  <button type="submit" id="go"><svg width="12" height="12"><circle cx="6" cy="6" r="5"/></svg>Get my price</button>
+</form>
+<script>
+  // what a framework does: it remembers the label's text node and later inserts the spinner before it
+  const btn = document.getElementById("go");
+  const label = btn.lastChild;
+  document.getElementById("f").addEventListener("submit", () => {
+    const spin = document.createElement("i"); spin.textContent = "…";
+    btn.insertBefore(spin, label);
+    label.nodeValue = "Pricing your task…";
+    fetch("https://example.invalid/api/estimate", { method: "POST", body: document.getElementById("brief").value }).catch(() => {});
+  });
+</script>
+</body>
