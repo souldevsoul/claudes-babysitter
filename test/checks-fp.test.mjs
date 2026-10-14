@@ -254,6 +254,18 @@ try {
     assert.ok(l.applicable);
     assert.ok(!l.soft.some((f) => /surface/.test(f.what)), `a white panel on a light site under a navy header is the site's surface: ${JSON.stringify(l.soft)}`);
   });
+  await test("3.5 open menu: a Radix-style overlay marked aria-hidden still dims the page; no backdrop, or only an aria-hidden decorative layer, still fails", async (page) => {
+    const r = await menu(page, "?radix");
+    assert.ok(r.applicable, "the sheet is found and opened");
+    assert.ok(!r.soft.some((f) => /undimmed/.test(f.what)), `Praxis: aria-hidden is not invisible — the overlay dims the page: ${JSON.stringify(r.soft)}`);
+    assert.deepEqual([...r.hard, ...r.soft], [], JSON.stringify([...r.hard, ...r.soft]));
+    const b = await menu(page, "?bare");
+    assert.ok(b.applicable);
+    assert.ok(b.soft.some((f) => /showing the page undimmed \(at its sides/.test(f.what)), `a sheet with no backdrop still fails: ${JSON.stringify(b.soft)}`);
+    const d = await menu(page, "?decor");
+    assert.ok(d.applicable);
+    assert.ok(d.soft.some((f) => /undimmed/.test(f.what)), `an aria-hidden glow that was there before the menu is not its backdrop: ${JSON.stringify(d.soft)}`);
+  });
   await test("3.5 open menu: a cookie banner over its buttons is a hard finding; no burger on a wide screen is not applicable", async (page) => {
     const m = await menu(page, "?covered");
     assert.ok(m.hard.some((f) => /"Get started" is covered by div#cookie/.test(f.what)), `covered item: ${JSON.stringify(m.hard)}`);
@@ -303,6 +315,42 @@ try {
     const r = await checks.interactionMotion(page, { reload: () => page.goto(u) });
     assert.ok(!has(r.soft, /got-it|Got it/), `a detached control reads "" for every style — not a snap: ${JSON.stringify(r.soft.map((f) => f.where))}`);
     assert.ok(has(r.soft, /#snap|Filter/), `a pressed fill that snaps on a control that stays is still soft: ${JSON.stringify(r.soft)}`);
+  });
+  // Nexus AI, 2026-10: a framer-motion cookie banner fades its outer wrapper (1 → 0.09) and slides out over ~300 ms,
+  // yet the site-wide run said "hides … in one frame": under load the click landed after the probe's window had closed
+  const late = async (page, q, delay) => {
+    const u = url("banner-exit.html", q);
+    await page.goto(u);
+    await checks.interactionMotion(page, { reload: () => page.goto(u), max: 0 }); // installs the probe only
+    await page.emulateMedia({ reducedMotion: "no-preference" });
+    const h = page.locator("#accept");
+    await h.evaluate((el) => window.__bsIx.arm(el));
+    await page.waitForTimeout(delay); // a busy machine: the click lands well after arm()
+    await h.click();
+    await page.waitForFunction(() => window.__bsIx.run.done, null, { timeout: 8000 });
+    await page.waitForTimeout(400);
+    return page.evaluate(() => window.__bsIx.result());
+  };
+  await test("6.12 interactions: a banner whose wrapper fades + slides out passes (WAAPI or JS frames, even when the click lands late); one removed at once still fails", async (page) => {
+    for (const q of ["?waapi", "?js"]) {
+      const u = url("banner-exit.html", q);
+      await page.goto(u);
+      const r = await checks.interactionMotion(page, { reload: () => page.goto(u) });
+      assert.ok(!has(r.hard, /Accept|#accept/), `${q}: the wrapper's fade is the children's exit: ${JSON.stringify(r.hard.map((f) => f.what))}`);
+      for (const d of [0, 1200]) {
+        const res = await late(page, q, d);
+        assert.ok(res.disappeared.length >= 2, `${q} +${d} ms: the text and the link left: ${JSON.stringify(res.disappeared.map((x) => x.where))}`);
+        assert.ok(res.disappeared.every((x) => x.moved), `${q}, click ${d} ms after arm: every child left in motion: ${JSON.stringify(res.disappeared.map((x) => [x.where, x.moved]))}`);
+      }
+    }
+    const u = url("banner-exit.html", "?instant");
+    await page.goto(u);
+    const bad = await checks.interactionMotion(page, { reload: () => page.goto(u) });
+    assert.ok(bad.hard.some((f) => f.kind === "close" && /#accept|Accept/.test(f.where + f.selector) && /hides .* in one frame/.test(f.what)), `a banner removed at once fails: ${JSON.stringify(bad.hard)}`);
+    for (const d of [0, 1200]) {
+      const res = await late(page, "?instant", d);
+      assert.ok(res.disappeared.length >= 2 && !res.disappeared.some((x) => x.moved), `instant +${d} ms: nothing moved: ${JSON.stringify(res.disappeared.map((x) => [x.where, x.moved]))}`);
+    }
   });
   await test("2.10 escapesBox: a button run out of its card, one clipped by an overflow:hidden section and a dropdown that widens its form fail; a corner close button, carousel slides, a full-bleed band and a fitting button pass", async (page) => {
     await page.goto(url("escape.html"));

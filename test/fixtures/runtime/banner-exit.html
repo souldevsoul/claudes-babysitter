@@ -1,0 +1,55 @@
+<!doctype html>
+<html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<!-- 6.12 a cookie banner's exit, judged by the site-wide interaction check (Nexus AI, 2026-10). The banner is the
+     framer-motion shape: an outer fixed wrapper that fades and slides out (opacity 1 → 0, y +100) and is then removed;
+     the text, the "Learn more" link and the clicked "Accept" sit three levels inside it, so the wrapper holds the
+     trigger and only the children are "what disappeared".
+     ?waapi (default): the wrapper fades with element.animate(), 300 ms (framer-motion's accelerated opacity).
+     ?js: the wrapper's style= is rewritten every frame for 300 ms (a JS-driven spring), no WAAPI, no transition.
+     ?instant: "Accept" removes the banner at once — no exit motion: a real defect. -->
+<style>
+  body { margin: 0; padding: 24px; font: 16px/1.5 Arial, sans-serif; background: #fff; color: #111; min-height: 1200px; }
+  .fixed { position: fixed; left: 0; right: 0; bottom: 0; z-index: 50; padding: 16px; }
+  .inner { max-width: 720px; margin: 0 auto; }
+  .card { background: #1e1b4b; color: #fff; border-radius: 12px; padding: 24px; display: flex; gap: 24px; align-items: center; }
+  .text { flex: 1; }
+  .actions { display: flex; gap: 12px; align-items: center; }
+  .actions a, .actions button { display: inline-flex; align-items: center; height: 44px; padding: 0 16px; border-radius: 8px; font: inherit; }
+  .actions a { color: #c7d2fe; text-decoration: none; }
+  .actions button { border: 0; background: #6366f1; color: #fff; }
+</style></head>
+<body>
+<h1>Privacy</h1>
+<p>Page content.</p>
+<div class="fixed" id="banner">
+  <div class="inner">
+    <div class="card">
+      <div class="text"><p>We use cookies to enhance your experience. By continuing to use the platform you consent to our use of cookies.</p></div>
+      <div class="actions">
+        <a href="/cookies">Learn more</a>
+        <button id="accept" type="button">Accept</button>
+      </div>
+    </div>
+  </div>
+</div>
+<script>
+  const q = location.search;
+  const banner = document.getElementById("banner");
+  document.getElementById("accept").addEventListener("click", () => {
+    if (/instant/.test(q)) { banner.remove(); return; }
+    if (/js/.test(q)) {
+      const t0 = performance.now();
+      const step = (now) => {
+        const p = Math.min(1, (now - t0) / 300);
+        banner.style.opacity = String(1 - 0.91 * p);
+        banner.style.transform = `translateY(${Math.round(100 * p)}px)`;
+        if (p < 1) requestAnimationFrame(step); else banner.remove();
+      };
+      requestAnimationFrame(step);
+      return;
+    }
+    const a = banner.animate([{ opacity: 1, transform: "translateY(0)" }, { opacity: 0, transform: "translateY(100px)" }], { duration: 300, easing: "ease-in" });
+    a.onfinish = () => banner.remove();
+  });
+</script>
+</body></html>

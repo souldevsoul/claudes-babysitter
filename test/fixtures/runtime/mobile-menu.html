@@ -5,7 +5,12 @@
      CTAs are 52 px pills, the page showing below and at its sides.
      ?good: a full-height navy panel with the site's pill buttons. ?sheet: a navy side sheet over a dimming backdrop.
      ?light: a light site with a navy header and a full-height white panel (its own surface: no mismatch).
-     ?covered: the good panel with a fixed cookie banner over its last button. -->
+     ?covered: the good panel with a fixed cookie banner over its last button.
+     ?radix: the sheet over a dimming backdrop the way a Radix Dialog / Sheet opens it (Praxis, 2026-10): everything
+     outside the sheet — the overlay itself included — is marked aria-hidden="true"; the overlay still dims the page.
+     ?bare: the same sheet with no backdrop at all (the page shows at its side, undimmed).
+     ?decor: the bare sheet on a page with an aria-hidden decorative fixed layer (a glow) behind the content: not a
+     backdrop the menu brought. -->
 <style>
   * { box-sizing: border-box; }
   body { margin: 0; font: 16px/1.5 Arial, sans-serif; background: #fff; color: #e5e7eb; }
@@ -37,6 +42,9 @@
   .light .p-full a.item { color: #0f172a; }
   #sheet { position: fixed; top: 0; right: 0; bottom: 0; width: 300px; background: #0a0f1c; padding: 72px 16px 16px; z-index: 60; }
   #backdrop { position: fixed; inset: 0; background: rgba(0,0,0,.5); z-index: 55; }
+  .radix #backdrop { background: rgba(0,0,0,.6); backdrop-filter: blur(4px); }
+  #glow { position: fixed; inset: 0; z-index: -1; background: radial-gradient(circle at 50% 30%, rgba(37,99,235,.35), transparent 60%), rgba(10,15,28,.4); }
+  .decor section { background: transparent; }
   .cur { height: 44px; min-width: 88px; padding: 0 12px; border: 1px solid #94a3b8; border-radius: 4px; background: transparent; color: #fff; font: 14px Georgia, serif; }
   .spacer { height: 440px; }
   #cookie { position: fixed; left: 0; right: 0; bottom: 0; z-index: 70; background: #111827; color: #fff; padding: 16px; height: 120px; }
@@ -72,18 +80,22 @@
     panel.className = "p-bad";
     panel.innerHTML = items + '<div class="chips"><button class="chip" aria-pressed="true">€ EUR</button><button class="chip" aria-pressed="false">$ USD</button><button class="chip" aria-pressed="false">£ GBP</button></div>' +
       '<a class="btn" href="/auth/signin">Sign in</a><a class="btn primary" href="/auth/signup">Get started</a>';
-  } else if (/sheet/.test(q)) {
+  } else if (/sheet|radix|bare|decor/.test(q)) {
     target = sheet;
     sheet.innerHTML = items + '<a class="cta" href="/auth/signup">Get started</a>';
   } else {
     panel.className = "p-full";
     panel.innerHTML = items + (/covered/.test(q) ? '<div class="spacer"></div>' : '') + '<a class="cta" href="/auth/signin">Sign in</a><a class="cta" href="/auth/signup">Get started</a><button class="cur" aria-haspopup="listbox">$ USD</button>';
   }
+  if (/radix/.test(q)) document.body.classList.add("radix");
+  if (/decor/.test(q)) { document.body.classList.add("decor"); document.body.insertAdjacentHTML("afterbegin", '<div id="glow" aria-hidden="true"></div>'); }
   if (/covered/.test(q)) document.body.insertAdjacentHTML("beforeend", '<div id="cookie"><p>We use cookies.</p></div>');
   const burger = document.getElementById("burger");
   const set = (open) => {
     target.hidden = !open;
-    if (/sheet/.test(q)) backdrop.hidden = !open;
+    if (/sheet|radix/.test(q)) backdrop.hidden = !open;
+    // Radix hideOthers(): every body child outside the sheet is aria-hidden while it is open (the overlay too)
+    if (/radix/.test(q)) for (const el of document.body.children) if (el !== sheet && el.tagName !== "SCRIPT") open ? el.setAttribute("aria-hidden", "true") : el.removeAttribute("aria-hidden");
     burger.setAttribute("aria-expanded", String(open));
     burger.setAttribute("aria-label", open ? "Close menu" : "Open menu");
   };

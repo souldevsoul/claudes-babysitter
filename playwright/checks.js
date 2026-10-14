@@ -191,6 +191,18 @@ window.__uiVisible = (el) => {
   if (/rect\\(0(px)?,? 0(px)?,? 0(px)?,? 0(px)?\\)/.test(cs.clip) || /inset\\(50%\\)|circle\\(0/.test(cs.clipPath)) return false;
   if (el.closest('[aria-hidden="true"], .sr-only, [hidden]')) return false;
   return true;
+};
+// Painted on screen, whatever the accessibility tree says: aria-hidden / inert are not visually hidden (a modal's
+// overlay is aria-hidden by Radix and still dims the page). Hidden = no box, display:none, visibility:hidden, or an
+// effective (ancestor-multiplied) opacity of about 0.
+window.__uiPainted = (el) => {
+  const r = el.getBoundingClientRect();
+  if (r.width < 1 || r.height < 1) return false;
+  const cs = getComputedStyle(el);
+  if (cs.visibility === 'hidden' || cs.display === 'none') return false;
+  let o = 1;
+  for (let n = el; n && n.nodeType === 1; n = n.parentElement) o *= Number(getComputedStyle(n).opacity);
+  return o > 0.02;
 };`;
 export async function install(page) {
     await page.addInitScript(describeFn);
@@ -1271,7 +1283,10 @@ export async function overlayMotion(page, max = 10) {
                 }
                 for (const [l, looks] of watched)
                     looks.push(alive(l) ? look(l) + (animated(l) ? "|anim" : "") : "gone");
-                if (performance.now() - t0 < 520)
+                // the window opens when the person acts, not when the probe is armed: on a busy machine the click can
+                // land well after arm(), and a window that closed before it saw none of the motion (Nexus AI, 2026-10)
+                const now = performance.now();
+                if (P.tAction == null ? now - t0 < 4000 : now - Math.max(t0, P.tAction) < 520)
                     return requestAnimationFrame(step);
                 run.done = true;
                 for (const [l, looks] of watched) {
@@ -1297,7 +1312,7 @@ export async function overlayMotion(page, max = 10) {
     const handles = await page.$$('[aria-haspopup]:not([aria-haspopup=false]), [aria-expanded], [aria-controls], [role=combobox], button[data-state], button:has(> svg:last-child), [role=button]:has(> svg:last-child), button[aria-label]:has(svg), summary');
     const done = new Set();
     let n = 0;
-    const wait = () => page.waitForFunction(() => window.__bsOverlayProbe.run && window.__bsOverlayProbe.run.done, null, { timeout: 4000 }).catch(() => { });
+    const wait = () => page.waitForFunction(() => window.__bsOverlayProbe.run && window.__bsOverlayProbe.run.done, null, { timeout: 6000 }).catch(() => { });
     for (const h of handles) {
         if (n >= max)
             break;
@@ -2374,9 +2389,10 @@ async function openMobileMenu(page) {
             return null;
         const bar = ranked[0][0].closest("header, [role=banner]") || ranked[0][0].parentElement;
         const headerBottom = Math.round(Math.max(0, Math.min(innerHeight * 0.4, bar.getBoundingClientRect().bottom)));
-        // fixed layers already on screen (cookie banner, chat bubble, the header itself): not something the menu opened
+        // fixed layers already on screen (cookie banner, chat bubble, the header itself, an aria-hidden decorative
+        // backdrop): not something the menu opened. Painted counts, not exposed: aria-hidden is not invisible.
         for (const el of document.body.querySelectorAll("*"))
-            if (getComputedStyle(el).position === "fixed" && W.__uiVisible(el))
+            if (getComputedStyle(el).position === "fixed" && W.__uiPainted(el))
                 el.setAttribute("data-bs-pre", "");
         return { n: ranked.length, headerBottom, dests };
     });
@@ -2504,8 +2520,14 @@ const menuGeometry = (headerBottom) => {
     const dims = (e) => { const cs = getComputedStyle(e); return bgA(e) >= 0.1 || (!!cs.backdropFilter && cs.backdropFilter !== "none"); };
     const paints = (e) => { const cs = getComputedStyle(e); return bgA(e) >= 0.1 || cs.backgroundImage !== "none" || /^(IMG|VIDEO|CANVAS|PICTURE|svg)$/i.test(e.tagName) || Array.from(e.childNodes).some((n) => n.nodeType === 3 && n.textContent.trim()); };
     const big = (e) => { const r = e.getBoundingClientRect(); return r.width >= innerWidth * 0.9 && r.height >= innerHeight * 0.9; };
-    // a backdrop the menu brought with it (pointer-events:none ones are not in elementsFromPoint)
-    const backdrops = Array.from(document.body.querySelectorAll("*")).filter((e) => !e.hasAttribute("data-bs-pre") && !panel.contains(e) && getComputedStyle(e).position === "fixed" && W.__uiVisible(e) && dims(e)).map((e) => e.getBoundingClientRect());
+    // a backdrop the menu brought with it. Judged by what is painted, not by the accessibility tree: a modal menu
+    // (Radix Dialog / Sheet) marks everything outside its content aria-hidden — its own overlay included — and that
+    // overlay still dims the page (Praxis, 2026-10: bg-black/60 backdrop-blur read as "53% undimmed").
+    const backdropEls = Array.from(document.body.querySelectorAll("*")).filter((e) => !e.hasAttribute("data-bs-pre") && !panel.contains(e) && getComputedStyle(e).position === "fixed" && W.__uiPainted(e) && dims(e));
+    // one that takes pointer events is judged by its place in the stack at each point (under the page's own paint it
+    // dims nothing); a pointer-events:none one never shows in elementsFromPoint, so its box is all there is
+    const ghost = backdropEls.filter((e) => getComputedStyle(e).pointerEvents === "none").map((e) => e.getBoundingClientRect());
+    const isBackdrop = (e) => backdropEls.some((b) => b === e || b.contains(e));
     let total = 0, bare = 0, below = 0, sides = 0;
     const cols = 7, rows = 12, top = headerBottom + 4, h = innerHeight - headerBottom - 8;
     if (h > 40)
@@ -2513,11 +2535,11 @@ const menuGeometry = (headerBottom) => {
             for (let xi = 0; xi < cols; xi++) {
                 const x = 3 + ((innerWidth - 6) * xi) / (cols - 1), y = top + (h * yi) / (rows - 1);
                 let verdict = "page";
-                if (backdrops.some((r) => x >= r.left && x <= r.right && y >= r.top && y <= r.bottom))
+                if (ghost.some((r) => x >= r.left && x <= r.right && y >= r.top && y <= r.bottom))
                     verdict = "menu";
                 else
                     for (const e of document.elementsFromPoint(x, y)) {
-                        if (panel.contains(e)) {
+                        if (panel.contains(e) || isBackdrop(e)) {
                             verdict = "menu";
                             break;
                         }
@@ -2763,6 +2785,11 @@ const ixProbe = () => {
         document.addEventListener(t, rec, true);
     const origAnimate = Element.prototype.animate;
     Element.prototype.animate = function (...args) { if (P.run && !P.run.done) P.run.events.push(this); return origAnimate.apply(this, args); };
+    // when the person acted: the ~700 ms watch runs from here, not from arm() — under load a Playwright click lands
+    // hundreds of ms after arm(), and a window that had already closed saw a banner's 300 ms fade as "one frame"
+    // (Nexus AI cookie banner, 2026-10: framer-motion exit opacity 1→0 + slide, reported as hidden in one frame)
+    for (const t of ["pointerdown", "mousedown", "keydown", "click"])
+        document.addEventListener(t, () => { const R = P.run; if (R && !R.done && R.tAct == null) R.tAct = performance.now(); }, true);
     const writes = new Map();
     new MutationObserver((list) => {
         const R = P.run;
@@ -2805,11 +2832,14 @@ const ixProbe = () => {
     const skip = (el) => !!el.closest("[data-babysitter], babysitter-studio, nextjs-portal, [data-nextjs-toast], script, style, svg *");
     const snap = () => { const m = new Map(); for (const el of document.body.querySelectorAll("*")) { if (skip(el)) continue; const r = el.getBoundingClientRect(); if (area(r) >= 1 && vis(el)) m.set(el, { a: area(r), h: Math.round(r.height) }); } return m; };
     const chain = (el) => { const o = []; for (let n = el.parentElement, i = 0; n && n !== document.body && n !== document.documentElement && i < 8; n = n.parentElement, i++) o.push(n); return o; };
-    const look = (el) => { const cs = getComputedStyle(el); const r = el.getBoundingClientRect(); return [cs.opacity, cs.transform, cs.translate, cs.scale, cs.clipPath, Math.round(r.height), Math.round(r.width), Math.round(r.top), ...chain(el).slice(0, 3).map((n) => { const c = getComputedStyle(n); return c.opacity + c.transform + Math.round(n.getBoundingClientRect().height); })].join("|"); };
+    // effective opacity: the product over every ancestor (a banner fading its outer wrapper fades every child)
+    const opac = (el) => { let o = 1; for (let n = el; n && n.nodeType === 1; n = n.parentElement) o *= Number(getComputedStyle(n).opacity); return Math.round(o * 1000) / 1000; };
+    const look = (el) => { const cs = getComputedStyle(el); const r = el.getBoundingClientRect(); return [cs.opacity, opac(el), cs.transform, cs.translate, cs.scale, cs.clipPath, Math.round(r.height), Math.round(r.width), Math.round(r.top), ...chain(el).slice(0, 3).map((n) => { const c = getComputedStyle(n); return c.opacity + c.transform + Math.round(n.getBoundingClientRect().height); })].join("|"); };
     const STATE = ["backgroundColor", "borderTopColor", "color", "boxShadow", "backgroundImage", "outlineColor"];
     const finite = (a) => { try { return Number.isFinite(a.effect.getComputedTiming().endTime); } catch { return true; } };
     P.arm = (trigger) => {
-        const R = (P.run = { trigger, t0: performance.now(), added: new Set(), removed: new Set(), touched: new Set(), events: [], anims: new Set(), looks: new Map(), done: false, before: snap(), state: (() => { const cs = getComputedStyle(trigger); return STATE.map((k) => cs[k]); })() });
+        writes.clear(); // "rewrites style= every frame" counts per click: an element animated before is judged afresh
+        const R = (P.run = { trigger, t0: performance.now(), tAct: null, added: new Set(), removed: new Set(), touched: new Set(), events: [], anims: new Set(), looks: new Map(), done: false, before: snap(), state: (() => { const cs = getComputedStyle(trigger); return STATE.map((k) => cs[k]); })() });
         const step = () => {
             for (const a of document.getAnimations())
                 if ((a.playState === "running" || a.playState === "pending") && finite(a) && a.effect && a.effect.target)
@@ -2820,7 +2850,8 @@ const ixProbe = () => {
                     R.looks.set(el, []);
                 R.looks.get(el).push(vis(el) ? look(el) : "gone");
             }
-            if (performance.now() - R.t0 < 700)
+            const now = performance.now();
+            if (R.tAct == null ? now - R.t0 < 4000 : now - Math.max(R.t0, R.tAct) < 700)
                 requestAnimationFrame(step);
             else
                 R.done = true;
@@ -2844,8 +2875,13 @@ const ixProbe = () => {
         // sizes from before the click when known: a panel that animated out and was then removed has no box any more
         const size = (x) => (R.before.get(x) || after.get(x) || { a: x.isConnected && x.getBoundingClientRect ? area(x.getBoundingClientRect()) : 0 }).a;
         const related = (s, x) => x === s || (x.contains && x.contains(s) && chain(s).includes(x)) || (s.contains(x) && size(x) >= 0.5 * size(s));
+        const swayed = (x) => new Set((R.looks.get(x) || []).filter((l) => l !== "gone")).size > 1;
+        // an ancestor that left the page too (the banner wrapper that also holds the clicked "Accept", so it is not in
+        // `disappeared` itself) and changed its look — effective opacity, transform, position — on the way out took
+        // `s` with it. Only one that is gone counts: a surviving parent that merely shrank says nothing about `s`.
+        const leftWith = (s) => chain(s).some((x) => !(x.isConnected && vis(x)) && swayed(x));
         const moved = (s) => [...R.anims].some((x) => related(s, x)) || R.events.some((x) => x instanceof Element && related(s, x))
-            || new Set((R.looks.get(s) || []).filter((l) => l !== "gone")).size > 1;
+            || swayed(s) || leftWith(s);
         const desc = (el) => ({ where: W.__uiDescribe(el), selector: W.__uiSelector(el) || "", human: W.__uiHuman(el), positioned: /fixed|absolute/.test(el.isConnected ? getComputedStyle(el).position : ""), radixSelect: !!(el.querySelector && (el.matches("[data-radix-select-viewport]") || el.querySelector("[data-radix-select-viewport]"))) });
         // a control the click removed (a cookie banner's "Got it", a quiz option replaced by the next question) has no
         // computed style any more: every property reads "" and looked changed with no transition — nothing to judge
@@ -3015,7 +3051,7 @@ export async function interactionMotion(page, { reload, max = 30, perReload = 6,
             await g(settle(page, 600));
             await g(h.evaluate((el) => window.__bsIx.arm(el)).catch(() => { }));
             await g(h.click({ timeout: 2000 }).catch(() => { }));
-            await g(page.waitForFunction(() => window.__bsIx && window.__bsIx.run && window.__bsIx.run.done, null, { timeout: 4000 }).catch(() => { }));
+            await g(page.waitForFunction(() => window.__bsIx && window.__bsIx.run && window.__bsIx.run.done, null, { timeout: 6000 }).catch(() => { }));
             if (page.url().split("#")[0] !== home.split("#")[0]) {
                 notTested.push({ reason: "navigated (client-side routing) when clicked", count: 1, examples: [pick.where] });
                 since = perReload; // reload before the next one
@@ -3042,14 +3078,14 @@ export async function interactionMotion(page, { reload, max = 30, perReload = 6,
                 if (positioned) {
                     await g(h.evaluate((el) => window.__bsIx.arm(el)).catch(() => { }));
                     await g(page.keyboard.press("Escape").catch(() => { }));
-                    await g(page.waitForFunction(() => window.__bsIx.run.done, null, { timeout: 4000 }).catch(() => { }));
+                    await g(page.waitForFunction(() => window.__bsIx.run.done, null, { timeout: 6000 }).catch(() => { }));
                     back = await g(page.evaluate(() => window.__bsIx.result()).catch(() => null));
                 }
                 const still = (res) => !res || !res.disappeared.length;
                 if (still(back) && (pick.toggle || !positioned) && (await g(h.evaluate((el) => window.__uiVisible(el)).catch(() => false)))) {
                     await g(h.evaluate((el) => window.__bsIx.arm(el)).catch(() => { }));
                     await g(h.click({ timeout: 2000 }).catch(() => { }));
-                    await g(page.waitForFunction(() => window.__bsIx.run.done, null, { timeout: 4000 }).catch(() => { }));
+                    await g(page.waitForFunction(() => window.__bsIx.run.done, null, { timeout: 6000 }).catch(() => { }));
                     await g(settle(page, 1200));
                     back = page.url().split("#")[0] === home.split("#")[0] ? await g(page.evaluate(() => window.__bsIx.result()).catch(() => null)) : null;
                 }

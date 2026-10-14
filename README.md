@@ -64,6 +64,14 @@ Or install it as a dev dependency: `npm i -D github:souldevsoul/claudes-babysitt
 | `docs/` | The guidelines the rules enforce |
 | `test/`, `fixtures/` | `npm test`: RuleTester, Stylelint fixtures, end-to-end cases |
 
+## What changed in 4.11.1 (two false alarms: a modal menu's aria-hidden backdrop; a banner exit the probe started watching too early)
+
+From fixing Praxis and Nexus AI (Oct 14, 2026).
+
+- **Fix: an open mobile menu over a Radix Dialog / Sheet overlay is not "undimmed" (3.5).** Radix marks everything outside the dialog content `aria-hidden="true"`, its own overlay included, and the check skipped aria-hidden layers as invisible. Praxis's `bg-black/60 backdrop-blur` overlay dimmed the page but was reported as "53% of the page undimmed". A backdrop is now judged by what is painted: no box, `display:none`, `visibility:hidden` or an effective (ancestor-multiplied) opacity of about 0 hide it, and aria-hidden does not (`__uiPainted`). A backdrop that takes pointer events counts only where it is on top of the page at the sampled point. Fixed layers that were on screen before the menu opened, aria-hidden decoration included, are still not the menu's backdrop. A sheet with no backdrop still fails.
+- **Fix: a cookie banner that fades out is not "hidden in one frame" (6.12, site-wide interactions).** The probe's ~700 ms watch window started when it was armed, not when the click landed. On a busy machine (several pages checked at once) the click on Nexus AI's "Accept" landed after the window had closed, so the 300 ms framer-motion fade + slide of the banner wrapper went unseen. The window now opens at the person's action (pointerdown / mousedown / keydown / click; it waits up to 4 s for one). The same applies to the dropdown/dialog check. The per-click style-rewrite count is reset on every click. Frames record effective opacity. A child also counts as moved when an ancestor that left the page with it changed its look on the way out. A banner removed at once still fails.
+- Fixtures + tests for both (`mobile-menu.html?radix|bare|decor`, `banner-exit.html?waapi|js|instant`); the new tests fail on 4.11.0.
+
 ## What changed in 4.11.0 (sign-in behind a cookie banner; a focus check that survives re-renders; the cookie panel's own controls; a translated page; fewer false alarms)
 
 From a full run on forge.actor, cipher.builders and facetai.space (Oct 13–14, 2026): what the babysitter could not do, and where it was wrong.
