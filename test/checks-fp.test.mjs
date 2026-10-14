@@ -123,6 +123,8 @@ try {
     for (const id of ["split", "calc", "halfhidden", "ctas", "logos", "tints"]) assert.ok(!has(out, new RegExp(`#${id}\\b`)), `#${id} is not a row of cards: ${JSON.stringify(out.filter((f) => f.where.includes(id)))}`);
     assert.ok(out.some((f) => /#pricing/.test(f.where) && /different heights/.test(f.what)), `pricing cards of different heights fail: ${JSON.stringify(out)}`);
     assert.ok(out.some((f) => /#mixed/.test(f.where) && /styled differently/.test(f.what)), "a row of three different looks fails");
+    for (const id of ["calc1", "panels"]) assert.ok(!has(out, new RegExp(`#${id}\\b`)), `#${id}: no footer CTAs to line up: ${JSON.stringify(out.filter((f) => f.where.includes(id)))}`);
+    for (const id of ["liplans", "footers"]) assert.ok(out.some((f) => f.where.includes(`#${id}`) && /CTAs in one row/.test(f.what)), `#${id}: misaligned CTAs still fail: ${JSON.stringify(out)}`);
   });
 
   await test("2.12 row columns: a column of different page sections is not a list; a real list with a wandering column still fails", async (page) => {

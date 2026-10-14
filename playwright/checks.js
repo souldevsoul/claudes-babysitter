@@ -713,7 +713,22 @@ export const rowAlignment = (page) => page.evaluate(() => {
         const all = Array.from(root.querySelectorAll("*")).filter((n) => W.__uiVisible(n) && test(n));
         return all[all.length - 1] || null;
     };
+    // a row of a list (a whole <li> made clickable: avatar, name, details) is an entry, not the card's CTA
+    // (the <li> must sit inside the card: cards that are themselves <li>s keep their full-width buttons as CTAs)
+    const listRow = (e, card) => {
+        const li = e.closest("li");
+        return !!li && li !== card && card.contains(li) && li.parentElement && li.parentElement.children.length >= 2 && e.getBoundingClientRect().width >= li.getBoundingClientRect().width * 0.8;
+    };
     const isCta = (e) => (e.matches("a[href], button, [role=button]") && e.getBoundingClientRect().height >= 28 && (e.textContent || "").trim().length > 0);
+    // a panel's "View all" link heading a list of clickable rows is the list's header action, not a footer CTA to line
+    // up with the next card's (a pricing card's button above its feature list still counts: features are not links)
+    const closing = (card, cta) => {
+        if (!cta)
+            return null;
+        const cb = cta.getBoundingClientRect().bottom;
+        const rowsBelow = Array.from(card.querySelectorAll("a[href], button, [role=button]")).some((e) => listRow(e, card) && W.__uiVisible(e) && e.getBoundingClientRect().top >= cb - 1);
+        return rowsBelow ? null : cta;
+    };
     const isPrice = (e) => Array.from(e.childNodes).some((n) => n.nodeType === 3 && PRICE.test(n.textContent || "")) && parseFloat(getComputedStyle(e).fontSize) >= 18;
     const spread = (xs) => Math.max(...xs) - Math.min(...xs);
     const containers = Array.from(document.querySelectorAll("body *")).filter((el) => {
@@ -750,7 +765,10 @@ export const rowAlignment = (page) => page.evaluate(() => {
         if (rects.every((r) => r.width >= innerWidth * 0.3) && rects.some((r) => r.height >= innerHeight * 0.9) && !row.every((k) => firstMatch(k, isPrice)))
             return true;
         const f = row.map(fields);
-        return f.some((n) => n >= 2) && f.some((n) => n === 0);
+        if (f.some((n) => n >= 2) && f.some((n) => n === 0))
+            return true;
+        // a calculator: one input column beside its result column, neither drawn as a card
+        return row.length === 2 && f.some((n) => n === 1) && f.some((n) => n === 0) && !row.some(isCardish);
     };
     for (const c of containers) {
         const kids = Array.from(c.children).filter((k) => W.__uiVisible(k) && k.getBoundingClientRect().width >= 140 && k.getBoundingClientRect().height >= 60
@@ -780,7 +798,7 @@ export const rowAlignment = (page) => page.evaluate(() => {
             if (seen.has(where))
                 continue;
             const cardish = row.every(isCardish);
-            const ctas = row.map((k) => lastMatch(k, isCta));
+            const ctas = row.map((k) => closing(k, lastMatch(k, (e) => isCta(e) && !listRow(e, k))));
             const prices = row.map((k) => firstMatch(k, isPrice));
             // offer cards (each has a CTA or a price) must match heights; bento/masonry/editorial tiles may not
             const offers = row.every((_, i) => ctas[i] || prices[i]);

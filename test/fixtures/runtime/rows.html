@@ -44,5 +44,29 @@
   <div style="box-shadow:0 2px 8px #0003;padding:24px"><h3>B</h3><p>Text</p></div>
   <div style="border:3px dashed #999;box-shadow:0 2px 8px #0003;padding:24px"><h3>C</h3><p>Text</p></div>
 </div>
+<!-- Parallel (2026-10): a one-field calculator beside its unstyled result column; a dashboard panel with an empty state
+     button beside a panel whose "Browse all" heads a list of clickable rows. Cards that are <li>s with misaligned
+     full-width buttons, and panels whose footer buttons sit at different heights, still fail. -->
+<div id="calc1" style="display:grid;grid-template-columns:1fr 1fr;gap:48px;padding:24px">
+  <div><label>Amount</label><input style="display:block;width:100%;height:56px"><p>Any whole amount.</p><div style="display:flex;gap:8px"><button style="height:40px;padding:0 16px">€10</button><button style="height:40px;padding:0 16px">€50</button></div></div>
+  <div><dl><div>€50 = 500 credits</div><div>Discount</div><div style="font-size:40px">500 credits</div></dl><a href="#" style="display:block;height:52px;margin-top:16px;padding:0 24px;background:#cf0;color:#000">Take €50 to the checkout</a><p>Nothing is charged yet.</p></div>
+</div>
+<div id="panels" style="display:grid;grid-template-columns:1fr 1fr;gap:24px;padding:24px">
+  <section style="border:1px solid #ddd;padding:24px"><header style="display:flex;justify-content:space-between"><h3>Recent orders</h3><a href="#" style="display:inline-flex;min-height:36px;align-items:center">View all</a></header><div style="text-align:center;padding:40px"><p>No orders yet</p><a href="#" style="display:inline-flex;height:44px;align-items:center;padding:0 20px;border:1px solid #333">Post a task</a></div></section>
+  <section style="border:1px solid #ddd;padding:24px"><header style="display:flex;justify-content:space-between"><h3>Specialists</h3><a href="#" style="display:inline-flex;min-height:36px;align-items:center">Browse all</a></header><ul style="list-style:none;padding:0">
+    <li><a href="#" style="display:flex;padding:12px;gap:12px"><span style="width:40px;height:40px;background:#ccc"></span><span>Alex<br>Designer</span></a></li>
+    <li><a href="#" style="display:flex;padding:12px;gap:12px"><span style="width:40px;height:40px;background:#ccc"></span><span>Priya<br>Writer</span></a></li>
+    <li><a href="#" style="display:flex;padding:12px;gap:12px"><span style="width:40px;height:40px;background:#ccc"></span><span>Pat<br>Analyst</span></a></li>
+    <li><a href="#" style="display:flex;padding:12px;gap:12px"><span style="width:40px;height:40px;background:#ccc"></span><span>Sam<br>Editor</span></a></li>
+  </ul></section>
+</div>
+<ul id="liplans" style="display:grid;grid-template-columns:repeat(2,1fr);gap:16px;padding:24px;list-style:none;align-items:stretch">
+  <li class="card"><h3>Basic</h3><p>Short</p><a href="#" style="display:block;width:100%;padding:10px 0;border:1px solid #333;text-align:center">Choose Basic</a></li>
+  <li class="card"><h3>Plus</h3><p>Longer text</p><p>More</p><p>More</p><a href="#" style="display:block;width:100%;padding:10px 0;border:1px solid #333;text-align:center">Choose Plus</a></li>
+</ul>
+<div id="footers" style="display:grid;grid-template-columns:1fr 1fr;gap:24px;padding:24px;align-items:stretch">
+  <section style="border:1px solid #ddd;padding:24px"><h3>Inbox</h3><p>Nothing new.</p><a href="#" style="display:inline-flex;height:44px;align-items:center;padding:0 20px;border:1px solid #333">Open inbox</a></section>
+  <section style="border:1px solid #ddd;padding:24px"><h3>Reports</h3><p>One</p><p>Two</p><p>Three</p><a href="#" style="display:inline-flex;height:44px;align-items:center;padding:0 20px;border:1px solid #333">Open reports</a></section>
+</div>
 <div id="cookie" style="position:fixed;left:16px;bottom:16px;width:360px;padding:20px;border:1px solid #ccc;background:#fff;box-shadow:0 4px 20px #0003">We use cookies. <button>Accept</button></div>
 </body>
