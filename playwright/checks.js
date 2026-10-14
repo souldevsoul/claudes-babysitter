@@ -10,7 +10,11 @@ window.__uiDescribe = (el) => {
     if (cls.length) s += '.' + cls.join('.');
     parts.unshift(s);
   }
-  const txt = (el.textContent || '').trim().replace(/\\s+/g, ' ').slice(0, 40);
+  // text of the element without <style>/<script>: a Radix layer read as "[data-radix-select-viewport]{scrollbar-w…"
+  let txt = '';
+  const w = document.createTreeWalker(el, NodeFilter.SHOW_TEXT, { acceptNode: (n) => n.parentElement && n.parentElement.closest('style, script, noscript, template') ? 2 : 1 });
+  for (let n = w.nextNode(); n && txt.length < 80; n = w.nextNode()) txt += n.nodeValue + ' ';
+  txt = txt.trim().replace(/\\s+/g, ' ').slice(0, 40);
   return parts.join(' > ') + (txt ? ' "' + txt + '"' : '');
 };
 // Resolve any CSS colour (rgb/hsl/lab/oklab/color()) to RGBA through canvas.
@@ -391,7 +395,18 @@ export const illegibleText = (page, allowLightWeights = false, root = null) => p
             continue;
         // translucency is judged by what it does to legibility: the ratio below already has the opacity of the text
         // and of every ancestor composited in (an opacity-80 caption at 9:1 is fine; one at 3.9:1 fails on contrast)
-        if (ratio < (large ? 3 : 4.5)) {
+        // an endlessly pulsing opacity (a blinking "_" caret, animate-pulse) was sampled mid-pulse, so the ratio is
+        // wherever the cycle happened to be (facet headings, 2026-10): a 1–2 character caret is decoration; longer
+        // pulsing text goes to the eye list instead of failing on a random frame
+        let pulsing = false;
+        for (let p = el, i = 0; p && i < 3 && !pulsing; p = p.parentElement, i++)
+            pulsing = (p.getAnimations ? p.getAnimations() : []).some((an) => an.effect && an.effect.getTiming && an.effect.getTiming().iterations === Infinity
+                && an.effect.getKeyframes().some((k) => "opacity" in k));
+        if (pulsing && ratio < (large ? 3 : 4.5)) {
+            if ((n.textContent || "").trim().length > 2)
+                eye.push({ what: `contrast ${ratio.toFixed(2)}:1 measured mid-pulse (endless opacity animation) — check the brightest frame by eye`, where: window.__uiDescribe(el), selector: window.__uiSelector(el), human: window.__uiHuman(el) });
+        }
+        else if (ratio < (large ? 3 : 4.5)) {
             if (clipText || overImage)
                 eye.push({ what: `contrast ${clipText ? "of gradient-filled text" : "over image/gradient"} cannot be measured (${ratio.toFixed(2)}:1 vs solid) — check by eye`, where: window.__uiDescribe(el), selector: window.__uiSelector(el), human: window.__uiHuman(el) });
             else
@@ -607,8 +622,12 @@ export async function focusVisible(page, presses = 8) {
     await page.mouse.click(1, 1).catch(() => { });
     // Styles are compared after transitions settle: a kit button with `transition-all` draws its focus ring over
     // 150-300 ms, and a same-frame comparison read the ring's starting value as "no focus style".
+    // The probed element can leave the page between samples (a component re-renders on focus/blur, a banner
+    // closes): every step tolerates a missing probe and the element is skipped instead of crashing the check.
     const look = () => page.evaluate(() => {
         const el = document.querySelector("[data-ui-focus-probe]");
+        if (!el || !el.isConnected)
+            return null;
         const pick = (cs) => [cs.outlineStyle, cs.outlineWidth, cs.outlineColor, cs.boxShadow, cs.backgroundColor, cs.color, cs.borderColor, cs.textDecorationLine, cs.transform].join("|");
         return pick(getComputedStyle(el)) + pick(getComputedStyle(el, "::after")) + pick(getComputedStyle(el, "::before"));
     });
@@ -616,7 +635,7 @@ export async function focusVisible(page, presses = 8) {
         await page.keyboard.press("Tab");
         const where = await page.evaluate(() => {
             const el = document.activeElement;
-            if (!el || el === document.body || !window.__uiVisible(el))
+            if (!el || !(el instanceof Element) || el === document.body || !window.__uiVisible(el))
                 return null;
             el.setAttribute("data-ui-focus-probe", "1");
             return window.__uiDescribe(el);
@@ -625,11 +644,13 @@ export async function focusVisible(page, presses = 8) {
             continue;
         await settle(page, 800);
         const focused = await look();
-        await page.evaluate(() => document.querySelector("[data-ui-focus-probe]").blur());
+        await page.evaluate(() => document.querySelector("[data-ui-focus-probe]")?.blur());
         await settle(page, 800);
         const plain = await look();
         // focus goes back where Tab left it, so the next Tab continues the order
-        await page.evaluate(() => { const el = document.querySelector("[data-ui-focus-probe]"); el.removeAttribute("data-ui-focus-probe"); el.focus({ preventScroll: true }); });
+        await page.evaluate(() => { const el = document.querySelector("[data-ui-focus-probe]"); if (!el) return; el.removeAttribute("data-ui-focus-probe"); el.focus({ preventScroll: true }); });
+        if (focused === null || plain === null)
+            continue;
         if (focused === plain && !out.some((o) => o.where === where))
             out.push({ what: "focused element looks identical to unfocused", where });
     }
@@ -897,7 +918,8 @@ export const inputVisibility = (page) => page.evaluate(() => {
         const ir = el.getBoundingClientRect();
         for (let p = el.parentElement, i = 0; p && p !== document.body && i < 4; p = p.parentElement, i++) {
             const pr = p.getBoundingClientRect();
-            if (pr.height - ir.height > 24 || pr.width - ir.width > Math.max(96, ir.width * 0.5))
+            // 32: a py-3 + border-2 field box is 28px taller than its bare input (forge hourly rate, 2026-10)
+            if (pr.height - ir.height > 32 || pr.width - ir.width > Math.max(96, ir.width * 0.5))
                 break;
             if (p.querySelectorAll("input:not([type=hidden]):not([type=checkbox]):not([type=radio]), textarea, select").length > 1)
                 break;
@@ -1257,7 +1279,10 @@ export async function overlayMotion(page, max = 10) {
                     const moved = lingered || looks.some((x) => x.endsWith("|anim")) || new Set(looks.filter((x) => x !== "gone").map((x) => x.replace(/\|anim$/, ""))).size > 1
                         || P.events.some((e) => e.t >= t0 && e.el instanceof Node && (l.contains(e.el) || e.el.contains(l)));
                     const ended = looks[looks.length - 1];
-                    const entry = { moved, where: W.__uiDescribe(l), selector: W.__uiSelector(l), human: W.__uiHuman(l) };
+                    // a Radix Select list: before 2.3 it unmounts the moment it closes, so its exit classes never play —
+                    // the message names the upgrade instead of "add an exit animation" (forge/cipher/facet, 2026-10)
+                    const radixSelect = !!(l.querySelector && (l.matches("[data-radix-select-viewport]") || l.querySelector("[data-radix-select-viewport]")));
+                    const entry = { moved, radixSelect, where: W.__uiDescribe(l), selector: W.__uiSelector(l), human: W.__uiHuman(l) };
                     if (phase === "open" && ended !== "gone") {
                         run.seen.push(entry);
                         if (!P.last) P.last = l;
@@ -1318,7 +1343,7 @@ export async function overlayMotion(page, max = 10) {
         }
         const g = gone.find((x) => x.selector === layer.selector) || gone[0];
         if (g && !g.moved)
-            out.push({ what: `closes without motion — it vanishes in one frame (give it an exit animation that mirrors the enter one) [6.12, P59]`, where: `${layer.where} (trigger: ${info.where})`, selector: info.selector, human: info.human, layer: layer.selector });
+            out.push({ what: g.radixSelect ? `Radix Select list closes in one frame — its exit classes never play before @radix-ui/react-select 2.3: update it [6.12, P59]` : `closes without motion — it vanishes in one frame (give it an exit animation that mirrors the enter one) [6.12, P59]`, where: `${layer.where} (trigger: ${info.where})`, selector: info.selector, human: info.human, layer: layer.selector });
         if (!gone.length)
             await page.mouse.click(2, 2).catch(() => { });
         await page.waitForTimeout(150);
@@ -1366,6 +1391,16 @@ export async function cookieFlow(page) {
     // ("Necessary — always on" is disabled, and was the one drawn past its track)
     for (const f of await toggleGeometry(page))
         out.push({ ...f, what: `${f.what} — in the cookie settings panel` });
+    // the panel's tick boxes and pickers: a banner that expands in place is no role=dialog, so the dialog-scoped
+    // native-control sweep (1.1) never looked inside it — forge's analytics/marketing boxes were OS checkboxes
+    await markCookieBanner(page).catch(() => 0);
+    const seenNative = new Set();
+    for (const n of await nativeControls(page, "[data-bs-cookie], [role=dialog], [role=alertdialog]")) {
+        if (seenNative.has(n.selector))
+            continue;
+        seenNative.add(n.selector);
+        out.push({ ...n, what: `${n.what.replace(" inside an open dialog/popover", "")} in the cookie settings panel — use the kit control [1.1, P01]` });
+    }
     const accepts = await page.evaluate(() => Array.from(document.querySelectorAll("button, a")).filter((b) => window.__uiVisible(b) && /^(accept( all)?|allow all|agree|принять( все)?)$/i.test((b.textContent || "").trim())).length);
     if (accepts > 1)
         out.push({ what: `${accepts} "Accept" buttons visible after opening cookie settings — banner and panel are shown together [4.6, P19]`, where: "cookie banner + settings" });
@@ -2811,7 +2846,7 @@ const ixProbe = () => {
         const related = (s, x) => x === s || (x.contains && x.contains(s) && chain(s).includes(x)) || (s.contains(x) && size(x) >= 0.5 * size(s));
         const moved = (s) => [...R.anims].some((x) => related(s, x)) || R.events.some((x) => x instanceof Element && related(s, x))
             || new Set((R.looks.get(s) || []).filter((l) => l !== "gone")).size > 1;
-        const desc = (el) => ({ where: W.__uiDescribe(el), selector: W.__uiSelector(el) || "", human: W.__uiHuman(el), positioned: /fixed|absolute/.test(el.isConnected ? getComputedStyle(el).position : "") });
+        const desc = (el) => ({ where: W.__uiDescribe(el), selector: W.__uiSelector(el) || "", human: W.__uiHuman(el), positioned: /fixed|absolute/.test(el.isConnected ? getComputedStyle(el).position : ""), radixSelect: !!(el.querySelector && (el.matches("[data-radix-select-viewport]") || el.querySelector("[data-radix-select-viewport]"))) });
         // a control the click removed (a cookie banner's "Got it", a quiz option replaced by the next question) has no
         // computed style any more: every property reads "" and looked changed with no transition — nothing to judge
         const cs = getComputedStyle(t);
@@ -3019,7 +3054,9 @@ export async function interactionMotion(page, { reload, max = 30, perReload = 6,
                     back = page.url().split("#")[0] === home.split("#")[0] ? await g(page.evaluate(() => window.__bsIx.result()).catch(() => null)) : null;
                 }
                 if (back && back.disappeared.length && !back.appeared.length && !back.disappeared.some((x) => x.moved))
-                    hard.push({ kind: "close", what: `toggling it back hides ${name(back.disappeared)} in one frame — no exit motion. Animate it out, mirroring the enter [6.12, P59]`, where: pick.where, ...at });
+                    hard.push({ kind: "close", what: back.disappeared.some((x) => x.radixSelect)
+                        ? `toggling it back closes a Radix Select list in one frame — its exit classes never play before @radix-ui/react-select 2.3: update it [6.12, P59]`
+                        : `toggling it back hides ${name(back.disappeared)} in one frame — no exit motion. Animate it out, mirroring the enter [6.12, P59]`, where: pick.where, ...at });
             }
             await g(recover(page));
         };
@@ -3067,4 +3104,79 @@ export async function interactionMotion(page, { reload, max = 30, perReload = 6,
         await within(page.unroute("**/*", blockNav), 5_000);
     }
     return { hard, soft, notTested };
+}
+/**
+ * 4.8 — a page the browser translated survives its own controls. Chrome / Edge / Yandex "Translate this page"
+ * swaps every text node React rendered for <font><font>…</font></font>; the next time React updates one of those
+ * nodes (a button switching to "Pricing your task…") it calls insertBefore/removeChild on a node that is gone and the
+ * whole page falls over with "Application error" until a reload (forge /request, cipher /request, 2026-10).
+ *
+ * The check translates the page the way Google Translate does, then presses its buttons — form submits too, since the
+ * crash came from the submitting state. Every request other than GET is aborted for the duration, so nothing is sent
+ * or created; empty fields get placeholder values so a submit is not blocked by validation. A crash is a page error
+ * from the DOM mismatch, or Next's "Application error" screen.
+ */
+export async function translationSurvives(page, max = 10) {
+    const out = [];
+    const errors = [];
+    const onErr = (e) => errors.push(String(e && e.message || e));
+    page.on("pageerror", onErr);
+    const block = (route) => (route.request().method() === "GET" ? route.fallback() : route.abort());
+    await page.route("**/*", block);
+    const translate = () => page.evaluate(() => {
+        const w = document.createTreeWalker(document.body, NodeFilter.SHOW_TEXT, { acceptNode: (t) => (t.nodeValue || "").trim() && t.parentElement && !t.parentElement.closest("script, style, noscript, textarea, font[data-bs-tr]") ? 1 : 2 });
+        const nodes = [];
+        for (let n = w.nextNode(); n; n = w.nextNode()) nodes.push(n);
+        for (const t of nodes) {
+            const outer = document.createElement("font"), inner = document.createElement("font");
+            outer.setAttribute("data-bs-tr", ""); outer.style.verticalAlign = inner.style.verticalAlign = "inherit";
+            inner.textContent = t.nodeValue; outer.appendChild(inner); t.parentNode.replaceChild(outer, t);
+        }
+        document.documentElement.classList.add("translated-ltr");
+        return nodes.length;
+    }).catch(() => 0);
+    const CRASH = /insertBefore|removeChild|not a child of this node|NotFoundError/i;
+    const crashed = async () => errors.some((e) => CRASH.test(e)) || /Application error: a client-side exception/i.test(await page.evaluate(() => document.body ? document.body.innerText.slice(0, 400) : "").catch(() => ""));
+    try {
+        const start = page.url();
+        // the buttons, marked once: submits of forms with fields first (the state that crashed), then the rest
+        const picks = await page.evaluate((max) => {
+            const W = window;
+            const list = Array.from(document.querySelectorAll('button, [role=button], input[type=submit]'))
+                .filter((b) => W.__uiVisible(b) && !b.disabled && !b.closest("a[href], [data-bs-cookie]") && !/log ?out|sign ?out|delete|remove|выйти|удалить/i.test(b.textContent || ""));
+            const submit = (b) => !!b.closest("form") && (b.type === "submit" || (b.tagName === "BUTTON" && !b.getAttribute("type")));
+            list.sort((a, b) => Number(submit(b)) - Number(submit(a)));
+            return list.slice(0, max).map((b, i) => { b.setAttribute("data-bs-tr-pick", String(i)); return { i, where: W.__uiDescribe(b), submit: submit(b) }; });
+        }, max);
+        for (const pick of picks) {
+            await translate();
+            const loc = page.locator(`[data-bs-tr-pick="${pick.i}"]`).first();
+            if (!(await loc.isVisible().catch(() => false)))
+                continue;
+            if (pick.submit)
+                await loc.evaluate((b) => {
+                    for (const f of Array.from(b.form ? b.form.elements : [])) {
+                        if (!(f instanceof HTMLInputElement || f instanceof HTMLTextAreaElement) || f.value || f.readOnly || f.disabled) continue;
+                        const v = f.type === "email" ? "qa@example.com" : f.type === "number" ? (f.min || "1") : f.type === "tel" ? "2025550143" : f.type === "url" ? "https://example.com" : f.type === "password" ? "Example-pass-123" : /^(text|search|)$/.test(f.type) || f instanceof HTMLTextAreaElement ? "A short example request for a landing page and a logo, two weeks." : "";
+                        if (!v) continue;
+                        const set = Object.getOwnPropertyDescriptor(Object.getPrototypeOf(f), "value").set;
+                        set.call(f, v); f.dispatchEvent(new Event("input", { bubbles: true })); f.dispatchEvent(new Event("change", { bubbles: true }));
+                    }
+                }).catch(() => { });
+            await loc.click({ timeout: 1500 }).catch(() => { });
+            await page.waitForTimeout(500);
+            if (await crashed()) {
+                out.push({ what: `the page crashes when it is translated by the browser and "${pick.where.split('"')[1] || "this control"}" is pressed (${(errors.find((e) => CRASH.test(e)) || "Application error").slice(0, 90)}) — wrap swapped labels in <span>, mark the control translate="no", or install a removeChild/insertBefore guard before hydration [4.8, P60]`, where: pick.where });
+                break;
+            }
+            if (page.url().split("#")[0] !== start.split("#")[0])
+                break; // it navigated: the rest of the page is gone
+            await page.keyboard.press("Escape").catch(() => { });
+        }
+    }
+    finally {
+        await page.unroute("**/*", block).catch(() => { });
+        page.off("pageerror", onErr);
+    }
+    return out;
 }

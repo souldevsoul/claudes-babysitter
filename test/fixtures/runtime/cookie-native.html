@@ -1,0 +1,18 @@
+<!doctype html><meta charset="utf-8"><title>1.1 cookie panel controls</title>
+<!-- 1.1: forge (2026-10) — "Manage" expands the banner in place (no role=dialog); its analytics/marketing boxes were
+     OS checkboxes, which the dialog-scoped sweep never saw. A kit box (appearance:none) passes. -->
+<style>body{margin:0;font:16px sans-serif}
+  .banner{position:fixed;left:0;right:0;bottom:0;background:#111;color:#eee;padding:16px}
+  .banner button{margin-right:8px} #panel{display:none;margin-top:12px} #panel.open{display:block}
+  .kit{appearance:none;width:18px;height:18px;border:2px solid #aaa;border-radius:4px}</style>
+<body>
+<main style="height:1200px;padding:24px">Page</main>
+<div class="banner" id="bn">
+  <p>We use cookies to run this site.</p>
+  <button id="manage" onclick="document.getElementById('panel').classList.add('open')">Manage</button><button>Reject All</button><button>Accept All</button>
+  <div id="panel">
+    <label>Analytics <input type="checkbox" id="native-a"></label>
+    <label>Marketing <input type="checkbox" id="kit-m" class="kit"></label>
+  </div>
+</div>
+</body>

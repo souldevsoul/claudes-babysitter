@@ -73,6 +73,7 @@ for (const route of ROUTES) {
     test("3.8 page loads scrolled to top [P52]", async ({ page }) => { await open(page, r); expect(await c.scrollY(page)).toBe(0); });
     test("4.6 cookie banner does not cover navigation [P57]", async ({ page }) => { await open(page, r); hard(await c.cookieCovers(page)); });
     test("4.6 cookie settings replace the banner, panel fits, its switches are drawn right [P19 P18]", async ({ page }) => { await open(page, r); hard(await c.cookieFlow(page)); });
+    test("4.8 a page translated by the browser survives its controls [P60]", async ({ page }) => { await open(page, r); hard(await c.translationSurvives(page)); });
     test("1.11 logo link hugs the logo [P58]", async ({ page }) => { await open(page, r); hard(await c.logoLink(page)); });
     test("2.6 cards in a row: equal height, CTAs and prices aligned, no double seams [P27 P55]", async ({ page }) => { await open(page, r); hard(await c.rowAlignment(page)); });
     test("2.12 repeated rows keep column positions [P48]", async ({ page }) => { await open(page, r); soft(await c.repeatedRowColumns(page), "row columns shift"); });

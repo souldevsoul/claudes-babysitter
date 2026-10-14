@@ -9,6 +9,7 @@
 import { chromium } from "@playwright/test";
 import { mkdirSync, writeFileSync, existsSync, readFileSync, rmSync } from "node:fs";
 import { resolve } from "node:path";
+import { dismissConsent } from "./consent.mjs";
 
 const root = process.env.BABYSITTER_ROOT || process.cwd();
 const cfgPath = process.env.BABYSITTER_CONFIG || resolve(root, "babysitter.config.json");
@@ -89,9 +90,19 @@ if (process.env.SESSION_COOKIES) {
   const page = await ctx.newPage();
   const loginUrl = new URL(cfg.login.url, base).href;
   await page.goto(loginUrl, { waitUntil: "networkidle" }).catch(() => page.goto(loginUrl));
+  // a cookie banner pinned over the form swallowed the submit click (forge, 2026-10): answer it first
+  const consent = await dismissConsent(page);
+  if (consent) console.log(`claudes-babysitter: cookie banner answered ("${consent}") before signing in`);
   await page.fill(cfg.login.emailSelector || 'input[type=email], input[name=email], input[name=username]', process.env.LOGIN_EMAIL);
-  await page.fill(cfg.login.passwordSelector || "input[type=password]", process.env.LOGIN_PASSWORD);
-  await page.click(cfg.login.submitSelector || 'button[type=submit], form button:not([type=button])');
+  const password = page.locator(cfg.login.passwordSelector || "input[type=password]").first();
+  await password.fill(process.env.LOGIN_PASSWORD);
+  // the submit of the form that holds the password field — not the banner's "Manage"/"Accept" submits
+  const submit = page.locator(cfg.login.submitSelector || 'form:has(input[type=password]) button[type=submit], form:has(input[type=password]) button:not([type=button])').first();
+  await submit.click({ timeout: 5000 }).catch(async () => {
+    // still covered by something we could not close: submit the way a keyboard user would
+    console.log("claudes-babysitter: the sign-in button is covered — submitting with Enter");
+    await password.press("Enter");
+  });
   await page.waitForURL((u) => u.href !== loginUrl && !/login|sign-?in/i.test(u.pathname), { timeout: 20000 }).catch(() => {});
   if (/login|sign-?in/i.test(new URL(page.url()).pathname)) {
     console.error(`login failed: still on ${page.url()}`);

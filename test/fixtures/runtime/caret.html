@@ -1,0 +1,11 @@
+<!doctype html><meta charset="utf-8"><title>6.4 pulsing caret</title>
+<!-- 6.4: facet (2026-10) — headings end in a blinking "_" (animate-pulse); measured mid-pulse it read 2.4:1. A 1–2
+     character caret is decoration; longer pulsing text goes to the eye list; a faint static "_" still fails. -->
+<style>body{margin:0;font:16px sans-serif;padding:24px;background:#fff;color:#111}
+  @keyframes pulse{50%{opacity:.25}} .pulse{animation:pulse 2s cubic-bezier(.4,0,.6,1) infinite;color:#2563eb}
+  .faint{color:#ddd}</style>
+<body>
+<h1>Heading<span class="pulse" id="caret">_</span></h1>
+<p class="pulse" id="loading" style="color:#bbb">Loading your results</p>
+<p>Static <span class="faint" id="static">_</span></p>
+</body>

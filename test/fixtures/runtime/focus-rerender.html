@@ -1,0 +1,18 @@
+<!doctype html><meta charset="utf-8"><title>1.9 focus probe removed</title>
+<!-- 1.9: cipher (2026-10) — the focus check threw "getComputedStyle: parameter 1 is not of type Element" /
+     "reading 'removeAttribute' of null" on 8 pages: the probed element re-rendered when it lost focus, so the next
+     sample found nothing. The check must skip it and still judge the others. -->
+<style>body{margin:0;font:16px sans-serif;padding:24px} button{margin:8px;padding:8px 12px;border:1px solid #888;background:#fff;outline:none}
+  #ok:focus-visible{outline:3px solid #1d4ed8;outline-offset:2px}</style>
+<body>
+<button id="ok">Has a focus ring</button>
+<button id="plain">No focus style</button>
+<button id="swap">Re-renders on blur</button>
+<script>
+  // like a framework re-render: on blur the node is replaced by a fresh one (no probe attribute)
+  document.addEventListener("focusout", (e) => {
+    if (e.target.id !== "swap") return;
+    const b = document.createElement("button"); b.id = "swap"; b.textContent = e.target.textContent; e.target.replaceWith(b);
+  });
+</script>
+</body>

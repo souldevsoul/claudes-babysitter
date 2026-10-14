@@ -1,0 +1,13 @@
+<!doctype html><meta charset="utf-8"><title>prepare: login behind a cookie banner</title>
+<!-- prepare: forge (2026-10) — a fixed cookie banner covered the "Sign in" button, so the login click timed out.
+     The banner is answered first (privacy choice preferred), then the form's own submit is pressed. -->
+<style>body{margin:0;font:16px sans-serif} form{padding:24px;margin-top:500px} input,button{display:block;margin:8px 0}
+  .cookie{position:fixed;left:0;right:0;bottom:0;height:260px;background:#222;color:#fff;padding:16px}</style>
+<body>
+<form id="login" onsubmit="event.preventDefault();document.body.dataset.sent='1'">
+  <input type="email" id="email"><input type="password" id="pw"><button type="submit" id="signin">Sign in</button>
+</form>
+<div class="cookie" id="cookie-banner"><p>We use cookies.</p>
+  <button type="submit" onclick="this.parentNode.remove()">Accept All</button>
+  <button type="submit" id="reject" onclick="document.body.dataset.choice='reject';this.parentNode.remove()">Reject All</button></div>
+</body>

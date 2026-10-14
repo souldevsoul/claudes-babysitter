@@ -50,6 +50,65 @@ try {
     assert.equal(lines.length, 60, `all 60 faint lines are reported (got ${lines.length})`);
   });
 
+  await test("4.8 translation: a translated page that crashes on submit is caught; the same page with the guard survives; nothing is sent", async (page) => {
+    const posts = [];
+    page.on("request", (r) => r.method() !== "GET" && posts.push(r.url()));
+    page.on("requestfailed", () => {});
+    await page.goto(url("translate.html"));
+    const bad = await checks.translationSurvives(page);
+    assert.equal(bad.length, 1, `the unguarded page crashes: ${JSON.stringify(bad)}`);
+    assert.match(bad[0].what, /Get my price/, "the finding names the control");
+    assert.match(bad[0].what, /insertBefore|NotFound|not a child/i, "and the DOM error");
+    await page.goto(url("translate.html", "?guard=1"));
+    const ok = await checks.translationSurvives(page);
+    assert.deepEqual(ok, [], `the guarded page survives: ${JSON.stringify(ok)}`);
+    const sent = await page.evaluate(() => document.documentElement.classList.contains("translated-ltr"));
+    assert.ok(sent, "the page was translated before pressing");
+    assert.ok(posts.length >= 1, "the submit did try to POST");
+  });
+
+  await test("1.9 focus: an element that re-renders on focus is skipped, not a crash; the plain one is still reported", async (page) => {
+    await page.goto(url("focus-rerender.html"));
+    const out = await checks.focusVisible(page, 6);
+    assert.ok(out.some((f) => /No focus style/.test(f.where)), `the unstyled button is reported: ${JSON.stringify(out)}`);
+    assert.ok(!out.some((f) => /Has a focus ring/.test(f.where)), "the ringed button passes");
+  });
+
+  await test("1.1 cookie panel: an OS checkbox in a panel that expands in place is reported; a kit box is not", async (page) => {
+    await page.goto(url("cookie-native.html"));
+    const out = await checks.cookieFlow(page);
+    assert.ok(has(out, /#native-a/), `the native analytics box is reported: ${JSON.stringify(out)}`);
+    assert.ok(!has(out, /#kit-m/), "the appearance:none kit box passes");
+  });
+
+  await test("1.9 inputs: a py-3 + border-2 field box (28px taller than its input) is the field's edge", async (page) => {
+    await page.goto(url("input-wrapper-tall.html"));
+    const out = await checks.inputVisibility(page);
+    assert.ok(!ids(out).includes("#rate"), `the boxed field is visible: ${JSON.stringify(out)}`);
+    assert.ok(ids(out).includes("#bare"), "a faint bare field still fails");
+  });
+
+  await test("6.4 pulse: a blinking caret is decoration, pulsing text goes to the eye list, a faint static caret fails", async (page) => {
+    await page.goto(url("caret.html"));
+    await page.waitForTimeout(1000); // mid-pulse
+    const { hard, eye } = await checks.illegibleText(page);
+    assert.ok(!ids(hard).includes("#caret"), `the caret is not a failure: ${JSON.stringify(hard)}`);
+    assert.ok(!ids(hard).includes("#loading") && ids(eye).includes("#loading"), `pulsing text is for the eye: ${JSON.stringify({ hard, eye })}`);
+    assert.ok(ids(hard).includes("#static"), "a faint static caret still fails");
+  });
+
+  await test("prepare: a cookie banner over the sign-in button is answered (privacy choice first)", async (page) => {
+    const { dismissConsent } = await import("../playwright/consent.mjs");
+    await page.goto(url("login-banner.html"));
+    const covered = await page.locator("#signin").click({ trial: true, timeout: 800 }).then(() => false, () => true);
+    assert.ok(covered, "the fixture really covers the button");
+    const label = await dismissConsent(page);
+    assert.equal(label, "Reject All");
+    assert.equal(await page.evaluate(() => document.body.dataset.choice), "reject");
+    await page.locator('form:has(input[type=password]) button[type=submit]').first().click({ timeout: 1500 });
+    assert.equal(await page.evaluate(() => document.body.dataset.sent), "1", "the form's own submit was pressed");
+  });
+
   await test("1.9 inputs: a wrapper drawing the edge counts; a bare faint field and one loose in a bordered section fail", async (page) => {
     await page.goto(url("input-wrapper.html"));
     const out = await checks.inputVisibility(page);
