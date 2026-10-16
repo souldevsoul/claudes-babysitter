@@ -174,9 +174,9 @@ test.describe("forms site-wide", () => {
       let found = false;
       for (const p of settings()) {
         await open(page, p);
-        const forms = await fm.describeForms(page);
-        if (!forms.some((f: any) => f.kind === "password-change")) continue;
+        if (!(await fm.openPasswordChange(page))) continue; // a form on the page, or behind a "Change password" button
         found = true;
+        out.push(...(await fm.passwordEyes(page))); // the dialog's fields are not on the page at load
         out.push(...(await fm.changePasswordSame(page)));
       }
       if (!found) out.push({ id: "FM7", soft: true, what: `no settings page has a change-password form (current + new password) (looked at ${settings().join(", ") || "none — set acceptance.auth.settings"}) [FM7, pw-change]`, where: "settings" });

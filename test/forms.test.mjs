@@ -157,6 +157,33 @@ try {
     assert.equal(out[0].selector, "#e1");
     assert.ok(await page.evaluate((s) => new RegExp(s, "i").test(document.body.innerText), forms.DATA_EXPORT_RE.source), "export control is recognised");
   });
+  await test("live FPs: a 'Credits not returned' placeholder is not a credits field; a radio subject is picked; 'Choose a subject.' is an error", async (page) => {
+    await go(page, "contact-radios.html");
+    assert.deepEqual(real_(await forms.numericBounds(page)), [], "Subject line is text (praxis /contact)");
+    const g = real_(await forms.gibberish(page));
+    assert.ok(g.length === 1 && /no check in the browser/.test(g[0].what), `the radio group is filled, so the gibberish goes out (sprout /contact): ${show(g)}`);
+    const o = real_(await forms.submitOutcomes(page));
+    assert.deepEqual(o, [], show(o));
+  });
+  await test("formless settings card: stale header name, password change behind a button, header wallet chip as balance (praxis /settings)", async (page) => {
+    await go(page, "settings-card.html");
+    const st = await forms.staleAfterSave(page);
+    assert.ok(st.length === 1 && st[0].id === "FM5" && !st[0].na, show(st));
+    await go(page, "settings-card.html");
+    const cr = real_(await forms.creditsUpFront(page));
+    assert.ok(cr.length === 1 && /Hire specialist/.test(cr[0].what) && /balance is 3900/.test(cr[0].what), show(cr));
+    await go(page, "settings-card.html");
+    assert.equal(await forms.openPasswordChange(page), true, "the Change password button opens the form");
+    const pw = await forms.changePasswordSame(page);
+    assert.ok(pw.some((f) => /equal to the current/.test(f.what)), show(pw));
+    const eyes = await forms.passwordEyes(page);
+    assert.equal(eyes.length, 2, `both dialog fields lack an eye: ${show(eyes)}`);
+  });
+  await test("FM6 balance split over label / figure elements ('AVAILABLE' · '3,900')", async (page) => {
+    await go(page, "wallet.html");
+    const cr = real_(await forms.creditsUpFront(page));
+    assert.ok(cr.length === 1 && /Hire now/.test(cr[0].what), show(cr));
+  });
   assert.deepEqual(real, [], `requests that reached the fixture server instead of the sandbox: ${real.join(", ")}`);
 } catch (e) {
   failed++;

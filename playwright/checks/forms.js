@@ -23,7 +23,7 @@ export function pageLib() {
   const where = (el) => (window.__uiDescribe ? window.__uiDescribe(el) : el.tagName.toLowerCase() + (el.id ? "#" + el.id : ""));
   const selector = (el) => (window.__uiSelector ? window.__uiSelector(el) : null);
   // error / success / busy wording (EN + RU — the factory's two languages)
-  const ERR = /\berror|invalid|required|\bmust\b|at least|at most|too (short|long|many|few|large|small|high|low|big)|minimum|maximum|\bmin(imum)?\b\.?\s*\d|\bmax(imum)?\b\.?\s*\d|between \S+ and|please (enter|provide|fill|use|choose|select|add|type|write)|enter (a|an|your|valid)|not (a )?valid|isn't valid|is not allowed|can't be|cannot be|should (be|contain|have)|failed|could ?n[o']t|unable to|went wrong|try again|whole number|greater than|less than|exceed|no more than|up to \S+ (characters|chars)|incorrect|wrong|doesn't match|do not match|different from|same as (your )?(current|old)|не удалось|ошибк|обязательн|неверн|некоррект|минимум|максимум/i;
+  const ERR = /\berror|invalid|required|\bmust\b|at least|at most|too (short|long|many|few|large|small|high|low|big)|minimum|maximum|\bmin(imum)?\b\.?\s*\d|\bmax(imum)?\b\.?\s*\d|between \S+ and|please (enter|provide|fill|use|choose|select|add|type|write)|^(choose|select|pick|enter|provide|add) (a|an|one|your|the|at least)\b|enter (a|an|your|valid)|not (a )?valid|isn't valid|is not allowed|can't be|cannot be|should (be|contain|have)|failed|could ?n[o']t|unable to|went wrong|try again|whole number|greater than|less than|exceed|no more than|up to \S+ (characters|chars)|incorrect|wrong|doesn't match|do not match|different from|same as (your )?(current|old)|не удалось|ошибк|обязательн|неверн|некоррект|минимум|максимум/i;
   const OK = /thank|success|\bsent\b|\bsaved\b|received|delivered|subscribed|submitted|we('ll| will) (get back|reply|respond|be in touch|contact|email)|check your (inbox|e-?mail|mail)|\bupdated\b|confirmed|you're (in|all set)|спасибо|отправлен|сохранен|успешно/i;
   const BUSY = /^(sending|saving|submitting|loading|please wait|processing|signing in|logging in|creating|updating|redirecting)\b|…$|\.\.\.$/i;
   const labelOf = (f) => {
@@ -46,8 +46,11 @@ export function pageLib() {
     if (f.tagName !== "INPUT" || f.disabled || f.readOnly) return null;
     const type = (f.getAttribute("type") || "text").toLowerCase();
     if (!["text", "number", "tel", ""].includes(type)) return null;
-    const k = keyOf(f), im = (f.getAttribute("inputmode") || "").toLowerCase();
+    const im = (f.getAttribute("inputmode") || "").toLowerCase();
+    // the placeholder is an example, not a name ("Credits not returned" in a Subject field) — keywords come from the rest
+    const k = clean([f.getAttribute("name"), f.id, f.getAttribute("aria-label"), f.getAttribute("autocomplete"), labelOf(f) === clean(f.getAttribute("placeholder")) ? "" : labelOf(f)].join(" ")).toLowerCase();
     if (NOT_NUMERIC.test(k)) return null;
+    if (type !== "number" && !im && type !== "tel" && /subject|message|title|description|comment|note|reason|e-?mail|\bname\b|address|company|city/.test(k)) return null;
     let kind = null;
     if (/\biban\b/.test(k)) kind = "iban";
     else if (/card ?number|cc-number|credit card/.test(k)) kind = "card";
@@ -87,6 +90,7 @@ export function pageLib() {
   const fieldsOf = (form) => Array.from(form.querySelectorAll(FIELD_SEL)).filter((f) => vis(f) || (["checkbox", "radio"].includes(f.type) && vis(f.parentElement || f)));
   const isStepper = (b) => /^[+\-−–]$/.test(clean(b.textContent)) || /increase|decrease|increment|decrement|plus|minus/i.test(b.getAttribute("aria-label") || "");
   function submitOf(form) {
+    if (form.getAttribute("data-bsf-form") === "pseudo") return Array.from(form.querySelectorAll("button, [role=button]")).find((b) => vis(b) && !isStepper(b) && ACTION.test(clean(b.textContent)) && !/show|hide|eye|toggle/i.test(b.getAttribute("aria-label") || "")) || null;
     const own = Array.from(form.querySelectorAll('button[type=submit], input[type=submit], button:not([type])')).filter((b) => vis(b) && !isStepper(b) && !/show|hide|password|eye|toggle/i.test([b.getAttribute("aria-label"), b.className].join(" ")) || false);
     const ext = form.id ? Array.from(document.querySelectorAll(`[form="${CSS.escape(form.id)}"]`)).filter(vis) : [];
     const all = [...own, ...ext];
@@ -107,7 +111,9 @@ export function pageLib() {
     const destructive = DESTRUCT.test(btnText);
     const search = form.getAttribute("role") === "search" || !!form.closest("[role=search]") || (method === "get" && !pw) || (fields.length && roles.every((r) => ["search", "select", "checkbox", "radio"].includes(r)));
     let kind = "other";
-    if (pw >= 2 && /current|old|existing/.test(k)) kind = "password-change";
+    // "current / old password" read from the password fields themselves ("18 or older" in a consent line is not it)
+    const pwKeys = fields.filter((f, i) => roles[i] === "password").map(keyOf).join(" | ");
+    if (pw >= 2 && /\b(current|old|existing|present)\b/.test(pwKeys)) kind = "password-change";
     else if (pw >= 1 && (/new password|reset|set (a )?password|choose (a )?password/i.test(text) && !roles.includes("email"))) kind = "password-reset";
     else if (pw >= 2 || (pw === 1 && roles.includes("name")) || (pw === 1 && /sign ?up|register|create (an |your )?account|get started|join/i.test(btnText))) kind = "signup";
     else if (pw === 1) kind = "signin";
@@ -121,8 +127,25 @@ export function pageLib() {
     return { kind, payment, destructive, search, pw, roles, button: btnText, method };
   }
   /** Visible forms (form, [role=form]) with their fields, each tagged data-bsf="<form>-<field>" for the Node side. */
+  const ACTION = /save|send|submit|update|continue|apply|create|add|request|subscribe|sign ?(in|up)|log ?in|register|join|confirm|change|reset|book|order|buy|pay|top ?up|get|start|сохран|отправ/i;
+  /** Fields that live outside any <form>: grouped by the nearest box that also holds an action button (a settings card with "Save"). */
+  function pseudoForms() {
+    const boxes = new Set();
+    for (const f of Array.from(document.querySelectorAll(FIELD_SEL)).filter((x) => vis(x) && !x.closest("form, [role=form], [data-bsf-form]"))) {
+      let box = f.parentElement;
+      for (let d = 0; d < 6 && box && box !== document.body; d++, box = box.parentElement) {
+        const btn = Array.from(box.querySelectorAll("button, [role=button]")).find((b) => vis(b) && !isStepper(b) && ACTION.test(clean(b.textContent)) && !/show|hide|eye|toggle/i.test(b.getAttribute("aria-label") || ""));
+        if (btn) { if (!box.closest("header, nav, [role=search]")) boxes.add(box); break; }
+      }
+    }
+    // the innermost boxes only
+    return [...boxes].filter((b) => ![...boxes].some((o) => o !== b && b.contains(o)));
+  }
   function describe() {
-    const forms = Array.from(document.querySelectorAll("form, [role=form]")).filter((f) => vis(f) && !f.parentElement?.closest("form, [role=form]"));
+    document.querySelectorAll("[data-bsf-form=pseudo]").forEach((e) => e.removeAttribute("data-bsf-form"));
+    const real = Array.from(document.querySelectorAll("form, [role=form]")).filter((f) => vis(f) && !f.parentElement?.closest("form, [role=form]"));
+    const forms = [...real, ...pseudoForms()];
+    forms.forEach((f) => f.setAttribute("data-bsf-form", f.tagName === "FORM" || f.getAttribute("role") === "form" ? "form" : "pseudo"));
     return forms.map((form, i) => {
       form.setAttribute("data-bsf", String(i));
       const k = kindOf(form);
@@ -137,7 +160,7 @@ export function pageLib() {
   }
   /** Numeric / amount fields that are not inside a form (pricing calculators, top-up widgets). */
   function looseNumeric() {
-    return Array.from(document.querySelectorAll("input")).filter((f) => vis(f) && !f.closest("form, [role=form]") && numericKind(f)).map((f, j) => {
+    return Array.from(document.querySelectorAll("input")).filter((f) => vis(f) && !f.closest("form, [role=form], [data-bsf-form]") && numericKind(f)).map((f, j) => {
       f.setAttribute("data-bsf", `x-${j}`);
       // the action this field feeds: the nearest real button around it (not a +/- stepper)
       let box = f.parentElement, btn = null;
@@ -157,7 +180,7 @@ export function pageLib() {
   /** After an action: errors that appeared, inline (next to the field / inside its form) or elsewhere (toast). */
   function errorsFor(fieldId) {
     const f = document.querySelector(`[data-bsf="${fieldId}"]`);
-    const region = f && (f.closest("form, [role=form]") || (() => { let b = f.parentElement; for (let d = 0; d < 4 && b?.parentElement; d++) b = b.parentElement; return b; })());
+    const region = f && (f.closest("form, [role=form], [data-bsf-form]") || (() => { let b = f.parentElement; for (let d = 0; d < 4 && b?.parentElement; d++) b = b.parentElement; return b; })());
     const out = { inline: [], elsewhere: [], invalid: !!f && f.getAttribute("aria-invalid") === "true", native: !!f && f.validity && !f.validity.valid, value: f ? f.value : null };
     for (const line of fresh()) {
       if (!ERR.test(line)) continue;
@@ -268,7 +291,12 @@ export async function fillForm(page, form, overrides = {}) {
         if (f.required || /terms|privacy|agree|accept|consent|соглас/i.test(zone)) { await loc.check({ force: true, timeout: 2000 }).catch(() => {}); }
         continue;
       }
-      if (["radio", "file", "range", "color", "date", "datetime-local", "time", "month", "week", "search"].includes(f.role)) continue;
+      if (f.role === "radio") {
+        // one choice per group: the first option of a group that has none picked
+        await loc.evaluate((r) => { const g = r.name ? Array.from(document.getElementsByName(r.name)) : [r]; if (!g.some((x) => x.checked) && g[0] === r) r.click(); }).catch(() => {});
+        continue;
+      }
+      if (["file", "range", "color", "date", "datetime-local", "time", "month", "week", "search"].includes(f.role)) continue;
       if (f.role === "select") { await loc.evaluate((s) => { if (s.options.length > 1 && !s.value) { s.selectedIndex = 1; s.dispatchEvent(new Event("change", { bubbles: true })); } }); continue; }
       let v = overrides[f.id] ?? overrides[f.role];
       if (v === undefined) {
@@ -534,6 +562,17 @@ export const creditsUpFront = async (page) => (await lib(page), page.evaluate(()
     const m = named || bare;
     if (m && (balance === null || (named && !balanceNamed))) { const n = num(m[1]); if (Number.isFinite(n)) { balance = n; balanceEl = e; balanceNamed = !!named; } }
   }
+  if (balance === null) {
+    // a label and its figure in separate elements ("AVAILABLE" / "3,900" / "credits"), or a header chip linking to the wallet
+    for (const e of Array.from(document.querySelectorAll("body *")).filter((x) => x.children.length === 0 && B.vis(x) && /^(available( balance)?|balance|your balance|credit balance|wallet balance|credits available|current balance)$/i.test(text(x)))) {
+      const m = text(e.parentElement).replace(text(e), "").match(/^\s*[:·]?\s*([\d][\d,  ]*)/) || text(e.parentElement.parentElement || e).match(new RegExp(text(e).replace(/[.*+?^${}()|[\]\\]/g, "\\$&") + "\\s*[:·]?\\s*([\\d][\\d,  ]*)", "i"));
+      if (m) { balance = num(m[1]); balanceEl = e.parentElement; break; }
+    }
+    if (balance === null) {
+      const chip = Array.from(document.querySelectorAll("a[href*=wallet i], a[href*=credit i], a[href*=balance i], a[href*=billing i]")).find((x) => B.vis(x) && /^[\d][\d,  ]*\b/.test(text(x)));
+      if (chip) { balance = num(text(chip).match(/^[\d][\d,  ]*/)[0]); balanceEl = chip; }
+    }
+  }
   if (balance === null) return [{ id: "FM6", na: true, what: "no credit balance on this page", where: location.pathname }];
   const out = [];
   for (const b of Array.from(document.querySelectorAll("button, [role=button], a[href]")).filter(B.vis)) {
@@ -597,11 +636,23 @@ export async function forgotPassword(page, signInPath) {
     let o = null;
     for (let t = 0; t < 25; t++) { await page.waitForTimeout(100); o = await page.evaluate((i) => window.__bsf.outcome(i), f.index).catch(() => null); if (o && (o.lines.length || o.urlChanged)) break; }
     const said = o ? o.lines.join(" | ") : "";
-    if (!sent.length && !(o && o.lines.length)) out.push({ id: "FM7", what: `the reset form at ${where} sends nothing and says nothing — submit the email and confirm [FM7, forgot-pw]`, where: f.where, selector: f.selector });
+    if (sent.some((x) => x.action)) out.push({ id: "FM7", na: true, what: `the reset form at ${where} posts a Server Action — its real confirmation cannot be imitated; check the wording by hand (neutral: "If an account exists…")`, where: f.where });
+    else if (!sent.length && !(o && o.lines.length)) out.push({ id: "FM7", what: `the reset form at ${where} sends nothing and says nothing — submit the email and confirm [FM7, forgot-pw]`, where: f.where, selector: f.selector });
     else if (!NEUTRAL_RE.test(said) && !(o && o.urlChanged)) out.push({ id: "FM7", soft: true, what: `after asking for a reset link the page says ${said ? `"${said.slice(0, 80)}"` : "nothing"} — confirm neutrally: "If an account exists for that email, we've sent a reset link" [FM7, forgot-pw]`, where: f.where, selector: f.selector });
     if (/no (account|user)|not found|doesn'?t exist|not registered/i.test(said)) out.push({ id: "FM7", what: `the reset form says "${said.slice(0, 60)}" — it tells strangers which emails have accounts; answer the same way for every address [FM7]`, where: f.where });
   } finally { await sb.stop(); }
   return out;
+}
+
+/** Settings often hide the change-password form behind a "Change password" button / dialog: open it (no request). */
+export async function openPasswordChange(page) {
+  const has = async () => (await describeForms(page)).some((f) => f.kind === "password-change");
+  if (await has()) return true;
+  const btn = page.locator("button, [role=button], a[href^='#']").filter({ hasText: /^\s*(change|update|set|reset) (your |my )?password\s*$/i }).filter({ visible: true }).first();
+  if (!(await btn.count())) return false;
+  await btn.click().catch(() => {});
+  await page.waitForTimeout(700);
+  return has();
 }
 
 /** FM7b — change password (signed in) rejects the current password as the new one before sending; has a confirm field. */
@@ -644,7 +695,7 @@ export const passwordEyes = async (page) => (await lib(page), page.evaluate(() =
       wrap = up;
     }
     const pool = wrap === inp ? [inp.previousElementSibling, inp.nextElementSibling].filter(Boolean).flatMap((x) => (x.matches("button, [role=button]") ? [x] : Array.from(x.querySelectorAll("button, [role=button]")))) : Array.from(wrap.querySelectorAll("button, [role=button]"));
-    eye = pool.find((b) => B.vis(b) && /show|hide|password|eye|reveal|visib|показ|скры/i.test([b.getAttribute("aria-label"), b.getAttribute("title"), b.textContent, b.className, b.querySelector("svg")?.getAttribute("class")].join(" ")) && !/submit|sign|log ?in|continue|forgot|generate/i.test(b.textContent || ""));
+    eye = pool.find((b) => B.vis(b) && /show|hide|password|eye|reveal|visib|показ|скры/i.test([b.getAttribute("aria-label"), b.getAttribute("title"), b.textContent, b.className, b.querySelector("svg")?.getAttribute("class")].join(" ")) && b.getAttribute("type") !== "submit" && !/submit|sign|log ?in|continue|forgot|generate|update|save|change|reset|create|confirm/i.test(b.textContent || ""));
     if (!eye) out.push({ id: "FM7", what: `password field "${B.labelOf(inp)}" has no show/hide eye of its own — add the eye inside this field (tabindex=-1) [FM7, pw-toggle]`, where: B.where(inp), selector: B.selector(inp) });
   }
   return out;

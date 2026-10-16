@@ -1,0 +1,12 @@
+<!doctype html><html><body><main><h1>Contact</h1>
+<form id="c" novalidate><label for="n">Name</label><input id="n" autocomplete="name">
+<label for="e">Email</label><input id="e" type="email">
+<fieldset><legend>Subject</legend><label><input type="radio" name="subject" value="a" class="sr"> Technical</label><label><input type="radio" name="subject" value="b"> Billing</label><p id="es"></p></fieldset>
+<label for="s2">Subject line (optional)</label><input id="s2" name="subjectLine" placeholder="Credits not returned">
+<label for="m">Message</label><textarea id="m"></textarea><p id="em"></p>
+<button type="submit">Send message</button><p id="st" role="status"></p></form>
+<script>document.getElementById('c').addEventListener('submit', async (e) => { e.preventDefault(); let bad = false;
+if (!document.querySelector('input[name=subject]:checked')) { document.getElementById('es').textContent = 'Choose a subject.'; bad = true; } else document.getElementById('es').textContent = '';
+if (bad) return;
+const r = await fetch('/api/contact', { method: 'POST', body: '{}' }); document.getElementById('st').textContent = r.ok ? 'Message sent.' : 'Could not send. Try again.'; });</script>
+</main></body></html>
