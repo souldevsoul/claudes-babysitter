@@ -3269,3 +3269,5 @@ export async function translationSurvives(page, max = 10) {
 
 // shared with playwright/checks/run.js (states, locales, scroll checks): the opener discovery of interactionMotion
 export { ixProbe, settle, uncover };
+// shared with playwright/checks/layout.js: the mobile-menu opener
+export { openMobileMenu, closeMobileMenu };

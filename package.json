@@ -28,7 +28,7 @@
     "node": ">=22.18"
   },
   "scripts": {
-    "test": "npm run test:eslint && npm run test:stylelint && npm run test:check && npm run test:tt && npm run test:team && npm run test:acceptance && npm run test:run && npm run test:content && npm run test:studio",
+    "test": "npm run test:eslint && npm run test:stylelint && npm run test:check && npm run test:tt && npm run test:team && npm run test:acceptance && npm run test:run && npm run test:content && npm run test:layout && npm run test:studio",
     "test:eslint": "node rules/eslint/test.mjs",
     "test:stylelint": "node rules/stylelint/test.mjs",
     "check": "node bin/ui-check.mjs",
@@ -43,7 +43,8 @@
     "test:team": "node test/team.test.mjs",
     "test:acceptance": "node test/acceptance.test.mjs",
     "test:run": "for f in test/run-*.test.mjs; do node \"$f\" || exit 1; done",
-    "test:content": "node test/content-lint.test.mjs && node test/content-runtime.test.mjs"
+    "test:content": "node test/content-lint.test.mjs && node test/content-runtime.test.mjs",
+    "test:layout": "node test/layout.test.mjs"
   },
   "dependencies": {
     "@clack/prompts": "^1.8.1",

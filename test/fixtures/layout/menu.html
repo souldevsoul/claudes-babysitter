@@ -1,0 +1,20 @@
+<!doctype html><html><head><title>Home | Acme</title><meta name="viewport" content="width=device-width">
+<style>
+ body{margin:0;font-family:sans-serif} header{display:flex;justify-content:space-between;padding:12px;align-items:center}
+ .links{display:none} #panel{position:fixed;inset:0;background:#fff;display:none;padding:16px}
+ #panel.open{display:block} #panel a{display:block;padding:10px 0;color:#333;text-decoration:none}
+ #panel a[aria-current=page]{ACTIVE}
+</style></head>
+<body>
+<header>
+  <a href="/"><svg width="24" height="24" class="logo"><rect width="24" height="24"/></svg></a>
+  <nav class="links"><a href="/" aria-current="page">Home</a><a href="/pricing">Pricing</a><a href="/about">About</a></nav>
+  <button id="burger" aria-label="Open menu" aria-expanded="false" onclick="document.getElementById('panel').classList.add('open');this.setAttribute('aria-expanded','true')"><svg width="20" height="20"><path d="M0 5h20M0 10h20M0 15h20" stroke="#000"/></svg></button>
+</header>
+<div id="panel" role="dialog" aria-label="Menu">
+  <div style="display:flex;justify-content:space-between"><img id="menu-logo" class="logo" alt="Acme" width="60" height="20" src="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='60' height='20'/%3E">
+  <button aria-label="Close menu" onclick="document.getElementById('panel').classList.remove('open')">×</button></div>
+  <a href="/" aria-current="page">Home</a><a href="/pricing">Pricing</a><a href="/about">About</a><a href="/faq">FAQ</a>
+</div>
+<main><h1>Acme</h1><p>Hello</p></main>
+</body></html>
