@@ -29,7 +29,7 @@
   },
   "scripts": {
     "test": "npm run test:eslint && npm run test:stylelint && npm run test:check && npm run test:tt && npm run test:team && npm run test:acceptance && npm run test:run && npm run test:content && npm run test:layout && npm run test:studio && npm run test:forms",
-    "test:eslint": "node rules/eslint/test.mjs",
+    "test:eslint": "node rules/eslint/test.mjs && node rules/eslint/test-forms.mjs",
     "test:stylelint": "node rules/stylelint/test.mjs",
     "check": "node bin/ui-check.mjs",
     "check:changed": "node bin/ui-check.mjs --changed --format agent",

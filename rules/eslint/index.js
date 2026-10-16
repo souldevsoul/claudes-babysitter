@@ -10,6 +10,8 @@ import { overlayMotion } from "./rules/motion.js";
 import { noDeadClasses } from "./rules/dead-classes.js";
 import { kitInteractive } from "./rules/interactive.js";
 import { noDynamicClasses, noCssInJsLiterals } from "./rules/ast.js";
+import { numericInputBounds } from "./rules/numeric-input-bounds.js";
+import { mutationRefreshesUi } from "./rules/mutation-refreshes-ui.js";
 import { DEFAULT_KIT, DEFAULT_THEME_PATHS } from "./util.js";
 
 const rules = {
@@ -37,6 +39,8 @@ const rules = {
   "overlay-motion": overlayMotion,
   "no-dead-classes": noDeadClasses,
   "kit-interactive": kitInteractive,
+  "numeric-input-bounds": numericInputBounds,
+  "mutation-refreshes-ui": mutationRefreshesUi,
 };
 
 const plugin = { meta: { name: "eslint-plugin-babysitter", version: "3.3.0" }, rules, configs: {} };
@@ -82,6 +86,9 @@ plugin.configs.create = (project = {}) => {
         "ui/overlay-motion": "error",
         "ui/no-dead-classes": "error",
         "ui/kit-interactive": ["error", { uiKitPaths }],
+        // FORMS (docs/checks-forms.md): FM1 bounds are a rule; FM5 is a heuristic, so it warns
+        "ui/numeric-input-bounds": "error",
+        "ui/mutation-refreshes-ui": "warn",
       },
     },
     {
