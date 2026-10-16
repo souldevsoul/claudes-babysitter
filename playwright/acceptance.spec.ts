@@ -47,7 +47,8 @@ for (const route of ROUTES) {
   test.describe(`acceptance ${route.auth ? `[signed-in${route.role ? `: ${route.role}` : ""}] ` : ""}${route.path}`, () => {
     if (route.auth) test.use({ storageState: storageFor(route.role) });
     const r = route.path;
-    test.beforeEach(() => twoWidths());
+    // N6 is a layout check (a label that fits at 390 can be cut at 360 or 768): it runs at every viewport
+    test.beforeEach(({}, info) => { if (!/^N6 /.test(info.title)) twoWidths(); });
 
     test("B1 no build notes or self-justifying copy [BQA 5]", async ({ page }) => {
       test.skip(!on("B1"), why("B1"));
