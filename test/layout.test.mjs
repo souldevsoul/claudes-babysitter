@@ -211,6 +211,11 @@ try {
     assert.ok(r.ok, "a compact bar replaces the header");
     r = await run({ H: "300" });
     assert.equal(r.applicable, false);
+    // sprout.boutique: a ticker strip above the header bar; the bar itself scrolls away
+    await page.unrouteAll();
+    await load(page, fixture("sticky.html").replace('<header id="h">', '<div style="height:36px;background:#000"></div><header id="h">'), { vars: { H: "3000", HEAD: "", JS: "" } });
+    r = await L.stickyHeader(page);
+    assert.ok(r.applicable && !r.ok, JSON.stringify(r));
   });
   await test("4.3 long lists: 30 cards and 25 table rows with no pager are soft; 'Load more', prose bullets, a marquee and 20 items pass", async (page) => {
     const rep = (n, f) => Array.from({ length: n }, (_, i) => f(i)).join("");
@@ -250,6 +255,8 @@ try {
       writeFileSync(registry, JSON.stringify(db));
       r = await L.favicon(page, { product: "a", registry });
       assert.match(r.hard.map((f) => f.what).join(" "), /same file as other \(https:\/\/other.example\)/, "another product with the same icon");
+      assert.ok(L.sameProduct({ product: "vertex", origin: "http://localhost:3000" }, { product: "vertex.boutique", origin: "https://vertex.boutique" }), "one product under its package name and its host");
+      assert.ok(!L.sameProduct({ product: "sprout", origin: "https://sprout.boutique" }, { product: "vertex", origin: "https://vertex.boutique" }));
       await page.unrouteAll(); await load(page, page1('<link rel="icon" href="/icon.svg">'), { icons: { "/icon.svg": ["image/svg+xml", own] } });
       r = await L.favicon(page, { product: "a", registry });
       assert.match(r.soft.map((f) => f.what).join(" "), /apple-touch-icon/);
@@ -262,6 +269,8 @@ try {
     assert.equal(L.orderOf(["Jan", "Feb", "Mar", "Apr"]), null);
     assert.equal(L.orderOf(["Zebra", "Yak", "Ant"]), null, "descending is an order");
     assert.equal(L.orderOf(["Billing", "Account", "Technical", "Other"]) !== null, true);
+    assert.equal(L.orderOf(["EUR", "USD", "AZN", "CAD", "GBP", "KZT"]), null, "favourites pinned on top, then A–Z");
+    assert.notEqual(L.orderOf(["EUR", "USD", "SAR", "MAD", "CAD", "LKR"]), null, "truelogos currency list: no order after the pinned ones");
   });
   await test("1.2 dropdowns on a page: unsorted native/custom lists are soft; an unmarked or hidden selected option and ticks on both sides are hard", async (page) => {
     const opt = (labels, sel, tick) => labels.map((l) => `<div role="option" aria-selected="${l === sel}"><span>${l}</span>${l === sel && tick ? `<svg class="tick" viewBox="0 0 12 12"><path d="M1 6l3 3 7-7" stroke="#000" fill="none"/></svg>` : ""}</div>`).join("");
@@ -313,6 +322,11 @@ try {
     assert.equal(L.moneyIssues([t("0,022 USD", { unit: true, fontSize: 14 })]).hard.length, 0, "a 3-decimal unit price is soft");
     assert.equal(L.moneyIssues([t("0,022 USD", { unit: true, fontSize: 14 })]).soft.length, 1);
     assert.equal(L.moneyIssues([t("BHD 1.250")]).hard.length, 0, "BHD has three decimals");
+    assert.equal(L.moneyIssues([t("R$ 10,50"), t("€20,000", { fontSize: 14 })]).hard.filter((f) => /decimals/.test(f.what)).length, 0, "another currency's comma decimals don't make €20,000 a 3-decimal amount (truelogos BRL)");
+    assert.match(L.moneyIssues([t("€1,50"), t("€7,489")]).hard.map((f) => f.what).join(" "), /"€7,489" has 3 decimals/, "the same currency's comma decimals do");
+    assert.deepEqual([L.moneyIssues([t("$0.0085", { unit: true, fontSize: 14 })]).hard.length, L.moneyIssues([t("$0.0085", { unit: true, fontSize: 14 })]).soft.length], [0, 1], "a sub-cent per-credit rate is soft (sprout)");
+    assert.equal(L.moneyIssues([t("$0.0089999", { unit: true, fontSize: 14 })]).hard.length, 1, "float garbage in a unit price is hard");
+    assert.deepEqual([L.moneyIssues([t("€0.89165", { rate: true })]).hard.length, L.moneyIssues([t("€0.89165", { rate: true })]).soft.length], [0, 1], "an exchange rate is soft (praxis)");
     assert.equal(L.moneyIssues([t("€8.93"), t("€17.86")], { baseNice: 1 }).soft.length, 1, "dirty conversion");
     assert.equal(L.moneyIssues([t("€8.99"), t("€17.90")], { baseNice: 1 }).soft.length, 0);
   });

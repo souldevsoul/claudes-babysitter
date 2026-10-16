@@ -53,7 +53,9 @@ didn't open) is listed under a "not tested" annotation. Nothing is dropped witho
 
 There is one file per machine: `~/.babysitter/favicons.json`. Set `BABYSITTER_FAVICON_REGISTRY` to use a different
 path. It maps the sha256 of each favicon file to the products that served it. A file already registered by another
-product (a different name and a different origin) is a hard finding. Set `layout.registerFavicon: false` to check
+product is a hard finding. Entries count as the same product when the name, the origin, or a distinctive name
+token matches: `vertex` on localhost and `vertex.boutique` live are one product. Generic tokens like `app`,
+`www` and `vercel` don't count. Keep `name` in `babysitter.config.json` stable. Set `layout.registerFavicon: false` to check
 the favicon without recording it.
 
 ## Measurer traps handled

@@ -696,7 +696,8 @@ export async function stickyHeader(page, distance = 1000) {
   await ensure(page);
   const pre = await page.evaluate(() => {
     const W = window, L = W.__ly;
-    const h = L.header().find((e) => W.__uiVisible(e) && e.getBoundingClientRect().top <= 8 && e.getBoundingClientRect().height <= 220);
+    // the header bar may sit under a promo/marquee strip (sprout.boutique: a 36 px ticker above the nav)
+    const h = L.header().find((e) => W.__uiVisible(e) && e.getBoundingClientRect().top <= 120 && e.getBoundingClientRect().height <= 220);
     if (!h) return null;
     h.setAttribute("data-bs-head", "");
     return { where: W.__uiDescribe(h), selector: W.__uiSelector(h), human: W.__uiHuman(h), room: document.documentElement.scrollHeight - innerHeight };
@@ -779,6 +780,13 @@ export const DEFAULT_FAVICONS = {
   "2d7a310283d6f9cc753210d83224cd6db6348cb82a5536348884e5831d46203f": "the Astro default",
   "1057b17aec08a7191d134000203947f195a8aa7c84c39f1164cee8d01279762a": "the Nuxt default",
 };
+const COMMON = new Set(["www", "app", "apps", "web", "site", "dev", "prod", "staging", "vercel", "netlify", "localhost", "local", "next", "frontend", "client"]);
+const ids = (e) => {
+  const host = (() => { try { return new URL(e.origin).hostname; } catch { return ""; } })();
+  return new Set([...String(e.product || "").toLowerCase().split(/[^a-z0-9]+/), ...host.split(".")[0].toLowerCase().split(/[^a-z0-9]+/)].filter((t) => t.length >= 4 && !COMMON.has(t)));
+};
+/** One product seen under two names (package "vertex" locally, host "vertex.boutique" live) is still one product. */
+export const sameProduct = (a, b) => a.product === b.product || a.origin === b.origin || [...ids(a)].some((t) => ids(b).has(t));
 export const FAVICON_REGISTRY = process.env.BABYSITTER_FAVICON_REGISTRY || resolve(homedir(), ".babysitter", "favicons.json");
 /**
  * Hard: no favicon at all (none declared and /favicon.ico missing), a declared icon that is not served (non-200 or
@@ -822,7 +830,7 @@ export async function favicon(page, { product = "", registry = FAVICON_REGISTRY,
     try { if (existsSync(registry)) db = JSON.parse(readFileSync(registry, "utf8")); } catch { db = {}; }
     for (const s of seen) {
       if (DEFAULT_FAVICONS[s.sha]) continue;
-      const others = (db[s.sha] || []).filter((e) => e.product !== name && e.origin !== origin);
+      const others = (db[s.sha] || []).filter((e) => !sameProduct(e, { product: name, origin }));
       if (others.length) hard.push({ what: `the favicon ${s.href} is the same file as ${others.map((o) => `${o.product} (${o.origin})`).join(", ")} — each product needs its own mark [6.11]`, where: "<head> link rel=icon" });
       if (register && !(db[s.sha] || []).some((e) => e.product === name)) (db[s.sha] = db[s.sha] || []).push({ product: name, origin, seen: new Date().toISOString().slice(0, 10) });
     }
@@ -848,6 +856,8 @@ export function orderOf(labels) {
   while (xs.length && PLACEHOLDER.test(xs[0])) xs = xs.slice(1);
   while (xs.length && LAST.test(xs[xs.length - 1])) xs = xs.slice(0, -1);
   if (xs.length < 3) return null;
+  // a few favourites pinned on top ("EUR, USD", then the rest A–Z) is an order too
+  for (let k = 1; k <= 3 && xs.length - k >= 4; k++) if (orderOf(xs.slice(k)) === null) return null;
   const mono = (v) => v.every((x, i) => i === 0 || x >= v[i - 1]) || v.every((x, i) => i === 0 || x <= v[i - 1]);
   const keyed = (f) => { const v = xs.map(f); return v.every((x) => x !== null && x !== undefined && !Number.isNaN(x)) ? mono(v) : false; };
   const coll = new Intl.Collator(undefined, { sensitivity: "base", numeric: true });
@@ -909,7 +919,7 @@ export async function dropdowns(page, max = 8) {
       const look = (o) => { const cs = getComputedStyle(o); const inner = o.querySelector("span, div"); const ics = inner ? getComputedStyle(inner) : cs; return [cs.backgroundColor, cs.color, cs.fontWeight, ics.color, ics.fontWeight, cs.boxShadow, cs.borderLeftColor].join("|"); };
       const icons = (o) => Array.from(o.querySelectorAll("svg, img, [class*=check i], [data-state=checked]")).filter((x) => { const b = x.getBoundingClientRect(); const cs = getComputedStyle(x); return b.width > 2 && b.height > 2 && cs.visibility !== "hidden" && Number(cs.opacity) > 0.1; });
       const tick = (o) => { const txt = o.textContent || ""; return /[✓✔☑]/.test(txt); };
-      const out = { labels: opts.map((o) => L.clean(o.textContent)), sort: SORTRE.test(label), where: L.at(trig, ""), selected: null };
+      const out = { labels: opts.map((o) => L.clean(o.innerText || o.textContent)), sort: SORTRE.test(label), where: L.at(trig, ""), selected: null };
       if (sel.length) {
         const s = sel[0];
         const others = opts.filter((o) => o !== s);
@@ -950,6 +960,8 @@ export async function dropdowns(page, max = 8) {
 export async function hoverFeedback(page, max = 40) {
   await ensure(page);
   const hard = [], soft = [], notTested = [];
+  // a touch screen has no hover (Tailwind v4 wraps hover: in @media (hover: hover)): nothing to judge here
+  if (await page.evaluate(() => matchMedia("(hover: none)").matches)) return { hard, soft, notTested: ["touch screen: no hover"] };
   const list = await page.evaluate(() => {
     const W = window;
     for (const e of document.querySelectorAll("[data-bs-hv]")) e.removeAttribute("data-bs-hv");
@@ -958,6 +970,16 @@ export async function hoverFeedback(page, max = 40) {
     const seen = new Set();
     for (const e of document.querySelectorAll("button, [role=button], a[href], [onclick], [role=link], [tabindex='0']")) {
       if (!W.__uiVisible(e) || disabled(e) || seen.has(e)) continue;
+      // a selected chip / pressed toggle / active tab keeps its selected look under the pointer by design
+      if (e.matches("[aria-pressed=true], [aria-selected=true], [aria-checked=true], [data-state=active], [data-state=on], [data-state=checked], [data-active=true]")) continue;
+      // the one filled pill in a row of look-alike toggles ("en | az | kk", praxis) is the selected one, even unmarked
+      const sibs = e.parentElement ? Array.from(e.parentElement.children).filter((x) => x !== e && x.tagName === e.tagName && W.__uiVisible(x)) : [];
+      if (sibs.length >= 2 && sibs.length <= 6) { // three or more: a Cancel | Save pair is not a toggle row
+        const bg = (x) => getComputedStyle(x).backgroundColor + getComputedStyle(x).color;
+        if (sibs.every((x) => bg(x) !== bg(e)) && new Set(sibs.map(bg)).size === 1 && Math.abs(e.getBoundingClientRect().height - sibs[0].getBoundingClientRect().height) < 2) continue;
+      }
+      // the current page's nav item keeps its active look under the pointer by design
+      if (e.getAttribute("aria-current") === "page" || (e.closest("nav, header") && e.matches("a[href]") && window.__ly.dest(e) === (location.pathname.replace(/\/+$/, "") || "/"))) continue;
       const r = e.getBoundingClientRect();
       if (r.width < 16 || r.height < 16) continue;
       let kind = null;
@@ -1097,21 +1119,29 @@ const nice = (p) => !p.decimals || /^(0+|5|50|9|90|95|99|49)$/.test(p.decimals) 
  */
 export function moneyIssues(tokens, { baseNice = null, label = "" } = {}) {
   const hard = [], soft = [];
+  // "7.489": three decimals or a thousands group? Decided by how the same currency writes its unambiguous decimals on
+  // this page (truelogos in BRL: "R$ 10,50" next to a static "€20,000" — the euro amount is not 20 with 3 decimals)
   const first = tokens.map((t) => ({ t, p: parseMoney(t.raw) })).filter((x) => x.p);
-  const decs = new Set(first.filter((x) => x.p.decimal && x.p.decimals.length <= 2).map((x) => x.p.decimal));
-  const pageDec = decs.size === 1 ? [...decs][0] : null;
-  const all = tokens.map((t) => ({ t, p: parseMoney(t.raw, pageDec) })).filter((x) => x.p);
+  const decOf = new Map();
+  for (const x of first) if (x.p.decimal && x.p.decimals.length <= 2) { if (!decOf.has(x.p.code)) decOf.set(x.p.code, new Set()); decOf.get(x.p.code).add(x.p.decimal); }
+  const all = tokens.map((t) => { const p0 = parseMoney(t.raw); const d = p0 && decOf.get(p0.code); return { t, p: parseMoney(t.raw, d && d.size === 1 ? [...d][0] : null) }; }).filter((x) => x.p);
+  const units = [];
   const at = (x) => ({ where: x.t.where, selector: x.t.selector, human: x.t.human });
   const pre = label ? `${label}: ` : "";
   for (const x of all) {
     const p = x.p, n = p.decimals.length;
     const allowed = ZERO_DEC.has(p.code) ? 0 : THREE_DEC.has(p.code) ? 3 : 2;
     if (n > allowed) {
-      if (n >= 4 || allowed === 0 || !(x.t.unit && p.value < 1)) hard.push({ what: `${pre}"${p.raw}" has ${n} decimals — ${allowed === 0 ? `${p.code} is shown without decimals` : `round to ${allowed} (Intl.NumberFormat with the currency's minor unit)`}${n >= 4 ? "; this looks like a raw floating-point conversion" : ""} [money]`, ...at(x) });
-      else soft.push({ what: `${pre}unit price "${p.raw}" has ${n} decimals — round it, or price the unit in a larger quantity [money]`, ...at(x) });
+      // a per-unit rate below 1 ("$0.0085 /credit", sprout.boutique) may need sub-cent digits: soft, unless it is float
+      // garbage (6+ decimals, 0.0089999…)
+      // an exchange rate ("$1 = €0.89165") is quoted with more digits on purpose: soft
+      if (x.t.rate && n < 6) soft.push({ what: `${pre}exchange rate "${p.raw}" is shown with ${n} decimals — round it for people (2–4 decimals) [money]`, ...at(x) });
+      else if (n >= 6 || allowed === 0 && !x.t.unit || !(x.t.unit && p.value < 1)) hard.push({ what: `${pre}"${p.raw}" has ${n} decimals — ${allowed === 0 ? `${p.code} is shown without decimals` : `round to ${allowed} (Intl.NumberFormat with the currency's minor unit)`}${n >= 4 ? "; this looks like a raw floating-point conversion" : ""} [money]`, ...at(x) });
+      else units.push(x);
     }
     if (p.value >= 1000 && !p.group && p.intPart.length >= 4) hard.push({ what: `${pre}"${p.raw}" has no thousands separator — group digits from 4 (1,000 / 1 000) [money]`, ...at(x) });
   }
+  if (units.length) { const ex = [...new Set(units.map((x) => x.p.raw))]; soft.push({ what: `${pre}${units.length} unit price(s) with 3 decimals (${ex.slice(0, 5).join(", ")}${ex.length > 5 ? ", …" : ""}) — round them, or price the unit in a larger quantity ("per 100 credits") [money]`, ...at(units[0]) }); }
   const byCode = new Map();
   for (const x of all) { if (!byCode.has(x.p.code)) byCode.set(x.p.code, new Map()); const m = byCode.get(x.p.code); if (!m.has(x.p.style)) m.set(x.p.style, x); }
   for (const [code, styles] of byCode) if (styles.size > 1) {
@@ -1123,7 +1153,7 @@ export function moneyIssues(tokens, { baseNice = null, label = "" } = {}) {
   const grpSeen = new Map(); for (const x of all) if (x.p.group && !grpSeen.has(x.p.group)) grpSeen.set(x.p.group, x);
   if (grpSeen.size > 1) { const ex = [...grpSeen.values()]; hard.push({ what: `${pre}two thousands separators on one page: ${ex.map((x) => `"${x.p.raw}"`).join(" and ")} [money]`, ...at(ex[1]) }); }
   // dirty conversions: prices shown large (packs, plans) were round in the base currency and are not here
-  const big = all.filter((x) => x.t.fontSize >= 18 && !x.t.unit);
+  const big = all.filter((x) => x.t.fontSize >= 18 && !x.t.unit && !x.t.rate);
   if (baseNice !== null && baseNice >= 0.8 && big.length >= 2) {
     const dirty = big.filter((x) => !nice(x.p));
     if (dirty.length / big.length > 0.5) soft.push({ what: `${pre}converted prices are not rounded (${dirty.slice(0, 4).map((x) => x.p.raw).join(", ")}${dirty.length > 4 ? ", …" : ""}) while the base currency's were — round packs to the currency's minor unit or a nice step (x.99 / x.90 / whole) [money]`, ...at(dirty[0]) });
@@ -1149,7 +1179,8 @@ const moneyTokens = (src) => {
   }
   function tok(b, m, txt) {
     const after = txt.slice(m.index + m[0].length, m.index + m[0].length + 14);
-    return { raw: m[0], fontSize: parseFloat(getComputedStyle(b).fontSize), unit: /^\s*(\/|per\b|за\b|each|\/\s*(hr|h|mo|month|yr|credit|token|gb|unit))/i.test(after) || /per (credit|token|unit)/i.test(txt), inHeader: !!b.closest("header, [role=banner]"), ...L.at(b, "") };
+    const before = txt.slice(Math.max(0, m.index - 3), m.index);
+    return { raw: m[0], fontSize: parseFloat(getComputedStyle(b).fontSize), rate: /=\s*$/.test(before), unit: /^\s*(\/|per\b|за\b|each|\/\s*(hr|h|mo|month|yr|credit|token|gb|unit))/i.test(after) || /per (credit|token|unit)/i.test(txt), inHeader: !!b.closest("header, [role=banner]"), ...L.at(b, "") };
   }
   const credits = /\bcredits?\b|кредит|kredit/i.test(document.body.innerText);
   const headerCredits = L.header().some((h) => /\bcredits?\b|кредит|kredit/i.test(h.innerText));
@@ -1162,8 +1193,8 @@ const findSwitcher = (codes) => {
   for (const e of document.querySelectorAll("[data-bs-cur]")) e.removeAttribute("data-bs-cur");
   const sel = Array.from(document.querySelectorAll("select")).find((s) => Array.from(s.options).filter((o) => CUR.test(o.text) || CUR.test(o.value)).length >= 2);
   if (sel) { sel.setAttribute("data-bs-cur", ""); const so = sel.options[sel.selectedIndex]; const cm = so && (so.text.match(CUR) || so.value.match(CUR)); return { kind: "native", current: cm ? cm[1] : null, options: Array.from(sel.options).filter((o) => CUR.test(o.text) || CUR.test(o.value)).map((o) => ({ value: o.value, code: (o.text.match(CUR) || o.value.match(CUR))[1] })) }; }
-  const btn = Array.from(document.querySelectorAll("button, [role=combobox], [aria-haspopup]")).find((b) => W.__uiVisible(b) && CUR.test(b.textContent || "") && (b.textContent || "").trim().length <= 16);
-  if (btn) { btn.setAttribute("data-bs-cur", ""); return { kind: "custom", current: btn.textContent.match(CUR)[1] }; }
+  const btn = Array.from(document.querySelectorAll("button, [role=combobox], [aria-haspopup]")).find((b) => W.__uiVisible(b) && CUR.test(b.innerText || "") && (b.innerText || "").trim().length <= 16);
+  if (btn) { btn.setAttribute("data-bs-cur", ""); return { kind: "custom", current: btn.innerText.match(CUR)[1] }; }
   // a segmented row of currency buttons
   const segs = Array.from(document.querySelectorAll("button, [role=radio], [role=tab]")).filter((b) => W.__uiVisible(b) && /^\W*([A-Z]{3})\W*$/.test((b.textContent || "").trim()) && CUR.test(b.textContent));
   if (segs.length >= 2 && segs.every((s) => s.parentElement === segs[0].parentElement)) { segs.forEach((s) => s.setAttribute("data-bs-cur-opt", s.textContent.match(CUR)[1])); return { kind: "segmented", options: segs.map((s) => ({ code: s.textContent.match(CUR)[1] })), current: (segs.find((s) => s.getAttribute("aria-pressed") === "true" || s.getAttribute("aria-checked") === "true" || s.getAttribute("data-state") === "on" || s.getAttribute("aria-selected") === "true") || segs[0]).textContent.match(CUR)[1] }; }
@@ -1195,9 +1226,9 @@ export async function moneyFormat(page, max = 8) {
     return page.evaluate((codes) => {
       const CUR = new RegExp(`(?<![A-Za-z])(${codes})(?![A-Za-z])`);
       const opts = Array.from(document.querySelectorAll("[role=option], [role=menuitem], [role=menuitemradio], [role=listbox] li, [data-radix-popper-content-wrapper] button, [role=dialog] button"))
-        .filter((o) => window.__uiVisible(o) && CUR.test(o.textContent || "") && !o.hasAttribute("data-bs-cur"));
-      for (const o of opts) o.setAttribute("data-bs-cur-opt", o.textContent.match(CUR)[1]);
-      return opts.map((o) => ({ code: o.textContent.match(CUR)[1] }));
+        .filter((o) => window.__uiVisible(o) && CUR.test(o.innerText || "") && !o.hasAttribute("data-bs-cur"));
+      for (const o of opts) o.setAttribute("data-bs-cur-opt", o.innerText.match(CUR)[1]);
+      return opts.map((o) => ({ code: o.innerText.match(CUR)[1] }));
     }, CODES);
   };
   const choose = async (code) => {
@@ -1211,6 +1242,7 @@ export async function moneyFormat(page, max = 8) {
   try {
     if (sw.kind === "custom") { options = await openCustom(); await page.keyboard.press("Escape").catch(() => {}); await page.waitForTimeout(200); }
     const codes = [...new Set((options || []).map((o) => o.code))].filter((c) => c !== sw.current);
+    if (!codes.length) notTested.push(`a currency switcher (${sw.kind}, showing ${sw.current}) was found but no other currency could be found in it`);
     for (const [i, code] of codes.entries()) {
       if (i >= max) { notTested.push(`${codes.length - max} more currencies not switched to (cap ${max})`); break; }
       try { await choose(code); } catch (e) { notTested.push(`${code}: could not switch (${String(e.message).split("\n")[0]})`); continue; }
