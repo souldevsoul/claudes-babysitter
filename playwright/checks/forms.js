@@ -118,8 +118,8 @@ export function pageLib() {
     else if (pw >= 2 || (pw === 1 && roles.includes("name")) || (pw === 1 && /sign ?up|register|create (an |your )?account|get started|join/i.test(btnText))) kind = "signup";
     else if (pw === 1) kind = "signin";
     // passwordless (magic link / code): told apart by the button and the page
-    else if (/sign ?in|log ?in|magic link|continue with e-?mail|send (me )?(a )?(login|sign-?in) (link|code)|войти/i.test(btnText) || (/^\/(login|log-in|signin|sign-in)(\/|$)/i.test(location.pathname) && roles.includes("email") && !roles.includes("message"))) kind = "signin";
-    else if (/sign ?up|register|create (an |your |my )?account|регистр/i.test(btnText) || (/^\/(register|signup|sign-up)(\/|$)/i.test(location.pathname) && roles.includes("email") && !roles.includes("message"))) kind = "signup";
+    else if (roles.includes("email") && /sign ?in|log ?in|magic link|continue with e-?mail|send (me )?(a )?(login|sign-?in) (link|code)|войти/i.test(btnText) || (/^\/(login|log-in|signin|sign-in)(\/|$)/i.test(location.pathname) && roles.includes("email") && !roles.includes("message"))) kind = "signin";
+    else if (roles.includes("email") && /sign ?up|register|create (an |your |my )?account|регистр/i.test(btnText) || (/^\/(register|signup|sign-up)(\/|$)/i.test(location.pathname) && roles.includes("email") && !roles.includes("message"))) kind = "signup";
     else if (roles.length && roles.every((r) => r === "email" || r === "checkbox")) kind = /reset|forgot|recover|send (me )?(a )?(reset |magic )?link/i.test(text) ? "forgot" : "newsletter";
     else if (roles.includes("message") || roles.includes("subject")) kind = "contact";
     else if (roles.includes("name") && /setting|profile|account/i.test(location.pathname + " " + text)) kind = "profile";
@@ -181,7 +181,10 @@ export function pageLib() {
   function errorsFor(fieldId) {
     const f = document.querySelector(`[data-bsf="${fieldId}"]`);
     const region = f && (f.closest("form, [role=form], [data-bsf-form]") || (() => { let b = f.parentElement; for (let d = 0; d < 4 && b?.parentElement; d++) b = b.parentElement; return b; })());
-    const out = { inline: [], elsewhere: [], invalid: !!f && f.getAttribute("aria-invalid") === "true", native: !!f && f.validity && !f.validity.valid, value: f ? f.value : null };
+    // the allowed range printed next to the field all along ("Min $5 · Max $10,000") explains a blocked value
+    let near = f && f.parentElement; for (let d = 0; d < 2 && near?.parentElement; d++) near = near.parentElement;
+    const hint = !!near && /(min(imum)?|max(imum)?|up to|from|between|limit|range)\D{0,25}\d/i.test(near.innerText || "");
+    const out = { hint, inline: [], elsewhere: [], invalid: !!f && f.getAttribute("aria-invalid") === "true", native: !!f && f.validity && !f.validity.valid, value: f ? f.value : null };
     for (const line of fresh()) {
       if (!ERR.test(line)) continue;
       const els = Array.from(document.querySelectorAll("body *")).filter((e) => vis(e) && clean(e.innerText) === line);
@@ -309,6 +312,19 @@ export async function fillForm(page, form, overrides = {}) {
       entered[f.id] = await loc.inputValue().catch(() => String(v));
     } catch { /* a field we cannot type into is left as it is */ }
   }
+  // custom dropdowns (Radix / headless Select: a button role=combobox and a listbox of role=option) still on their placeholder
+  const combos = page.locator(`[data-bsf="${form.index}"] [role=combobox]:not(input)`);
+  for (let i = 0; i < Math.min(await combos.count().catch(() => 0), 6); i++) {
+    const cb = combos.nth(i);
+    if (!(await cb.isVisible().catch(() => false))) continue;
+    const txt = (await cb.innerText().catch(() => "")).trim();
+    if (txt && !/^(pick|select|choose|—|-|выбер)/i.test(txt) && !(await cb.getAttribute("data-placeholder").catch(() => null))) continue;
+    await cb.click({ timeout: 2000 }).catch(() => {});
+    await page.waitForTimeout(250);
+    const opt = page.locator("[role=option]:not([aria-disabled=true]):not([data-disabled])").filter({ visible: true }).first();
+    if (await opt.count()) await opt.click({ timeout: 2000 }).catch(() => {}); else await page.keyboard.press("Escape").catch(() => {});
+    await page.waitForTimeout(150);
+  }
   // Radix / headless consent boxes (button role=checkbox) next to Terms
   await page.locator(`[data-bsf="${form.index}"] [role=checkbox][aria-checked=false]`).evaluateAll((bs) => bs.filter((b) => /terms|privacy|agree|accept|consent/i.test((b.closest("label") || b.parentElement)?.textContent || "")).forEach((b) => b.click())).catch(() => {});
   return entered;
@@ -376,7 +392,7 @@ export async function numericBounds(page, { maxFields = 8 } = {}) {
         const btnOff = await page.locator(`[data-bsf-submit="${btnKey}"]`).first().evaluate((b) => b.disabled || b.getAttribute("aria-disabled") === "true").catch(() => false);
         if (changed || err0.inline.length || err0.invalid) continue; // clamped / rejected / explained
         if (t.typeOnly) {
-          if (err0.native || btnOff) quiet.push(v); // blocked, but nothing says why
+          if (err0.native || btnOff) { if (!err0.hint) quiet.push(v); } // blocked; quiet unless the range is printed next to it
           else bad.push(v);
           continue;
         }
@@ -386,7 +402,7 @@ export async function numericBounds(page, { maxFields = 8 } = {}) {
         await page.waitForTimeout(400);
         const err = await page.evaluate((id) => window.__bsf.errorsFor(id), t.field.id).catch(() => ({ inline: [], elsewhere: [], native: false }));
         if (sent.length) bad.push(v);
-        else if (!err.inline.length && !err.native && !err.invalid) quiet.push(v);
+        else if (!err.inline.length && !err.native && !err.invalid && !err.hint) quiet.push(v);
       }
       const name = `"${t.field.label || t.field.kind}" (${t.field.numeric.kind})`;
       const place = t.form ? `${formName(t.form)} → ${t.field.where}` : `${t.field.where}${t.field.button ? ` (next to "${t.field.button}")` : ""}`;
@@ -394,7 +410,7 @@ export async function numericBounds(page, { maxFields = 8 } = {}) {
       else if (quiet.length) out.push({ id: "FM1", soft: true, what: `${name}: ${quiet.map((v) => JSON.stringify(v)).join(", ")} is blocked, but nothing next to the field says why — show the allowed range / the reason under the field [FM1]`, where: place, selector: t.field.selector });
     }
     // the allowed range is printed next to an amount field that has one (voicecraft, playfix)
-    const ranges = await page.evaluate(() => Array.from(document.querySelectorAll("[data-bsf]")).filter((f) => f.tagName === "INPUT" && window.__bsf.vis(f) && f.getAttribute("min") !== null && f.getAttribute("max") !== null && /amount|credits?|top|deposit|price/i.test(window.__bsf.keyOf(f))).map((f) => {
+    const ranges = await page.evaluate(() => Array.from(document.querySelectorAll("[data-bsf]")).filter((f) => f.tagName === "INPUT" && f.type !== "range" && window.__bsf.vis(f) && f.getAttribute("min") !== null && f.getAttribute("max") !== null && /amount|credits?|top|deposit|price/i.test(window.__bsf.keyOf(f))).map((f) => {
       let box = f.parentElement; for (let d = 0; d < 3 && box?.parentElement; d++) box = box.parentElement;
       const txt = (box?.innerText || "").replace(/[\s,  ]/g, "");
       const shown = (n) => txt.includes(String(Number(n))) || txt.includes(Number(n).toLocaleString("en-US").replace(/,/g, ""));

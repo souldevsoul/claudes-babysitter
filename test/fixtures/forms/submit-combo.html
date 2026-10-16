@@ -1,0 +1,16 @@
+<!doctype html><html><body><main><h1>Contact</h1>
+<form id="a" novalidate><h2>Write to us here</h2><label for="n">Full name</label><input id="n" name="name">
+<label for="e">Email</label><input id="e" name="email" type="email">
+<label id="tl">Topic</label><button type="button" role="combobox" aria-labelledby="tl" aria-expanded="false" id="cb" data-placeholder="">Pick a tag from the table</button>
+<ul role="listbox" id="lb" hidden><li role="option" data-v="task">Task</li><li role="option" data-v="bug">Bug</li></ul><p id="te"></p>
+<label for="m">Message</label><textarea id="m" name="message"></textarea>
+<button type="submit">Send message</button><p id="st" role="status"></p></form>
+<script>let topic = '';
+const cb = document.getElementById('cb'), lb = document.getElementById('lb');
+cb.onclick = () => { lb.hidden = !lb.hidden; cb.setAttribute('aria-expanded', String(!lb.hidden)); };
+lb.querySelectorAll('[role=option]').forEach((o) => o.onclick = () => { topic = o.dataset.v; cb.textContent = o.textContent; cb.removeAttribute('data-placeholder'); lb.hidden = true; });
+document.getElementById('a').addEventListener('submit', async (e) => { e.preventDefault(); const st = document.getElementById('st');
+if (!topic) { document.getElementById('te').textContent = 'Pick a topic.'; return; }
+const r = await fetch('/api/contact', { method: 'POST', body: JSON.stringify({ topic }) }).catch(() => null);
+st.textContent = r && r.ok ? 'Message sent.' : 'Could not send your message. Please try again.'; });</script>
+</main></body></html>

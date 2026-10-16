@@ -184,6 +184,11 @@ try {
     const cr = real_(await forms.creditsUpFront(page));
     assert.ok(cr.length === 1 && /Hire now/.test(cr[0].what), show(cr));
   });
+  await test("a custom Topic dropdown (role=combobox) is filled, so the form is really checked (praxis /contact)", async (page) => {
+    await go(page, "submit-combo.html");
+    const o = await forms.submitOutcomes(page);
+    assert.deepEqual(o, [], `checked end to end, no "sent nothing" note: ${show(o)}`);
+  });
   assert.deepEqual(real, [], `requests that reached the fixture server instead of the sandbox: ${real.join(", ")}`);
 } catch (e) {
   failed++;
