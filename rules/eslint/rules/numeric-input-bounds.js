@@ -5,8 +5,12 @@
 // 44 of the factory's projects shipped a custom top-up / amount field that took -1, 999999999 or "abc".
 import { meta, elementName, getAttr, staticAttrValue } from "../util.js";
 
-const FIELD_COMPONENT = /^(input|Input|TextField|TextInput|NumberInput|NumericInput|AmountInput|CurrencyInput|FormInput|InputField|PriceInput|QuantityInput)$/;
-const NOT_NUMERIC = /otp|one-?time|code|2fa|\bpin\b|zip|postal|postcode|search|cvc|cvv|expir|coupon|promo|referral|year|month|day/i;
+const FIELD_COMPONENT = /^(input|Input|TextField|TextInput|FormInput|InputField|\w*(Number|Numeric|Amount|Currency|Price|Quantity|Credits?|Money)Input)$/;
+// the component's own name says what it holds (<CreditAmountInput …/>)
+const KIND_OF_COMPONENT = /(Credits?|Amount|Price|Quantity|Money|Currency)Input$/;
+const NOT_NUMERIC = /otp|one-?time|code|2fa|\bpin\b|zip|postal|postcode|search|cvc|cvv|expir|coupon|promo|referral|year|month|day|\bref\b|reference|\bnote\b|memo|comment|description|reason|\bname\b|e-?mail|\bdigit\b/i;
+// a component / file that is a one-time-code / PIN input (OtpCodeInput.tsx: one digit per box)
+const NOT_NUMERIC_FILE = /otp|one-?time|pin-?input|pincode|verification-?code|code-?input/i;
 const KIND = [
   ["iban", /iban/i],
   ["card", /card-?number|cc-?number|cardnumber/i],
@@ -32,6 +36,13 @@ export const numericInputBounds = {
     const registers = new Map(); // register("name", { min, max })
     const src = context.sourceCode.getText();
     const clamps = /Math\.min\s*\(/.test(src) && /Math\.max\s*\(/.test(src) || /\bclamp\s*\(/.test(src);
+    // the file checks a two-sided range itself (refund >= 0 && refund <= price; amount < min || amount > max)
+    // — only when the checked variable is the field's value (refundNumber for value={refund})
+    const ranges = [...src.replace(/\.length\b/g, "\u0000").matchAll(/\b([\w.]+)\s*>=?\s*[\w.]+\s*&&\s*([\w.]+)\s*<=?\s*[\w.()]+|\b([\w.]+)\s*<=?\s*[\w.]+\s*\|\|\s*([\w.]+)\s*>=?\s*[\w.()]+/g)]
+      .map((m) => (m[1] || m[3]) === (m[2] || m[4]) ? (m[1] || m[3]).toLowerCase() : null).filter(Boolean);
+    const rangeChecked = (v) => !!v && ranges.some((r) => r.split(".").pop().startsWith(v.toLowerCase().split(".").pop()));
+    const fileName = String(context.filename || context.getFilename?.() || "").split(/[\\/]/).pop();
+    if (NOT_NUMERIC_FILE.test(fileName)) return {};
     const chainMethods = (node) => {
       const out = [];
       for (let n = node; n && n.type === "CallExpression"; ) {
@@ -70,14 +81,28 @@ export const numericInputBounds = {
         for (const at of node.attributes) {
           if (at.type === "JSXSpreadAttribute" && at.argument.type === "CallExpression" && at.argument.callee.type === "Identifier" && at.argument.callee.name === "register" && at.argument.arguments[0]?.type === "Literal") fieldName = String(at.argument.arguments[0].value);
         }
-        const keyText = camelWords([fieldName, val("placeholder"), val("aria-label"), val("autoComplete")].filter((x) => typeof x === "string").join(" "));
+        // a kit wrapper (function CreditAmountInput({ value, onChange, …rest }) { return <input value={value} …/> }): the
+        // bounds belong to each use of the wrapper, which is checked where it is used
+        const va0 = getAttr(node, "value");
+        if (va0 && va0.value && va0.value.type === "JSXExpressionContainer" && va0.value.expression.type === "Identifier") {
+          for (let p = node.parent; p; p = p.parent) {
+            if (!/Function/.test(p.type)) continue;
+            const prm = p.params && p.params[0];
+            if (prm && prm.type === "ObjectPattern" && prm.properties.some((q) => q.type === "Property" && q.key.type === "Identifier" && q.key.name === va0.value.expression.name)) return;
+            break;
+          }
+        }
+        const keyText = camelWords([fieldName, val("placeholder"), val("aria-label"), val("autoComplete"), KIND_OF_COMPONENT.test(el) ? el : ""].filter((x) => typeof x === "string").join(" "));
         if (NOT_NUMERIC.test(keyText)) return;
         let kind = null;
         for (const [k, re] of KIND) if (re.test(keyText)) { kind = k; break; }
         if (!kind && type === "tel") kind = "phone";
         if (!kind && (type === "number" || im === "numeric" || im === "decimal")) kind = "number";
         if (!kind) return;
-        candidates.push({ node, kind, fieldName, type, has, val });
+        const va = getAttr(node, "value");
+        const ve = va && va.value && va.value.type === "JSXExpressionContainer" ? va.value.expression : null;
+        const valueVar = ve ? context.sourceCode.getText(ve).replace(/\[.*$/, "").replace(/\?\./g, ".") : "";
+        candidates.push({ node, kind, fieldName, type, has, val, valueVar: /^[\w.]+$/.test(valueVar) ? valueVar : "" });
       },
       "Program:exit"() {
         for (const c of candidates) {
@@ -95,6 +120,12 @@ export const numericInputBounds = {
           const hi = c.has("max") || (schema && ["max", "lte", "lt", "lessThan"].some((m) => schema.has(m))) || (reg && reg.has("max"));
           if (lo && hi) continue;
           if (clamps) continue; // the file clamps the value itself
+          if (rangeChecked(c.valueVar)) continue; // … or checks a two-sided range of the field's value
+          // validated with the error on the field (aria-invalid={error}): the range is enforced and explained
+          const inv = getAttr(c.node, "aria-invalid");
+          if (inv && inv.value && inv.value.type === "JSXExpressionContainer" && inv.value.expression.type !== "Literal") continue;
+          // a digit-only box with a length cap (one digit per box, at most 7 digits): no negative, no 999999999
+          if (c.has("maxLength") && c.kind === "number") continue;
           const missing = !lo && !hi ? "min / max" : !lo ? "min" : "max";
           context.report({ node: c.node, messageId: "number", data: { what, missing } });
         }

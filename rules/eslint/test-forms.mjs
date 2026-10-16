@@ -31,6 +31,18 @@ tester.run("numeric-input-bounds", R["numeric-input-bounds"], {
     '<input type="range" name="amount" />',
     '<Input name="amount" type="number" readOnly />',
     '<Input name="amount" type="number" disabled />',
+    // real repos (2026-10): Praxis /admin/payouts "Transfer reference" (id payout-ref is not an amount)
+    '<Input id="payout-ref" value={reference} onChange={(e) => setReference(e.target.value)} />',
+    // Praxis dispute refund: the file checks the range itself and prints it in the label
+    'const refundNumber = Number(refund);\nconst ok = Number.isInteger(refundNumber) && refundNumber >= 0 && refundNumber <= price;\n<Input id={`refund-${id}`} inputMode="numeric" value={refund} />',
+    // Praxis / Vertex top-up custom amount: validated with the error on the field
+    '<Input id="custom-amount" type="text" inputMode="decimal" value={v} aria-invalid={!!customError} />',
+    // Vertex OtpCodeInput: one digit per box
+    { code: '<input type="text" inputMode="numeric" maxLength={1} value={value[i]} />', filename: "components/auth/OtpCodeInput.tsx" },
+    '<input type="text" inputMode="numeric" maxLength={1} aria-label={`Digit ${i + 1}`} />',
+    // truelogos CreditAmountInput: the kit wrapper itself (bounds belong to each use)
+    'export function CreditAmountInput({ value, onChange, ...rest }) { return <input {...rest} inputMode="decimal" value={value} onChange={(e) => onChange(e.target.value)} /> }',
+    '<CreditAmountInput value={v} onChange={setV} min={10} max={100000} />',
   ],
   invalid: [
     // playfix /pricing "Custom amount", voicecraft "Custom credits"
@@ -47,6 +59,18 @@ tester.run("numeric-input-bounds", R["numeric-input-bounds"], {
     { code: '<Input name="iban" />', errors: [{ messageId: "length" }] },
     { code: '<input name="cardNumber" inputMode="numeric" />', errors: [{ messageId: "length" }] },
     { code: '<input type="tel" name="phone" />', errors: [{ messageId: "length" }] },
+    // Vertex topup-modal: digits only, "min 10" in the placeholder, no maximum anywhere
+    { code: 'const h = (v) => setCustomAmount(v.replace(/\\D/g, ""));\n<Input type="text" placeholder="Enter credits (min 10)" value={customAmount} onChange={(e) => h(e.target.value)} />', errors: [{ messageId: "number" }] },
+    // a one-sided check is not a range; a static aria-invalid is not validation; a length check is not a value range
+    { code: 'const ok = amount >= 10;\n<Input name="amount" type="number" />', errors: [{ messageId: "number" }] },
+    { code: '<Input name="amount" type="number" aria-invalid="false" />', errors: [{ messageId: "number" }] },
+    { code: 'const ok = s.length >= 3 && s.length <= 19;\n<Input name="amount" type="number" />', errors: [{ messageId: "number" }] },
+    // …but each use of the wrapper is checked
+    { code: '<CreditAmountInput value={v} onChange={setV} />', errors: [{ messageId: "number" }] },
+    // truelogos quote form: the imported schema has .min(1) only — no ceiling on the quote
+    { code: 'export function Q() { return <Input id="quotedCredits" type="number" {...register("quotedCredits", { valueAsNumber: true })} /> }', errors: [{ messageId: "number" }] },
+    // a range check of another variable (pagination) does not bound this field
+    { code: 'const ok = page >= 1 && page <= pages;\n<Input name="amount" type="number" value={amount} />', errors: [{ messageId: "number" }] },
   ],
 });
 
@@ -67,12 +91,20 @@ tester.run("mutation-refreshes-ui", R["mutation-refreshes-ui"], {
     client('export function L() { const remove = async (id) => { setItems((xs) => xs.filter((x) => x.id !== id)); await fetch(`/api/items/${id}`, { method: "DELETE" }); }; }'),
     // the helper hands the response back for its caller to apply
     client('export function useApi() { async function saveName(n) { return fetch("/api/me", { method: "PATCH", body: n }); } return { saveName }; }\nconst helper = async (n) => { return fetch("/api/me", { method: "PATCH", body: n }); };'),
+    // real repos (2026-10): Praxis onboarding upload stores the saved file name (setSaved with data, not a flag)
+    client('export function Docs() { const upload = async (type, file) => { setBusy(type); const res = await fetch("/api/onboarding/documents", { method: "POST", body: file }); if (res.ok) { setSaved((prev) => ({ ...prev, [type]: file.name })); } setBusy(null); }; }'),
+    // truelogos lib/upload-client.ts: a module-level helper that returns the result to its caller
+    client('export async function uploadToStore(file) { const res = await fetch("/api/upload", { method: "POST", body: file }); const data = await res.json(); if (res.ok) return { url: data.url }; return { error: data.error }; }'),
+    // Vertex delete account: signs out (navigates away)
+    client('export function Settings() { const del = async () => { const res = await fetch("/api/user/delete", { method: "POST" }); toast.success("Deleted"); await signOut({ callbackUrl: "/" }); }; }'),
   ],
   invalid: [
     // voicecraft / orbit / fluentai: credits spent, header balance stays
     { code: client('export function Gen() { const run = async () => { setLoading(true); await fetch("/api/generate", { method: "POST" }); setLoading(false); toast.success("Done"); }; }'), errors: [{ messageId: "stale" }] },
     { code: client('export function Settings() { async function save(e) { e.preventDefault(); const res = await fetch("/api/profile", { method: "PATCH", body: JSON.stringify(form) }); if (res.ok) { setSaved(true); } else { setError("Could not save"); } } }'), errors: [{ messageId: "stale" }] },
     { code: client('export function Row() { const del = async () => { await axios.delete("/api/items/1"); toast("Deleted"); }; }'), errors: [{ messageId: "stale" }] },
+    // a handler inside a component that only returns a status is still stale
+    { code: client('export function Row() { const del = async () => { const r = await fetch("/api/items/1", { method: "DELETE" }); toast("Deleted"); return; }; }'), errors: [{ messageId: "stale" }] },
   ],
 });
 
