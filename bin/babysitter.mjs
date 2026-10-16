@@ -122,9 +122,11 @@ switch (cmd) {
     const ROOT = env.BABYSITTER_ROOT;
     const args = [...rest];
     const take = (flag) => { const i = args.indexOf(flag); if (i < 0) return null; const v = args[i + 1]; args.splice(i, v && !v.startsWith("--") ? 2 : 1); return v || true; };
-    const skipPrepare = take("--skip-prepare");
+    // boolean flags never take the next argument (`e2e --quick forms.spec` used to drop forms.spec)
+    const flag = (f) => { const i = args.indexOf(f); if (i < 0) return false; args.splice(i, 1); return true; };
+    const skipPrepare = flag("--skip-prepare");
     const only = take("--only");
-    if (take("--quick")) env.BABYSITTER_PROFILE = "quick";
+    if (flag("--quick")) env.BABYSITTER_PROFILE = "quick";
     const lastFailed = args.includes("--last-failed");
     const { wiringBanner } = await import("../lib/wiring.js");
     const banner = wiringBanner(ROOT, { context: "e2e" });
@@ -137,6 +139,8 @@ switch (cmd) {
     const uiSpecs = readdirSync(join(root, "playwright")).filter((f) => /\.spec\.(t|j)s$/.test(f) && !OWN.some((o) => f.startsWith(`${o}.`))).map((f) => f.replace(/\.(t|j)s$/, ""));
     const SUITES = { ui: uiSpecs, acceptance: ["acceptance.spec"], content: ["content.spec"], product: ["--project=product"] };
     if (only && !SUITES[only]) { console.error(`babysitter e2e: --only ui | acceptance | content | product (got "${only}")`); process.exit(2); }
+    // the specs know which suites share the run (B1 defers to content's CT1 unless content is left out)
+    if (only) env.BABYSITTER_ONLY = only;
     if (only) {
       const skippedNames = { ui: `UI checks + states/languages/scroll (${uiSpecs.join(", ")})`, acceptance: "business acceptance (acceptance.spec: B1 copy leaks, B2–B4 money, H1/H2 hover and cursor, N1/N4/N6, F0–F5 footer, P1–P3 policies, D1–D3, C1/C2 cookies, M1 currency, A1–A9 sign-in)", content: "copy (content.spec: CT1–CT18 unfinished copy, test data, raw errors, punctuation, dates, plurals, email MX + mailto, translations, legal names, © line)", product: "the product's own e2e/*.spec.ts" };
       const off = Object.keys(SUITES).filter((k) => k !== only);
@@ -178,6 +182,6 @@ switch (cmd) {
   case "fix-plan": node("bin/fix-plan.mjs", rest); break;
   case "after-merge": node("bin/after-merge.mjs", rest); break;
   default:
-    console.log("usage: babysitter <init|check|audit|prepare|test-ui|e2e|fix-plan|after-merge> [...]\n  e2e [--skip-prepare] [--quick] [--only ui|acceptance|product] [--last-failed]\n  init [repo] [--new|--existing] [--link|--vendor] [--ci] [--url URL] [--dev-url URL] [--dry-run] [--no-install] [--yes] [--force]");
+    console.log("usage: babysitter <init|check|audit|content|prepare|test-ui|e2e|fix-plan|after-merge> [...]\n  e2e [--skip-prepare] [--quick] [--only ui|acceptance|content|product] [--last-failed]\n  init [repo] [--new|--existing] [--link|--vendor] [--ci] [--url URL] [--dev-url URL] [--dry-run] [--no-install] [--yes] [--force]");
     process.exit(cmd ? 2 : 0);
 }

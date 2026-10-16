@@ -1,0 +1,5 @@
+<!doctype html><html lang="en"><head><meta charset="utf-8"><title>Pricing</title></head><body>
+<!-- Praxis /pricing "Work out a top-up": a loose amount field (no form, no submit button) that clamps itself -->
+<main><h1>Pricing</h1><div class="calc"><label for="amt">Credits to buy</label>
+<input id="amt" inputmode="numeric" value="100" oninput="this.value=this.value.replace(/\D/g,'')" onblur="const n=Number(this.value||0);this.value=String(Math.min(10000,Math.max(10,n)))">
+<p>From 10 to 10,000 credits</p></div></main></body></html>

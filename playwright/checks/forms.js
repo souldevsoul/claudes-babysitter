@@ -264,7 +264,7 @@ const SAMPLE = {
   name: "Alex Morgan", subject: "Question about my account", company: "Example Ltd", text: "Example text",
   message: "Hello, I would like to know more about how your service works for my team. Thank you!",
 };
-const sampleNumber = async (loc) => loc.evaluate((f) => { const min = Number(f.getAttribute("min")); const max = Number(f.getAttribute("max")); if (Number.isFinite(min) && f.getAttribute("min") !== null && min > 0) return String(min); if (Number.isFinite(max) && f.getAttribute("max") !== null && max < 1) return String(max); return f.value && Number(f.value) > 0 ? f.value : "1"; }).catch(() => "1");
+const sampleNumber = async (loc) => loc.evaluate((f) => { const min = Number(f.getAttribute("min")); const max = Number(f.getAttribute("max")); if (Number.isFinite(min) && f.getAttribute("min") !== null && min > 0) return String(min); if (Number.isFinite(max) && f.getAttribute("max") !== null && max < 1) return String(max); return f.value && Number(f.value) > 0 ? f.value : "1"; }, null, { timeout: 2000 }).catch(() => "1");
 
 async function settle(page, ms = 700) {
   await page.waitForLoadState("networkidle", { timeout: 4000 }).catch(() => {});
@@ -290,17 +290,17 @@ export async function fillForm(page, form, overrides = {}) {
     const loc = page.locator(`[data-bsf="${f.id}"]`).first();
     try {
       if (f.role === "checkbox") {
-        const zone = await loc.evaluate((el) => (el.closest("label") || el.parentElement)?.textContent || "").catch(() => "");
+        const zone = await loc.evaluate((el) => (el.closest("label") || el.parentElement)?.textContent || "", null, { timeout: 2000 }).catch(() => "");
         if (f.required || /terms|privacy|agree|accept|consent|соглас/i.test(zone)) { await loc.check({ force: true, timeout: 2000 }).catch(() => {}); }
         continue;
       }
       if (f.role === "radio") {
         // one choice per group: the first option of a group that has none picked
-        await loc.evaluate((r) => { const g = r.name ? Array.from(document.getElementsByName(r.name)) : [r]; if (!g.some((x) => x.checked) && g[0] === r) r.click(); }).catch(() => {});
+        await loc.evaluate((r) => { const g = r.name ? Array.from(document.getElementsByName(r.name)) : [r]; if (!g.some((x) => x.checked) && g[0] === r) r.click(); }, null, { timeout: 2000 }).catch(() => {});
         continue;
       }
       if (["file", "range", "color", "date", "datetime-local", "time", "month", "week", "search"].includes(f.role)) continue;
-      if (f.role === "select") { await loc.evaluate((s) => { if (s.options.length > 1 && !s.value) { s.selectedIndex = 1; s.dispatchEvent(new Event("change", { bubbles: true })); } }); continue; }
+      if (f.role === "select") { await loc.evaluate((s) => { if (s.options.length > 1 && !s.value) { s.selectedIndex = 1; s.dispatchEvent(new Event("change", { bubbles: true })); } }, null, { timeout: 2000 }).catch(() => {}); continue; }
       let v = overrides[f.id] ?? overrides[f.role];
       if (v === undefined) {
         if (f.role === "number") v = await sampleNumber(loc);
@@ -309,7 +309,7 @@ export async function fillForm(page, form, overrides = {}) {
       }
       if (f.value && overrides[f.id] === undefined && overrides[f.role] === undefined && f.role !== "password") { entered[f.id] = f.value; continue; } // prefilled (profile): keep it
       await loc.fill(String(v), { timeout: 3000 });
-      entered[f.id] = await loc.inputValue().catch(() => String(v));
+      entered[f.id] = await loc.inputValue({ timeout: 2000 }).catch(() => String(v));
     } catch { /* a field we cannot type into is left as it is */ }
   }
   // custom dropdowns (Radix / headless Select: a button role=combobox and a listbox of role=option) still on their placeholder
@@ -317,8 +317,8 @@ export async function fillForm(page, form, overrides = {}) {
   for (let i = 0; i < Math.min(await combos.count().catch(() => 0), 6); i++) {
     const cb = combos.nth(i);
     if (!(await cb.isVisible().catch(() => false))) continue;
-    const txt = (await cb.innerText().catch(() => "")).trim();
-    if (txt && !/^(pick|select|choose|—|-|выбер)/i.test(txt) && !(await cb.getAttribute("data-placeholder").catch(() => null))) continue;
+    const txt = (await cb.innerText({ timeout: 2000 }).catch(() => "")).trim();
+    if (txt && !/^(pick|select|choose|—|-|выбер)/i.test(txt) && !(await cb.getAttribute("data-placeholder", { timeout: 1000 }).catch(() => null))) continue;
     await cb.click({ timeout: 2000 }).catch(() => {});
     await page.waitForTimeout(250);
     const opt = page.locator("[role=option]:not([aria-disabled=true]):not([data-disabled])").filter({ visible: true }).first();
@@ -338,7 +338,7 @@ async function clickSubmit(page, key) {
     return "clicked";
   }
   const last = page.locator(`[data-bsf^="${key}-"]`).last();
-  await last.press("Enter").catch(() => {});
+  await last.press("Enter", { timeout: 3000 }).catch(() => {});
   return "enter";
 }
 
@@ -381,15 +381,17 @@ export async function numericBounds(page, { maxFields = 8 } = {}) {
         if (!t.typeOnly) { forms = await reopen(page, url); const f = forms[t.form.index]; if (!f) break; await fillForm(page, f, { [t.field.id]: "1" }); await page.evaluate(() => window.__bsf.mark()); }
         const loc = page.locator(`[data-bsf="${t.field.id}"]`).first();
         if (!(await loc.isVisible().catch(() => false))) break;
-        await loc.fill("").catch(() => {});
+        // every locator call has its own timeout: inside the test runner the default action timeout is "none", so a
+        // field that cannot be edited or a submit button that does not exist waited out the whole test (Praxis /pricing)
+        await loc.fill("", { timeout: 3000 }).catch(() => {});
         await loc.pressSequentially(v, { delay: 5, timeout: 8000 }).catch(() => {});
-        await loc.press("Tab").catch(() => {});
+        await loc.press("Tab", { timeout: 3000 }).catch(() => {});
         await page.waitForTimeout(350);
-        const typed = await loc.inputValue().catch(() => "");
+        const typed = await loc.inputValue({ timeout: 2000 }).catch(() => "");
         const changed = typed.replace(/[\s,]/g, "") !== v;
         const btnKey = t.form ? String(t.form.index) : t.field.id;
         const err0 = await page.evaluate((id) => window.__bsf.errorsFor(id), t.field.id).catch(() => ({ inline: [], elsewhere: [], invalid: false, native: false }));
-        const btnOff = await page.locator(`[data-bsf-submit="${btnKey}"]`).first().evaluate((b) => b.disabled || b.getAttribute("aria-disabled") === "true").catch(() => false);
+        const btnOff = await page.locator(`[data-bsf-submit="${btnKey}"]`).first().evaluate((b) => b.disabled || b.getAttribute("aria-disabled") === "true", null, { timeout: 1000 }).catch(() => false);
         if (changed || err0.inline.length || err0.invalid) continue; // clamped / rejected / explained
         if (t.typeOnly) {
           if (err0.native || btnOff) { if (!err0.hint) quiet.push(v); } // blocked; quiet unless the range is printed next to it
@@ -541,7 +543,7 @@ export async function staleAfterSave(page) {
       const f = (await reopen(page, url))[f0.index];
       if (!f) continue;
       const fresh = "Babysitter QA";
-      await page.locator(`[data-bsf="${nameField.id}"]`).fill(fresh).catch(() => {});
+      await page.locator(`[data-bsf="${nameField.id}"]`).fill(fresh, { timeout: 3000 }).catch(() => {});
       sb.mark();
       page.on("request", onReq);
       await clickSubmit(page, String(f.index));
@@ -624,15 +626,15 @@ export async function forgotPassword(page, signInPath) {
   const hasPassword = await page.locator("input[type=password]").filter({ visible: true }).count().catch(() => 0);
   if (!hasPassword && !(await link.count())) return [{ id: "FM7", na: true, what: `${signInPath} signs in without a password (magic link / code) — no reset needed`, where: signInPath }];
   if (!(await link.count())) return [{ id: "FM7", what: `${signInPath} has no "Forgot password?" link — add one under the password field, to a page that sends a reset link [FM7, forgot-pw]`, where: signInPath }];
-  const label = (await link.innerText().catch(() => "")).trim().slice(0, 40);
-  const href = await link.getAttribute("href").catch(() => null);
+  const label = (await link.innerText({ timeout: 2000 }).catch(() => "")).trim().slice(0, 40);
+  const href = await link.getAttribute("href", { timeout: 1000 }).catch(() => null);
   const status = { code: 200 };
   if (href && !/^(#|javascript:)/.test(href)) {
     const res = await page.goto(new URL(href, page.url()).href, { waitUntil: "load" }).catch(() => null);
     status.code = res ? res.status() : 0;
     if (!res || res.status() >= 400) return [{ id: "FM7", what: `"${label}" goes to ${href}, which answers ${res ? res.status() : "nothing"} — build the reset page [FM7, forgot-pw]`, where: signInPath }];
   } else {
-    await link.click().catch(() => {});
+    await link.click({ timeout: 3000 }).catch(() => {});
   }
   await settle(page, 500);
   await lib(page);
@@ -666,7 +668,7 @@ export async function openPasswordChange(page) {
   if (await has()) return true;
   const btn = page.locator("button, [role=button], a[href^='#']").filter({ hasText: /^\s*(change|update|set|reset) (your |my )?password/i }).filter({ visible: true }).first();
   if (!(await btn.count())) return false;
-  await btn.click().catch(() => {});
+  await btn.click({ timeout: 3000 }).catch(() => {});
   await page.waitForTimeout(700);
   return has();
 }

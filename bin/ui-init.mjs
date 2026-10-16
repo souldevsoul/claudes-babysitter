@@ -26,7 +26,7 @@
  * instructions live between markers and are replaced, never appended twice.
  */
 import { existsSync, readFileSync, writeFileSync, mkdirSync, readdirSync, statSync, copyFileSync, rmSync } from "node:fs";
-import { join, relative, resolve, dirname } from "node:path";
+import { join, relative, resolve, dirname, basename } from "node:path";
 import { fileURLToPath } from "node:url";
 import { spawnSync, execSync } from "node:child_process";
 import * as clack from "@clack/prompts";
@@ -157,6 +157,8 @@ const cfgPath = join(repo, "babysitter.config.json");
 const prev = readJson(cfgPath, null);
 const cfg = {
   $comment: "claudes-babysitter project settings. Every allowance is a design decision: write the reason in allowReasons.",
+  // the product's stable name: the cross-product favicon registry (layout) and reports key on it
+  name: prev?.name || String(pkg?.name || "").replace(/^@[^/]+\//, "") || basename(repo),
   baseURL: opt("url") || prev?.baseURL || "",
   routes: prev?.routes || ["/"],
   ...(prev || {}),

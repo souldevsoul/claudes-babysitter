@@ -5,7 +5,7 @@
 // Finding: { what, where, selector?, human?, id }.
 import { resolve } from "node:path";
 import {
-  contentConfig, lintSegment, findDates, lastUpdatedDates, LAST_UPDATED_RE, findEmails, emailDomainProblem, englishIn,
+  contentConfig, lintSegment, findDates, lastUpdatedDates, LAST_UPDATED_RE, findEmails, emailDomainProblem, untranslatedReason, untranslatedWhat,
   looksLikeKey, isRtl, LEGAL_FAMILIES, legalFamily, normName, AUTO_VARIANTS, numericFacts, factConflicts, ruleId,
 } from "../../lib/content-rules.js";
 import { checkEmails } from "../../lib/email-dns.js";
@@ -59,7 +59,10 @@ export const collectCopy = (page) => page.evaluate(() => {
       : btn && (btn === el || (btn.innerText || "").trim().length <= 60) ? "button"
         : link && el.closest("nav, [role=navigation], header") && text.length <= 40 ? "nav" : "body";
     const i = els.push(el) - 1;
-    segs.push({ i, text, kind, collapsed: !pre, footer: !!el.closest("footer, [role=contentinfo]"), table: !!el.closest("table, [role=grid], [role=table], [role=row]") });
+    // a language set on the element or a section (<span lang="en">), not the page's own; translate=no keeps it as is
+    const tagged = el.closest("[lang]");
+    const ownLang = el.closest("[translate=no], .notranslate") ? "zxx" : tagged && tagged !== document.documentElement ? tagged.getAttribute("lang") || "" : "";
+    segs.push({ i, text, kind, collapsed: !pre, footer: !!el.closest("footer, [role=contentinfo]"), table: !!el.closest("table, [role=grid], [role=table], [role=row]"), ownLang });
   }
   // emails in text: linked by a mailto with the same address?
   const emails = [];
@@ -194,11 +197,14 @@ export async function emailFindings(page, { cfg = {}, copy = null, dns = true, c
 
 const SCRIPT = { cyr: /[Ѐ-ӿ]/g, arab: /[؀-ۿݐ-ݿ]/g, hebr: /[֐-׿]/g, latin: /[A-Za-zÀ-ɏ]/g };
 /**
- * CT11 English left on a page in another language; CT12 translation keys printed as text; CT13 <html lang>/dir
- * match the language shown. `locale`: the language this page is meant to be in (config locale run); without it
- * the page's own lang is trusted for CT11. `keys`: the product's translation keys (lib/content-lint.translationKeys).
+ * CT11 untranslated text on a page in another language — English left in it, or text word for word the same as on the
+ * default-language page (`defaults`: that page's collectCopy() or its texts; one check, both heuristics, one finding
+ * per string); CT12 translation keys printed as text; CT13 <html lang>/dir match the language shown. `locale`: the
+ * language this page is meant to be in (config locale run); without it the page's own lang is trusted for CT11.
+ * `keys`: the product's translation keys (lib/content-lint.translationKeys). `defaultLocale`: the default language's code.
+ * Strings in babysitter.config.json → locales.keep and content.brandTerms are never "untranslated".
  */
-export async function languageFindings(page, { cfg = {}, copy = null, locale = null, keys = null } = {}) {
+export async function languageFindings(page, { cfg = {}, copy = null, locale = null, keys = null, defaults = null, defaultLocale = null } = {}) {
   const cc = contentConfig(cfg);
   const skip = new Set(cc.skip || []);
   copy = copy || (await collectCopy(page));
@@ -242,10 +248,16 @@ export async function languageFindings(page, { cfg = {}, copy = null, locale = n
       for (const s of copy.segs) if (native.test(s.text)) for (const w of new Set(s.text.match(/[A-Z][A-Za-z0-9+.-]+/g) || [])) n.set(w, (n.get(w) || 0) + 1);
       for (const [w, c] of n) if (c >= 2) brand.push(w);
     }
+    const keep = (cfg.locales && !Array.isArray(cfg.locales) && cfg.locales.keep) || [];
+    let def = null;
+    if (defaults) {
+      def = new Set(Array.isArray(defaults) ? defaults.map((x) => (typeof x === "string" ? x : x.text)) : (defaults.segs || []).map((x) => x.text));
+      def.locale = defaultLocale || defaults.lang || cc.defaultLocale || "";
+    }
     for (const s of copy.segs) {
-      if (s.text.length < 8) continue;
-      const en = englishIn(s.text, code, brand);
-      if (en) out.push({ i: s.i, x: { id: "CT11", what: `English on the "${code}" page: "${s.text.slice(0, 80)}"`, fix: `translate it (every locale's message file; content.brandTerms for names that stay as they are)` } });
+      const r = untranslatedReason(s.text, code, { brand, defaults: def, keep, ownLang: s.ownLang });
+      if (!r) continue;
+      out.push({ i: s.i, x: { id: "CT11", what: untranslatedWhat(r, s.text, code), fix: `translate it (the ${code} messages file, or the CMS / database field; locales.keep / content.brandTerms for names that stay as they are)` } });
     }
   }
   const loc = await locate(page, out.map((o) => o.i));

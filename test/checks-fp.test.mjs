@@ -40,6 +40,33 @@ try {
     assert.equal(await page.evaluate(() => getComputedStyle(document.getElementById("banner")).visibility), "visible", "the banner is shown again");
   });
 
+  await test("2.5 default language: a wrapping header item and a wrapping top-level nav fail; footer columns, a sidebar and an \"On this page\" list may wrap", async (page) => {
+    await page.goto(url("hover.html"));
+    await page.setContent(`<header style="display:flex"><nav><a id="hd" href="/a" style="display:inline-block;width:70px">Apply as a specialist</a></nav></header>
+      <nav id="top"><a id="tn" href="/b" style="display:inline-block;width:70px">Browse all categories</a></nav>
+      <main><nav aria-label="On this page"><a id="toc" href="#x" style="display:inline-block;width:70px">02 Pre-existing materials</a></nav><header><a id="art" href="/c" style="display:inline-block;width:70px">Article header link here</a></header></main>
+      <aside><nav><a id="side" href="/d" style="display:inline-block;width:70px">Sidebar long link text</a></nav></aside>
+      <footer><nav><a id="ft" href="/e" style="display:inline-block;width:70px">Terms of service and privacy</a></nav></footer>
+      <nav aria-label="Breadcrumb"><a id="bc" href="/f" style="display:inline-block;width:70px">Home and some long crumb</a></nav>`);
+    await checks.install(page);
+    const out = await checks.wrappedNavItems(page);
+    const got = ids(out).sort();
+    assert.deepEqual(got, ["#hd", "#tn"], JSON.stringify(out));
+  });
+
+  await test("mobile menu: a menu that leaves with a 400 ms exit after Escape is closed, not re-opened, and opens again at once (truelogos.pro 390: 30 s)", async (page) => {
+    await page.setViewportSize({ width: 390, height: 844 });
+    await page.goto(url("mobile-menu-exit.html"));
+    for (let k = 0; k < 3; k++) {
+      const t0 = Date.now();
+      const m = await checks.openMobileMenu(page);
+      assert.ok(m && /#mm/.test(m.selector || m.where), `open #${k}: the panel is found: ${JSON.stringify(m)}`);
+      await checks.closeMobileMenu(page, m);
+      assert.equal(await page.locator("#mm").count(), 0, `close #${k}: the menu is closed, not re-opened by a second press`);
+      assert.ok(Date.now() - t0 < 6000, `open + close #${k} took ${Date.now() - t0} ms`);
+    }
+  });
+
   await test("6.4 opacity: readable translucent text passes, unreadable fails on contrast, a dense page reports every line", async (page) => {
     await page.goto(url("text-opacity.html"));
     const { hard } = await checks.illegibleText(page);

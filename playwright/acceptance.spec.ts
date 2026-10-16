@@ -52,10 +52,10 @@ for (const route of ROUTES) {
 
     test("B1 no build notes or self-justifying copy [BQA 5]", async ({ page }) => {
       test.skip(!on("B1"), why("B1"));
+      // B1 = CT1: content.spec reports these phrases (every page, every language) — B1 runs only when it is not in the run
+      test.skip(process.env.BABYSITTER_ONLY !== "acceptance", "B1 is reported by CT1 (content.spec) — once per phrase");
       await open(page, r);
-      const { leaks, defensive } = await a.copyLeaks(page);
-      hard(leaks);
-      soft(defensive, "self-justifying copy");
+      hard(await a.copyLeaks(page, cfg));
     });
     test("B2–B4 exact prices, no VAT/tax, thousands separators [BQA 5/9/11]", async ({ page }) => {
       test.skip(!on("B2"), why("B2"));

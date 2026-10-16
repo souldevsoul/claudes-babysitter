@@ -3,14 +3,14 @@
 // dynamic /tasks/[id] page, two roles, and pages that break only in Azerbaijani.
 import { createServer } from "node:http";
 const T = {
-  en: { title: "Find a specialist for your task", cta: "Apply", hire: "Hire the best people", about: "About us" },
-  az: { title: "Find a specialist for your task", cta: "Mütəxəssis kimi müraciət edin indi", hire: "Ən yaxşı insanları işə götürün", about: "Haqqımızda" },
-  kk: { title: "Тапсырмаңызға маман табыңыз", cta: "Өтінім", hire: "Ең жақсы адамдарды жалдаңыз", about: "Біз туралы" },
+  en: { title: "Find a specialist for your task", cta: "Apply", hire: "Hire the best people", about: "About us", col: "Task" },
+  az: { title: "Find a specialist for your task", cta: "Mütəxəssis kimi müraciət edin indi", hire: "Ən yaxşı insanları işə götürün", about: "Haqqımızda", col: "Tapşırıqlar" },
+  kk: { title: "Тапсырмаңызға маман табыңыз", cta: "Өтінім", hire: "Ең жақсы адамдарды жалдаңыз", about: "Біз туралы", col: "Іс" },
 };
 const page = (lang, body, { hreflang = true } = {}) => `<!doctype html><html lang="${lang}"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width">
 ${hreflang ? '<link rel="alternate" hreflang="en" href="/"><link rel="alternate" hreflang="kk" href="/kk">' : ""}
 <style>body{margin:0;font:16px Arial;color:#111;background:#fff} header{display:flex;gap:8px;padding:8px;border-bottom:1px solid #ccc} main{padding:16px}
-.card{background:#f2f2f2;border:1px solid #bbb;border-radius:8px;padding:12px;width:160px} .cta{white-space:nowrap;height:40px;padding:0 12px}</style></head>
+.card{background:#f2f2f2;border:1px solid #bbb;border-radius:8px;padding:12px;width:160px} th.col{width:44px;font-size:13px;word-break:break-all;text-align:left} .cta{white-space:nowrap;height:40px;padding:0 12px}</style></head>
 <body><header><a href="/">Home</a><button type="button" data-l="en" title="English">EN</button><button type="button" data-l="az" title="Azərbaycanca">AZ</button><a href="/kk" hreflang="kk">KK</a></header>
 <main>${body}</main><footer><a href="/about">About</a></footer>
 <script>
@@ -22,7 +22,7 @@ if (document.documentElement.lang !== "kk") {
   document.querySelectorAll("[data-t]").forEach((e) => e.textContent = L[lang][e.dataset.t]);
 }
 </script></body></html>`;
-const home = (lang) => `<h1 data-t="title">${T[lang].title}</h1><p data-t="hire">${T[lang].hire}</p><div class="card"><button class="cta" data-t="cta">${T[lang].cta}</button></div><a href="/about" data-t="about">${T[lang].about}</a>`;
+const home = (lang) => `<h1 data-t="title">${T[lang].title}</h1><p data-t="hire">${T[lang].hire}</p><div class="card"><button class="cta" data-t="cta">${T[lang].cta}</button></div><a href="/about" data-t="about">${T[lang].about}</a><table><thead><tr><th class="col" data-t="col">${T[lang].col}</th><th>1,200</th></tr></thead></table>`;
 export function start() {
   const srv = createServer((req, res) => {
     const u = new URL(req.url, "http://x");

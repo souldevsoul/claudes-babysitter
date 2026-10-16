@@ -89,8 +89,9 @@ try {
     const az = f.filter((x) => x.locale === "az" && x.route === "/");
     const items = az.flatMap((x) => x.items.map((i) => i.what)).join("\n");
     assert.match(items, /\[az\] sticks out of its card/, items);
-    assert.match(items, /untranslated in "az": "Find a specialist for your task"/, items);
-    assert.ok(!f.some((x) => x.locale === "kk" && x.route === "/" && x.items.some((i) => /sticks out/.test(i.what))), "kk fits: no false alarm");
+    assert.match(items, /\[az\] word broken mid-word: "Tapşı/, `a longer language breaks a header label mid-word at 360: ${items}`);
+    assert.ok(!/untranslated|English on the/.test(items), `untranslated text is CT11 in content.spec, not reported again per viewport by run.spec: ${items}`);
+    assert.ok(!f.some((x) => x.locale === "kk" && x.route === "/" && x.items.some((i) => /sticks out|broken mid-word/.test(i.what))), "kk fits: no false alarm");
     // --last-failed re-runs exactly the failures (Playwright's .last-run.json in .babysitter/test-results)
     const nFailed = (o.match(/(\d+) failed/) || [])[1];
     const again = await sh([join(TOOL, "bin/babysitter.mjs"), "e2e", "--skip-prepare", "--last-failed", "--only", "ui", "--project=mobile-360", "--workers=2"], { cwd: repo, env, timeout: 600_000 });
@@ -103,6 +104,12 @@ try {
     assert.match(fp.stdout, /on: \/ .*mobile-360 in az/);
     assert.match(fp.stdout, /look at: app\/page\.tsx \(page\)/);
     assert.match(fp.stdout, /e2e --skip-prepare --last-failed/);
+    // the untranslated title is reported once, by content.spec's CT11, in the language prepare found
+    const ct = await sh([join(TOOL, "bin/babysitter.mjs"), "e2e", "--skip-prepare", "--only", "content", "--project=desktop-1440", "--grep", "CT11", "--workers=2", "--reporter=line"], { cwd: repo, env: { ...env, ROUTES: "", BABYSITTER_DNS: "0" }, timeout: 600_000 });
+    const co = ct.stdout + ct.stderr;
+    assert.equal(ct.status, 1, co.slice(-3000));
+    assert.equal((co.match(/Find a specialist for your task/g) || []).length > 0, true, co.slice(-3000));
+    assert.match(co, /\[az\][\s\S]*(untranslated in "az"|English on the "az" page): "Find a specialist for your task"/, co.slice(-3000));
   });
   await t("prepare: a crawl that finds no page fails loudly instead of writing an empty route list", async () => {
     const d = mkdtempSync(join(tmpdir(), "bs-run-empty-"));

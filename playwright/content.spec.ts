@@ -47,9 +47,10 @@ async function open(page: Page, route: string, loc: any = null) {
   await page.waitForTimeout(700);
   await c.revealLazy(page);
 }
-async function ctxFor(browser: Browser, auth: boolean) {
+/** a context signed in as the route's own role (storage-<role>.json), or signed out for a public route */
+async function ctxFor(browser: Browser, route: { auth?: boolean; role?: string } | null) {
   const info = test.info();
-  return browser.newContext({ ...info.project.use, storageState: auth ? STORAGE : undefined, baseURL: info.project.use.baseURL });
+  return browser.newContext({ ...info.project.use, storageState: route?.auth ? storageFor(route.role) : undefined, baseURL: info.project.use.baseURL });
 }
 
 /* ───────── every page ───────── */
@@ -83,11 +84,24 @@ for (const loc of LOCALES) {
     test.describe(`content [${loc.code}] ${authTag(route)}${route.path}`, () => {
       if (route.auth) test.use({ storageState: storageFor(route.role) });
       test.beforeEach(() => once());
-      test(`CT11–CT13 [${loc.code}] translated: no English left, no keys, lang/dir right; CT1–CT8 copy`, async ({ page }) => {
+      test(`CT11–CT13 [${loc.code}] translated: no English left, nothing word for word the default language, no keys, lang/dir right; CT1–CT8 copy`, async ({ page, browser }) => {
+        // the same page in the default language: text left unchanged in ${loc.code} is untranslated (CT11, 2nd heuristic)
+        let defaults: any = null;
+        if (on("CT11")) {
+          const dctx = await ctxFor(browser, route);
+          const dp = await dctx.newPage();
+          await open(dp, route.path, DEF ? { ...DEF, detected: true } : null);
+          defaults = await k.collectCopy(dp).catch(() => null);
+          await dctx.close();
+        }
         await open(page, route.path, loc);
         const copy = await k.collectCopy(page);
-        const list = [...(await k.languageFindings(page, { cfg, copy, locale: loc.code, keys: keys() })).hard, ...(await k.copyFindings(page, cfg, copy)).hard];
-        hard(list);
+        const lang = (await k.languageFindings(page, { cfg, copy, locale: loc.code, keys: keys(), defaults, defaultLocale: DEFAULT_LOCALE })).hard;
+        const untranslated = lang.filter((o: any) => o.id === "CT11");
+        // babysitter.config.json → locales.untranslated: "warn" lists untranslated text without failing
+        const warnOnly = !Array.isArray(cfg.locales) && cfg.locales?.untranslated === "warn";
+        if (warnOnly) note(untranslated, `untranslated text in ${loc.code}`);
+        hard([...(warnOnly ? lang.filter((o: any) => o.id !== "CT11") : lang), ...(await k.copyFindings(page, cfg, copy)).hard]);
       });
     });
   }
@@ -101,7 +115,7 @@ test.describe("content site-wide", () => {
   async function crawl(browser: Browser, loc: any = null) {
     const recs: any[] = [];
     for (const route of ROUTES) {
-      const ctx = await ctxFor(browser, route.auth);
+      const ctx = await ctxFor(browser, route);
       const page = await ctx.newPage();
       await open(page, route.path, loc);
       recs.push(k.pageRecord(route.path, await k.collectCopy(page), loc?.code || null));
@@ -111,7 +125,7 @@ test.describe("content site-wide", () => {
     const seen = new Set(recs.map((x) => x.route.replace(/\/$/, "") || "/"));
     const missing = [...new Set(recs.flatMap((x) => x.legal.map((l: any) => l.path)))].filter((p) => !seen.has(p));
     for (const p of missing) {
-      const ctx = await ctxFor(browser, false);
+      const ctx = await ctxFor(browser, null);
       const page = await ctx.newPage();
       await open(page, p, loc);
       recs.push(k.pageRecord(p, await k.collectCopy(page), loc?.code || null));
@@ -143,7 +157,7 @@ test.describe("content site-wide", () => {
     test.skip(LOCALES.length > 0, "the languages are known (content.locales or prepare): each has its own tests");
     test.skip(!on("CT11"), why("CT11"));
     test.setTimeout(120_000 + PUBLIC.length * 15_000 * 4);
-    const ctx = await ctxFor(browser, false);
+    const ctx = await ctxFor(browser, null);
     const page = await ctx.newPage();
     await open(page, PUBLIC[0]?.path || "/");
     const first = await k.collectCopy(page);
@@ -167,4 +181,4 @@ test.describe("content site-wide", () => {
     hard(out);
   });
 });
-void STRICT; void existsSync;
+void STRICT; void existsSync; void STORAGE;

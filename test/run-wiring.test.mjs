@@ -32,6 +32,7 @@ try {
     const r = spawnSync(process.execPath, [BIN, "init", ".", "--yes", "--new", "--link"], { cwd: d, encoding: "utf8", env });
     assert.equal(r.status, 0, r.stdout + r.stderr);
     for (const h of ["post-merge", "post-rewrite"]) assert.match(readFileSync(join(d, ".git/hooks", h), "utf8"), /after-merge\.mjs/);
+    assert.equal(JSON.parse(readFileSync(join(d, "babysitter.config.json"), "utf8")).name, "p", "init records the product name (favicon registry, reports)");
     const md = readFileSync(join(d, "CLAUDE.md"), "utf8");
     assert.match(md, /Babysitter findings are blocking/);
     assert.match(md, /e2e --skip-prepare --last-failed/);
@@ -127,6 +128,17 @@ try {
     const f = JSON.parse(readFileSync(join(d, ".babysitter/findings.json"), "utf8"));
     assert.equal(f.findings.length, 1);
     assert.deepEqual(f.findings[0].items, [{ what: "extends to x=0..420", where: "div.hero" }]);
+  });
+  await t("e2e: a boolean flag never swallows the spec file after it (`e2e --skip-prepare --quick forms.spec` runs forms.spec only)", async () => {
+    const d = project();
+    writeFileSync(join(d, "babysitter.config.json"), JSON.stringify({ baseURL: "http://127.0.0.1:9", routes: ["/"] }));
+    const r = spawnSync(process.execPath, [BIN, "e2e", "--skip-prepare", "--quick", "forms.spec", "--list"], { cwd: d, encoding: "utf8", env: { ...env, BABYSITTER_ROOT: d } });
+    const o = r.stdout + r.stderr;
+    assert.match(o, /Total: \d+ tests? in 1 file/, o.slice(-1500));
+    assert.match(o, /forms\.spec\.ts/);
+    assert.ok(!/layout\.spec\.ts|content\.spec\.ts/.test(o), "only the named spec");
+    const listed = o.split("\n").filter((l) => /^\s+\[[\w-]+\] › /.test(l));
+    assert.ok(listed.length && listed.every((l) => /\[(mobile-390|desktop-1440)\]/.test(l)), `--quick still applies: ${listed.slice(0, 3).join(" | ")}`);
   });
 } finally {
   for (const d of dirs) rmSync(d, { recursive: true, force: true });

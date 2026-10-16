@@ -3,6 +3,8 @@
 // → acceptance.skip can switch off — with a reason in acceptance.skipReasons. Sources: docs/acceptance.md.
 // Plain JavaScript on purpose (see checks.js). Page-level checks need checks.install(page) first.
 
+import { copyFindings } from "./checks/content.js";
+
 /** Defaults for babysitter.config.json → acceptance. Every one is an owner decision; override per product. */
 export const DEFAULTS = {
   // two-factor sign-in: "required" (a signed-in settings page offers it), "if-claimed" (only when the site
@@ -37,35 +39,16 @@ export const isAuthPath = (path, acc = DEFAULTS) => [acc.auth.signIn, acc.auth.s
 
 /* ─────────────── page text ─────────────── */
 
-// Build notes and self-justification that ended up in production copy (BQA 5; ~35 cards on 14 projects).
-const LEAK_RE = /(no mailbox is connected|this build\b|this deployment|in this preview|\.vercel\.app|MX record|lorem ipsum|\bTODO\b|\bFIXME\b|placeholder text|coming soon[^.]{0,40}(credits|pay|charge))/i;
-const DEFENSIVE_RE = /(we would rather|we'd rather say|is not a promise|rather than pretend|nothing on our side|to be honest|we (do not|don't) pretend|plainly:)/i;
-
-/** B1 — no build notes or self-justifying copy in visible text. */
-export const copyLeaks = (page) => page.evaluate(({ leak, defensive }) => {
-    const L = new RegExp(leak, "i"), D = new RegExp(defensive, "i");
-    const out = { leaks: [], defensive: [] };
-    const walker = document.createTreeWalker(document.body, NodeFilter.SHOW_TEXT);
-    const seen = new Set();
-    for (let n = walker.nextNode(); n; n = walker.nextNode()) {
-        const el = n.parentElement;
-        if (!el || seen.has(el) || el.closest("script, style, noscript, code, pre") || !window.__uiVisible(el))
-            continue;
-        const t = (el.innerText || "").replace(/\s+/g, " ").trim();
-        if (!t)
-            continue;
-        const m = t.match(L) || null, d = t.match(D) || null;
-        if (m) {
-            seen.add(el);
-            out.leaks.push({ what: `build note / unfinished copy in production text: "${m[0]}" [B1, BQA 5]`, where: window.__uiDescribe(el), selector: window.__uiSelector(el), human: window.__uiHuman(el) });
-        }
-        else if (d) {
-            seen.add(el);
-            out.defensive.push({ what: `self-justifying copy: "${d[0]}" — state the fact, drop the apology [B1, BQA 5]`, where: window.__uiDescribe(el), selector: window.__uiSelector(el), human: window.__uiHuman(el) });
-        }
-    }
-    return out;
-}, { leak: LEAK_RE.source, defensive: DEFENSIVE_RE.source });
+/**
+ * B1 — no build notes, unfinished or self-justifying copy in visible text (BQA 5; ~35 cards on 14 projects).
+ * One source of truth: the CT1 rules of lib/content-rules.js (content.spec reports them on every page and language).
+ * acceptance.spec runs B1 only when content.spec is not part of the run (`--only acceptance`), so a phrase is
+ * reported once. @returns {Promise<object[]>} findings
+ */
+export async function copyLeaks(page, cfg = {}) {
+    const { hard } = await copyFindings(page, cfg);
+    return hard.filter((f) => f.id === "CT1").map((f) => ({ ...f, what: f.what.replace(/\[CT1\]$/, "[B1 = CT1, BQA 5]") }));
+}
 
 /**
  * B2 — no "≈" approximations, B3 — no VAT / tax lines, B4 — amounts of money or credits from 1,000 up carry a thousands

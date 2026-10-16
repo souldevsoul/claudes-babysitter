@@ -9,6 +9,7 @@
 // Plain JavaScript (see checks.js). Page-level checks need checks.install(page) first.
 import * as c from "../checks.js";
 import * as a from "../acceptance.js";
+import { untranslatedReason, untranslatedWhat } from "../../lib/content-rules.js";
 
 /* ───────────────────────── shared ───────────────────────── */
 
@@ -629,9 +630,8 @@ export async function stateChecks(page, { reload, opts = {}, maxOpeners = 15, ma
 
 /** 2.5 — HEADER navigation items that wrap (a longer language): footer columns and "On this page" lists may wrap. */
 export async function headerNavWraps(page) {
-    const all = await c.wrappedNavItems(page);
-    const keep = await page.evaluate((sels) => sels.map((s) => { const el = s && document.querySelector(s); return !!el && !!el.closest("header, [role=banner]") && !el.closest("footer, [role=contentinfo], aside, main"); }), all.map((f) => f.selector || null)).catch(() => all.map(() => true));
-    return all.filter((_, i) => keep[i]);
+    // c.wrappedNavItems keeps site navigation only (header / top-level nav) — one filter for every language
+    return c.wrappedNavItems(page);
 }
 
 
@@ -656,31 +656,17 @@ export const textRuns = (page) => page.evaluate(() => {
 });
 
 /**
- * Text of the page in locale `code` that is still word for word the default locale's text: two or more words of
- * letters, at least 8 characters, not an email / URL / number, not all-caps codes, not inside an element that declares
- * another language (<span lang="en">) or translate=no. Brand and product names are single words, or are listed in
- * babysitter.config.json → locales.keep (exact strings). One finding per string, none dropped.
+ * Untranslated text (kept for callers of 4.x): the same check as content.spec's CT11 (lib/content-rules.js →
+ * untranslatedReason — English left in the page OR word for word the default-language text). run.spec no longer runs
+ * it: CT11 in content.spec is the one place a string is reported. One finding per element, none dropped.
  */
-export function untranslated(runs, defaultRuns, code, keep = []) {
-    const def = new Set(defaultRuns.map((r) => r.text));
-    const KEEP = new Set(keep);
-    const lang = (x) => String(x || "").split("-")[0].toLowerCase();
+export function untranslated(runs, defaultRuns, code, keep = [], brand = []) {
+    const defaults = new Set(defaultRuns.map((r) => r.text));
     const out = [];
-    const seen = new Set();
     for (const r of runs) {
-        const t = r.text;
-        if (!def.has(t) || KEEP.has(t) || seen.has(t))
-            continue;
-        if (r.ownLang && lang(r.ownLang) !== lang(code))
-            continue;
-        const words = t.match(/\p{L}{2,}/gu) || [];
-        // one token with no space is an identifier (a cookie name "session-token", a slug), not prose (Praxis /cookies)
-        if (words.length < 2 || t.length < 8 || !/\s/.test(t) || /@|https?:|www\./.test(t))
-            continue;
-        if (words.every((x) => x === x.toUpperCase()))
-            continue;
-        seen.add(t);
-        out.push({ what: `untranslated in "${code}": "${t.slice(0, 80)}" is the same text as on the default-language page — translate it (the ${code} messages file, or the CMS / database field) [i18n, 2.5]`, where: r.where, selector: r.selector });
+        const why = untranslatedReason(r.text, code, { brand, defaults, keep, ownLang: r.ownLang });
+        if (why)
+            out.push({ what: `${untranslatedWhat(why, r.text, code)} — translate it (the ${code} messages file, or the CMS / database field) [CT11, i18n]`, where: r.where, selector: r.selector });
     }
     return out;
 }

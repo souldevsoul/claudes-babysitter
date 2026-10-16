@@ -1,0 +1,31 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width">
+<style>
+  body { margin: 0; font: 16px system-ui; }
+  header { display: flex; justify-content: space-between; align-items: center; height: 56px; padding: 0 16px; background: #fff; position: relative; z-index: 2; }
+  header nav { display: none; }
+  #mm { position: fixed; inset: 0; background: #fff; z-index: 1; padding-top: 64px; display: flex; flex-direction: column; gap: 16px; padding-left: 16px; transition: opacity .25s; }
+  #mm.leaving { opacity: .99; }
+  #mm a { font-size: 20px; color: #111; }
+</style></head>
+<body>
+<!-- truelogos.pro pattern (2026-10): the toggle's label flips Open/Close, Escape closes with a 400 ms exit, the panel
+     is unmounted afterwards. Pressing the toggle while it leaves re-opens it. -->
+<header><a href="/">Logo</a><nav><a href="/designers">Designers</a><a href="/features">Features</a><a href="/pricing">Pricing</a></nav>
+  <button id="tg" aria-label="Open menu" aria-expanded="false" aria-controls="mm">☰</button></header>
+<main><h1>Home</h1></main>
+<script>
+  const tg = document.getElementById("tg");
+  let panel = null, timer = null;
+  const state = (o) => { tg.setAttribute("aria-expanded", String(o)); tg.setAttribute("aria-label", o ? "Close menu" : "Open menu"); };
+  const open = () => {
+    if (timer) { clearTimeout(timer); timer = null; panel.classList.remove("leaving"); return state(true); } // pressed while leaving: back open
+    panel = document.createElement("div"); panel.id = "mm";
+    panel.innerHTML = '<a href="/designers">Designers</a><a href="/features">Features</a><a href="/pricing">Pricing</a>';
+    document.body.appendChild(panel); state(true);
+  };
+  const close = () => { if (!panel || timer) return; state(false); panel.classList.add("leaving"); timer = setTimeout(() => { panel.remove(); panel = null; timer = null; }, 400); };
+  tg.addEventListener("click", () => (panel && !timer ? close() : open()));
+  addEventListener("keydown", (e) => { if (e.key === "Escape") close(); });
+</script>
+</body></html>

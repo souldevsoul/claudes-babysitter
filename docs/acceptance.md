@@ -101,7 +101,7 @@ Write the check's ID into `acceptance.skip`, and the reason into `acceptance.ski
 
 | ID | Check | Sources |
 |---|---|---|
-| B1 | No build notes ("No mailbox is connected to this build", `vercel.app`, TODO). Self-justifying copy ("we would rather", "is not a promise") is reported too. | 14 products |
+| B1 | No build notes ("No mailbox is connected to this build", `vercel.app`, TODO) and no self-justifying copy ("we would rather", "is not a promise"). **B1 = CT1:** the phrases are the CT1 rules of `lib/content-rules.js` (one source of truth), reported by `content.spec`; B1 runs only in `e2e --only acceptance`, so a phrase is reported once. | 14 products |
 | D1 | No internal link answers 4xx or 5xx. | 1 product; BQA 2 |
 | D2 | `/gdpr`, `/press` and `/currency` do not exist. | BQA 1 |
 | P1 | Policy text spans its column. | 3 products |

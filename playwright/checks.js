@@ -559,7 +559,7 @@ export const navReachable = (page) => page.evaluate(() => {
 });
 /** 3.8 — a fresh navigation lands at the top. */
 export const scrollY = (page) => page.evaluate(() => window.scrollY);
-/** 2.9 — header nav items stay on one line. */
+/** 2.5 — site navigation items (header / top-level nav) stay on one line. */
 export const wrappedNavItems = (page) => page.evaluate(() => {
     const lines = (el) => {
         // count visual lines of the text itself (not element height — padding/icons fake a "wrap")
@@ -577,8 +577,20 @@ export const wrappedNavItems = (page) => page.evaluate(() => {
         }
         return tops.length;
     };
-    return Array.from(document.querySelectorAll("header a, header button, nav a"))
-        .filter((el) => window.__uiVisible(el) && (el.textContent || "").trim().length > 0 && lines(el) > 1)
+    // site navigation only: the header (banner) and a top-level <nav>. Footer columns, sidebars and an "On this page" /
+    // table-of-contents list inside the content may wrap.
+    const siteNav = (el) => {
+        if (el.closest("footer, [role=contentinfo], aside, [role=complementary]"))
+            return false;
+        if (el.closest("header, [role=banner]"))
+            return !el.closest("main, article, [role=main]");
+        const nav = el.closest("nav, [role=navigation]");
+        if (!nav || nav.closest("main, article, [role=main]"))
+            return false;
+        return !/on this page|contents|breadcrumb|bu səhifədə|осы бетте|на этой странице|содержание/i.test(`${nav.getAttribute("aria-label") || ""} ${nav.id} ${nav.className}`);
+    };
+    return Array.from(document.querySelectorAll("header a, header button, [role=banner] a, [role=banner] button, nav a, [role=navigation] a"))
+        .filter((el) => siteNav(el) && window.__uiVisible(el) && (el.textContent || "").trim().length > 0 && lines(el) > 1)
         .map((el) => ({ what: "nav item wraps onto two lines", where: window.__uiDescribe(el), selector: window.__uiSelector(el), human: window.__uiHuman(el) }));
 });
 /** 2.12 — text blocks must not overlap each other (sampled). */
@@ -2493,7 +2505,9 @@ async function openMobileMenu(page) {
         if (panel)
             return { ...prep, ...panel, toggle: i };
         await page.keyboard.press("Escape").catch(() => { });
-        if ((await t.getAttribute("aria-expanded").catch(() => null)) === "true")
+        // a toggle that re-rendered (menu icon swapped for a close icon) is gone: never wait for it (it used to hang
+        // 30 s on truelogos.pro at 390 — the default locator timeout)
+        if ((await t.getAttribute("aria-expanded", { timeout: 500 }).catch(() => null)) === "true")
             await t.click({ timeout: 1000 }).catch(() => { });
         await page.waitForTimeout(200);
     }
@@ -2502,15 +2516,24 @@ async function openMobileMenu(page) {
 async function closeMobileMenu(page, m) {
     await recover(page);
     const open = () => page.evaluate(() => { const p = document.querySelector("[data-bs-menu-panel]"); return !!p && Array.from(p.querySelectorAll("[data-bs-menu-link]")).some((a) => window.__uiVisible(a)); }).catch(() => false);
+    // closed = the panel's links are no longer visible. Escape often closes with a 150–300 ms exit animation: wait for
+    // it before deciding Escape did nothing — clicking the toggle while the menu is leaving opened it again, and the
+    // next openMobileMenu then found no closed menu to open (truelogos.pro at 390: 30 s and no panel)
+    const closed = async (ms) => { for (const end = Date.now() + ms; Date.now() < end; await page.waitForTimeout(100)) if (!(await open())) return true; return !(await open()); };
     await page.keyboard.press("Escape").catch(() => { });
-    await page.waitForTimeout(250);
-    if (await open()) {
+    await settle(page, 800);
+    if (!(await closed(1200))) {
         const t = page.locator(`[data-bs-menu-toggle="${m.toggle}"]`).first();
-        if (await t.isVisible().catch(() => false))
-            await t.click({ timeout: 1500 }).catch(() => { });
-        else
-            await page.locator('header [aria-expanded="true"], nav [aria-expanded="true"], header button[aria-label*="close" i]').first().click({ timeout: 1500 }).catch(() => { });
-        await page.waitForTimeout(250);
+        // a toggle that already says "collapsed" is closing the menu: do not press it again
+        const expanded = await t.getAttribute("aria-expanded", { timeout: 300 }).catch(() => null);
+        if (expanded !== "false") {
+            if (await t.isVisible().catch(() => false))
+                await t.click({ timeout: 1500 }).catch(() => t.evaluate((el) => el.click(), null, { timeout: 500 }).catch(() => { }));
+            else
+                await page.locator('header [aria-expanded="true"], nav [aria-expanded="true"], header button[aria-label*="close" i], [data-bs-menu-panel] button[aria-label*="close" i]').first().click({ timeout: 1500 }).catch(() => { });
+        }
+        await settle(page, 800);
+        await closed(1500);
     }
     await settle(page);
     await page.evaluate(() => { for (const a of ["data-bs-menu-link", "data-bs-menu-toggle", "data-bs-menu-panel", "data-bs-pre", "data-bs-vis"]) for (const e of document.querySelectorAll(`[${a}]`)) e.removeAttribute(a); }).catch(() => { });

@@ -94,6 +94,29 @@ try {
     silent(hard, "az"); silent(hard, "domain"); silent(hard, "brands");
   });
 
+  await test("CT11 one check, both heuristics: English left OR the default-language text unchanged — each string reported once; lang-tagged, translate=no, locales.keep, brands, one-token ids pass", async (page) => {
+    const html = (h) => page.goto("data:text/html;charset=utf-8," + encodeURIComponent(h));
+    await html(`<html lang="en"><body><h1>Hire specialists today</h1><p>Find a specialist for your task</p><p>Praxis Studio</p><p>Brand new tagline</p><p>__Secure-authjs.session-token</p></body></html>`);
+    const defaults = await k.collectCopy(page);
+    await html(`<html lang="az"><body><h1 id="same">Hire specialists today</h1><p id="en">Find a specialist for your task</p><p id="brand">Praxis Studio</p><p id="kept">Brand new tagline</p>
+      <p id="cookie">__Secure-authjs.session-token</p><blockquote lang="en" id="quote">Hire specialists today</blockquote><p translate="no" id="tn">Hire specialists today</p><p id="az">Mütəxəssis tapın</p></body></html>`);
+    const { hard } = await k.languageFindings(page, { cfg: { content: { brandTerms: ["Praxis", "Studio"] }, locales: { keep: ["Brand new tagline"] } }, locale: "az", defaults, defaultLocale: "en" });
+    const ct11 = hard.filter((f) => f.id === "CT11");
+    fired(ct11, "same", /untranslated in "az": "Hire specialists today" is the same text as on the default-language page/);
+    fired(ct11, "en", /English on the "az" page/);
+    assert.equal(at(ct11, "en").length, 1, `one report per string, not one per heuristic: ${JSON.stringify(at(ct11, "en"))}`);
+    for (const id of ["brand", "kept", "cookie", "quote", "tn", "az"]) silent(ct11, id);
+  });
+
+  await test("B1 = CT1: acceptance's build-note check reports with the CT1 rules (one source of truth), defensive copy included", async (page) => {
+    await page.goto("data:text/html;charset=utf-8," + encodeURIComponent(`<html lang="en"><body><p id="leak">No mailbox is connected to this build.</p><p id="def">We would rather say so plainly.</p><p id="host">Open qa-preview.vercel.app to try it</p><p id="ok">We answer within a day.</p></body></html>`));
+    await checks.install(page);
+    const out = await acceptance.copyLeaks(page);
+    fired(out, "leak", /\[B1 = CT1, BQA 5\]/); fired(out, "def", /would rather/); fired(out, "host", /vercel\.app/); silent(out, "ok");
+    const { hard } = await k.copyFindings(page, {});
+    assert.deepEqual(at(hard, "leak").length, 1, "CT1 reports the same phrase once");
+  });
+
   await test("CT11 a Cyrillic locale: Latin-only sentence fails; names inside Kazakh sentences pass; lang matches", async (page) => {
     await page.goto(url("lang-kk.html"));
     const { hard } = await k.languageFindings(page, { locale: "kk" });

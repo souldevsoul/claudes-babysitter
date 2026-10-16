@@ -1,7 +1,7 @@
 // What the page-level checks cannot see on a page at rest (Praxis, 2026-10: 21 cards missed although a check existed —
 // the check never ran there):
-//   • every language the site speaks: overflow, escapes, contrast, money, clipped labels and untranslated text,
-//     at every viewport (locales from prepare → .babysitter/locales.json);
+//   • every language the site speaks: overflow, escapes, contrast, money and clipped labels at every viewport
+//     (untranslated text is CT11 in content.spec, once per language) (locales from prepare → .babysitter/locales.json);
 //   • states: every dialog / sheet / dropdown opened, forms submitted empty, wizard steps walked with sample data,
 //     top-up dialogs opened in "no-pay" mode, pagination — the same checks re-run in each (checks/run.js);
 //   • 3.8: in-app navigation and #anchor links land at the top / below the sticky header.
@@ -10,6 +10,7 @@ import { test, expect, type Page, type Browser } from "@playwright/test";
 import * as c from "./checks.js";
 import * as a from "./acceptance.js";
 import * as run from "./checks/run.js";
+import * as L from "./checks/layout.js";
 import { loadConfig, loadRoutes, storageFor, loadLocales, applyLocale, localize, viewports } from "./project.js";
 
 const cfg = loadConfig();
@@ -61,7 +62,7 @@ for (const route of ROUTES) {
   test.describe(`run ${route.auth ? `[signed-in${route.role ? `: ${route.role}` : ""}] ` : ""}${route.path}`, () => {
     /* languages: every check whose result depends on the words, at every viewport */
     for (const loc of OTHERS) {
-      test(`i18n [${loc.code}] 2.1/2.10/6.4/B4/N6 + untranslated: the page in ${loc.code} fits, reads and is translated [P15 P16]`, async ({ browser }) => {
+      test(`i18n [${loc.code}] 2.1/2.10/6.4/B4/N6/2.5: the page in ${loc.code} fits and reads (untranslated text: CT11, content.spec) [P15 P16]`, async ({ browser }) => {
         test.setTimeout(150_000);
         const { ctx, page } = await openIn(browser, route, loc);
         const list: O[] = [];
@@ -71,16 +72,15 @@ for (const route of ROUTES) {
         add("6.4", (await c.illegibleText(page, allowLight)).hard);
         add("B4", await a.moneyText(page, opts));
         add("N6", await a.clippedControls(page));
-        const runs = await run.textRuns(page);
+        // 2.5 words broken mid-word / numbers split / orphans: a longer language breaks what fits in English (Praxis KK
+        // "ТАПСЫРМА" broken by letters at 360) — layout.spec checks the default language, this checks the others
+        let breaks: { hard: O[]; soft: O[] } = { hard: [], soft: [] };
+        if ((page.viewportSize()?.width ?? 1440) < 768) { breaks = await L.textBreaks(page); add("2.5", breaks.hard); }
         await ctx.close();
-        // untranslated: compared with the same page in the default language
-        const d = await openIn(browser, route, DEFAULT);
-        const defRuns = await run.textRuns(d.page);
-        await d.ctx.close();
-        const missing = run.untranslated(runs, defRuns, loc.code, cfg.locales?.keep || []);
-        if (cfg.locales?.untranslated === "warn") soft(missing, `untranslated text in ${loc.code}`); else list.push(...missing);
+        // untranslated text is CT11 in content.spec (both heuristics: English left, or the default-language text
+        // unchanged) — reported there once per language, not again at every viewport here
         const p2 = await openIn(browser, route, loc);
-        soft([...(await run.headerNavWraps(p2.page)), ...(await c.overlappingText(p2.page))].map((o) => ({ ...o, what: `[${loc.code}] ${o.what}` })), `nav wraps / text covered in ${loc.code}`);
+        soft([...(await run.headerNavWraps(p2.page)), ...(await c.overlappingText(p2.page)), ...breaks.soft].map((o) => ({ ...o, what: `[${loc.code}] ${o.what}` })), `nav wraps / text covered / orphan words in ${loc.code}`);
         await p2.ctx.close();
         hard(list);
       });

@@ -58,7 +58,7 @@ cannot happen quietly.
 
 | Test | Where | What |
 |---|---|---|
-| `i18n [<code>]` | every route × every non-default language × every viewport | 2.1 overflow, 2.10 escapesBox, 6.4 legibility/contrast, B4 money, N6 clipped labels, **untranslated text** (identical to the default-language page, two or more words; `lang`-tagged and `translate=no` text and `locales.keep` excluded); nav wrapping and covered text as warnings |
+| `i18n [<code>]` | every route × every non-default language × every viewport | 2.1 overflow, 2.10 escapesBox, 6.4 legibility/contrast, B4 money, N6 clipped labels, 2.5 text breaks at phone widths (mid-word / split number hard, orphan soft); header-nav wrapping and covered text as warnings. **Untranslated text is CT11 in `content.spec`** (once per language, both heuristics: English left, or word for word the default-language page) |
 | `states[ <code>]` | every route × every language × narrowest + widest viewport | `checks/run.js → stateChecks`: the same checks (plus A1 password eye) re-run in each state, reporting only what the state adds over the page at rest |
 | `3.8 …` | every route, narrowest + widest | an in-app link followed from the bottom of the page opens the new page at its top; every `#anchor` target lands below the sticky header |
 

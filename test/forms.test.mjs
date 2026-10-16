@@ -53,6 +53,16 @@ try {
     const amt = out.find((f) => /Amount/.test(f.what));
     assert.ok(amt && /without a word/.test(amt.what) && /Buy credits/.test(amt.where), show(out));
   });
+  await test("FM1 a loose calculator field (no form, no submit button) finishes inside the test runner's 'no action timeout' (Praxis /pricing timed out at 240 s)", async (page) => {
+    page.setDefaultTimeout(0); // what the Playwright test runner uses: no action timeout
+    await page.goto(BASE + "calc-loose.html");
+    const t0 = Date.now();
+    const out = await Promise.race([forms.numericBounds(page), new Promise((r) => setTimeout(() => r("hung"), 30000))]);
+    assert.notEqual(out, "hung", "numericBounds never returned");
+    assert.ok(Date.now() - t0 < 20000, `took ${Date.now() - t0} ms`);
+    assert.deepEqual(out.filter((f) => !f.soft), [], JSON.stringify(out));
+  });
+
   await test("FM1 bounded, clamped and explained fields pass", async (page) => {
     await go(page, "numeric-good.html");
     const out = real_(await forms.numericBounds(page));
