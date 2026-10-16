@@ -32,6 +32,7 @@ const cfg = existsSync(cfgPath) ? JSON.parse(readFileSync(cfgPath, "utf8")) : {}
 const git = (c) => { try { return execSync(`git ${c}`, { cwd: repo, encoding: "utf8", stdio: ["ignore", "pipe", "ignore"] }).trim(); } catch { return ""; } };
 
 let files;
+let changedAll = null; // every changed path (message files and templates too), for the copy lint
 let lineFilter = null; // file -> Set(line) | "all"
 const movedLines = new Map(); // file -> Set(line): content that only changed place
 // a line counts as moved only when it carries real content: braces, bare tags and blank lines are everywhere
@@ -91,6 +92,7 @@ if (changed) {
     }
   }
   const list = [git(`diff --name-only --diff-filter=ACMR ${base}`), git("diff --name-only --diff-filter=ACMR"), git("ls-files --others --exclude-standard")].join("\n");
+  changedAll = [...new Set(list.split("\n").filter(Boolean))].filter((f) => existsSync(join(repo, f)));
   files = [...new Set(list.split("\n").filter(Boolean))].filter((f) => /\.(jsx|tsx|ts|js|mjs|s?css)$/.test(f) && !/\.d\.ts$|(^|\/)(next|tailwind|postcss|eslint|vite|playwright)\.config\./.test(f) && existsSync(join(repo, f)));
 } else {
   // a full check that finds nothing to check is a failure, not a clean result (a folder that is not a git
@@ -217,6 +219,24 @@ if (!changed) {
     const consolidation = /is defined in \d+ files/.test(f.msg) && /(^|\/)components\//.test(f.file) && !isOld;
     if (isOld || consolidation) info.push({ file: f.file, message: consolidation ? `${f.msg.split(" is defined")[0]} now has a shared version here; older local copies can be migrated later.` : f.msg });
     else problems.push({ file: f.file, line: 1, rule: `ui-audit/${f.kind}`, message: `${f.msg} [${f.rule}]` });
+  }
+}
+
+// 7. copy: i18n message files of every locale, JSX copy, email addresses (lib/content-lint.js, docs/checks-content.md).
+// Offline here (hooks run on every edit); `babysitter content` adds the MX lookups. "content": false turns it off.
+if (cfg.content !== false) {
+  const { lintContent, lintFileText } = await import("../lib/content-lint.js");
+  const ign = (f) => ignore.some((r) => r.test(f));
+  let scope = null;
+  if (only && only !== true) scope = [relative(repo, resolve(repo, only))];
+  else if (changed) scope = (changedAll || []).filter((f) => !ign(f));
+  if (!scope || scope.length) {
+    const res = await lintContent(repo, { files: scope, dns: false, cfg });
+    for (const p of res.problems) if (!ign(p.file)) problems.push({ file: p.file, line: p.line, rule: p.rule, message: p.message });
+    for (const f of lineFilter && scope ? scope : []) {
+      const text = atBase(f);
+      if (text !== null) for (const p of lintFileText(f, text, cfg)) countAtBase(f, { rule: p.rule, message: p.message });
+    }
   }
 }
 

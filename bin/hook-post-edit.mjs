@@ -12,7 +12,9 @@ let input = "";
 for await (const chunk of process.stdin) input += chunk;
 let file;
 try { const j = JSON.parse(input); file = j.tool_input?.file_path || j.tool_input?.path; } catch {}
-if (!file || !/\.(jsx|tsx|ts|js|mjs|s?css)$/.test(file) || /\.d\.ts$/.test(file)) process.exit(0);
+// UI code, and the copy in translation files (messages/en.json, locales/az/common.yaml …: checks-content.md)
+const messages = /\.(json|ya?ml)$/.test(file || "") && /(^|\/)(messages|locales?|i18n|lang|langs|translations|dictionar(y|ies)|intl)\//i.test(file || "");
+if (!file || (!/\.(jsx|tsx|ts|js|mjs|s?css)$/.test(file) && !messages) || /\.d\.ts$/.test(file)) process.exit(0);
 
 const repo = process.env.CLAUDE_PROJECT_DIR || process.cwd();
 try { recover(repo); } catch {} // a killed Studio review left HEAD versions on disk: put the work back first

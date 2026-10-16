@@ -1,0 +1,24 @@
+{
+  "home": {
+    "title": "Find a specialist.",
+    "subtitle": "Book in minutes.",
+    "cta": { "button": "Get started" }
+  },
+  "pricing": {
+    "note": "Card payments open at launch.",
+    "fee": "We keep 20% of each hire."
+  },
+  "legal": {
+    "terms": {
+      "updated": "Last updated: October 1, 2026",
+      "revised": "Last updated 02.10.2026"
+    },
+    "privacy": { "updated": "Last updated: 01.10.2026" }
+  },
+  "footer": { "company": "New Company 1" },
+  "catalog": { "count": "{count} profiles", "one": "1 profiles offer this task" },
+  "auth": { "emailPlaceholder": "you@example.com", "invalid": "Enter an email like you@example.com" },
+  "contact": { "email": "Write to support@acme.vercel.app" },
+  "nav": { "pricing": "Pricing" },
+  "onlyEn": "Only in English"
+}

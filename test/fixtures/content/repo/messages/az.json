@@ -1,0 +1,24 @@
+{
+  "home": {
+    "title": "Mütəxəssis tapın",
+    "subtitle": "Bir neçə dəqiqəyə sifariş edin.",
+    "cta": { "button": "Başlayın" }
+  },
+  "pricing": {
+    "note": "Kart ödənişləri tezliklə",
+    "fee": "Payments are not live yet and we keep 20% of the hire"
+  },
+  "legal": {
+    "terms": {
+      "updated": "Son yenilənmə: 05.10.2026",
+      "revised": "Son yenilənmə 02.10.2026"
+    },
+    "privacy": { "updated": "Son yenilənmə: 01.10.2026" }
+  },
+  "footer": { "company": "New Company 1" },
+  "catalog": { "count": "{count} profil", "one": "1 profil" },
+  "auth": { "emailPlaceholder": "you@example.com", "invalid": "E-poçt ünvanı daxil edin, məsələn you@example.com" },
+  "contact": { "email": "support@acme.vercel.app ünvanına yazın" },
+  "nav": { "pricing": "Qiymətlər" },
+  "onlyAz": "Yalnız AZ"
+}
