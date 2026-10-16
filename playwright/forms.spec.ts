@@ -9,16 +9,17 @@ import { resolve } from "node:path";
 import * as c from "./checks.js";
 import * as a from "./acceptance.js";
 import * as fm from "./checks/forms.js";
-import { loadConfig, loadRoutes, STORAGE, ROOT } from "./project.js";
+import { loadConfig, loadRoutes, STORAGE, ROOT, storageFor } from "./project.js";
 
 const cfg = loadConfig();
 const acc = a.acceptanceConfig(cfg);
-const F = { skip: [] as string[], skipReasons: {} as Record<string, string>, zeroBalanceStorage: null as string | null, protectedRoute: null as string | null, forgot: null as string | null, ...(cfg.forms || {}) };
+const F = { skip: [] as string[], skipReasons: {} as Record<string, string>, zeroBalanceStorage: null as string | null, zeroBalanceRole: null as string | null, protectedRoute: null as string | null, forgot: null as string | null, ...(cfg.forms || {}) };
 const ROUTES = loadRoutes(cfg);
 const PUBLIC = ROUTES.filter((r) => !r.auth);
 const AUTH = ROUTES.filter((r) => r.auth);
 const SIGNED_IN = existsSync(STORAGE);
-const ZERO = F.zeroBalanceStorage ? resolve(ROOT, F.zeroBalanceStorage) : null;
+// a user with no credits: a role from babysitter.config.json → roles (signed in by prepare), or a storage file
+const ZERO = F.zeroBalanceRole ? storageFor(F.zeroBalanceRole) : F.zeroBalanceStorage ? resolve(ROOT, F.zeroBalanceStorage) : null;
 const STRICT = process.env.STRICT !== "0";
 const on = (id: string) => !F.skip.includes(id);
 const why = (id: string) => `${id} switched off in babysitter.config.json → forms.skip${F.skipReasons[id] ? `: ${F.skipReasons[id]}` : ""}`;
@@ -57,7 +58,7 @@ const desktopOnce = () => test.skip(!/desktop-1440/.test(test.info().project.nam
 /* ───────── every page ───────── */
 for (const route of ROUTES) {
   test.describe(`forms ${route.auth ? "[signed-in] " : ""}${route.path}`, () => {
-    if (route.auth) test.use({ storageState: STORAGE });
+    if (route.auth) test.use({ storageState: storageFor(route.role) });
     const r = route.path;
     test.beforeEach(() => desktopOnce());
 
@@ -96,7 +97,7 @@ for (const route of ROUTES) {
       });
       test("FM6 an action the balance cannot pay for says so before the click [late-insufficient-credits ×24]", async ({ browser }) => {
         test.skip(!on("FM6"), why("FM6"));
-        const ctx = await ctxFor(browser, ZERO && existsSync(ZERO) ? ZERO : STORAGE);
+        const ctx = await ctxFor(browser, ZERO && existsSync(ZERO) ? ZERO : storageFor(route.role));
         const page = await ctx.newPage();
         await open(page, r);
         report(await fm.creditsUpFront(page), "FM6");
