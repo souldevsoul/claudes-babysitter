@@ -43,7 +43,7 @@
     "test:team": "node test/team.test.mjs",
     "test:acceptance": "node test/acceptance.test.mjs",
     "test:run": "for f in test/run-*.test.mjs; do node \"$f\" || exit 1; done",
-    "test:content": "node test/content-lint.test.mjs"
+    "test:content": "node test/content-lint.test.mjs && node test/content-runtime.test.mjs"
   },
   "dependencies": {
     "@clack/prompts": "^1.8.1",

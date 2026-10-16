@@ -318,12 +318,18 @@ export const footer = (page, acc = DEFAULTS) => page.evaluate((acc) => {
     const root = location.hostname.replace(/^www\./, "").split(".").slice(-2).join(".");
     const emails = [...new Set((text.match(/[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}/gi) || []).concat(Array.from(f.querySelectorAll("a[href^='mailto:']")).map((a) => a.getAttribute("href").slice(7).split("?")[0])))];
     const want = acc.company?.supportEmail;
-    const local = /^(localhost|127\.|0\.0\.0\.0|\[::1\])/.test(location.hostname) || /\.vercel\.app$|\.netlify\.app$|\.pages\.dev$/.test(location.hostname);
+    // on a preview host the product's own domain is unknown, so the same-domain rule waits — but an address ON a
+    // preview host never receives mail and fails everywhere (30 projects; MX lookups: content.spec CT9)
+    const local = /^(localhost|127\.|0\.0\.0\.0|\[::1\])/.test(location.hostname);
+    const preview = /\.vercel\.app$|\.netlify\.app$|\.pages\.dev$/.test(location.hostname);
+    const onPreview = emails.find((e) => /(^|\.)(vercel\.app|netlify\.app|pages\.dev|herokuapp\.com|onrender\.com|railway\.app|fly\.dev)$/i.test(e.split("@")[1] || ""));
+    if (onPreview)
+        push("F3", `support email ${onPreview} is on a preview host — it has no mailbox, mail to it bounces [F3, CT9]`);
     if (!emails.length)
         push("F3", "footer shows no support email [F3, BQA 6]");
     else if (want && !emails.map((e) => e.toLowerCase()).includes(want.toLowerCase()))
         push("F3", `footer support email is ${emails.join(", ")}, expected ${want} [F3]`);
-    else if (!want && !local && !emails.some((e) => e.toLowerCase().endsWith("@" + root) || e.toLowerCase().endsWith("." + root)))
+    else if (!want && !local && !preview && !onPreview && !emails.some((e) => e.toLowerCase().endsWith("@" + root) || e.toLowerCase().endsWith("." + root)))
         push("F3", `support email ${emails[0]} is not on the site's domain (${root}) [F3, BQA 6]`);
     // F4 currency selector only in the header
     if (!acc.footerCurrencySelector) {

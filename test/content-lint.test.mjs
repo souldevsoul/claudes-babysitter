@@ -65,6 +65,7 @@ await t("CT4 headings, buttons, nav items: no trailing period; body text, ellips
   quiet("Wait…", "content/trailing-period", "heading");
   quiet("Acme Inc.", "content/trailing-period", "heading");
   quiet("Fast. Simple", "content/trailing-period", "heading");
+  quiet("Vusal A.", "content/trailing-period", "heading"); // Praxis specialist cards: a name with its initial
 });
 
 /* CT5 dashes */
@@ -162,6 +163,8 @@ await t("CT11 English in a non-English locale fires; translations, brands and ac
   assert.equal(R.englishIn("PRAXIS платформасында GitHub арқылы кіріңіз", "kk", ["PRAXIS"]), null);
   assert.equal(R.englishIn("Payments are not live yet", "en"), null);
   assert.equal(R.englishIn("Sifariş PDF, CSV və API vasitəsilə", "az"), null);
+  assert.equal(R.englishIn("__Secure-authjs.callback-url", "kk"), null, "cookie names on the kk Cookie Policy are identifiers (Praxis live)");
+  assert.equal(R.englishIn("__Host-authjs.csrf-token", "kk"), null);
 });
 await t("CT12 translation keys printed as text are recognised; domains, files and abbreviations are not", () => {
   for (const k of ["home.title", "common.viewAll", "auth.errors.invalid_email", "pricing.calc.clamped"]) assert.ok(R.looksLikeKey(k), k);
@@ -179,6 +182,7 @@ await t("CT17 glossary variants fire; the preferred term passes", () => {
   assert.equal(R.legalFamily("Cookie Policy"), "cookies");
   assert.equal(R.legalFamily("Deliverables and Licence"), "license");
   assert.equal(R.legalFamily("Pricing"), null);
+  assert.equal(R.normName("Privacy Policy →"), R.normName("Privacy Policy"), "a footer arrow is not part of the name (Praxis live)");
 });
 await t("CT18 numeric facts: the same keyword with different values conflicts; the same value or other keywords do not", () => {
   const facts = (txt, where) => R.numericFacts(txt).map((x) => ({ ...x, where }));

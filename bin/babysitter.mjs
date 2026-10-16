@@ -18,7 +18,8 @@
 //   micro-check      → rendered contrast / row / overflow check on a running dev server
 //   prepare          → playwright/prepare.mjs (login + crawl)
 //   test-ui [...]    → playwright test with the bundled config
-//   e2e [--skip-prepare] [--quick] [--only ui|acceptance|product] [--last-failed] [...playwright args]
+//   content [repo] [--offline] → static copy lint: i18n files of every locale, JSX copy, email addresses (MX)
+//   e2e [--skip-prepare] [--quick] [--only ui|acceptance|content|product] [--last-failed] [...playwright args]
 //                    → prepare (login per role + crawl + languages) + the UI checks + states / languages / scroll
 //                      (run.spec.ts) + business acceptance (acceptance.spec.ts) + the product's own e2e/*.spec.ts, in one
 //                      Playwright run at 360/390/768/1280/1440 (--quick: 390 + 1440). --only is a partial run and says so.
@@ -46,6 +47,7 @@ const node = (file, args) => process.exit(spawnSync(process.execPath, [join(root
 switch (cmd) {
   case "init": node("bin/ui-init.mjs", rest); break;
   case "check": node("bin/ui-check.mjs", rest); break;
+  case "content": node("bin/content-lint.mjs", rest); break;
   case "audit": {
     // audit --diff <base>: the CI gate — only problems this branch adds since it left <base> fail the run
     const i = rest.indexOf("--diff");
@@ -128,10 +130,10 @@ switch (cmd) {
     const banner = wiringBanner(ROOT, { context: "e2e" });
     if (banner) console.error(banner);
     // everything runs by default; --only is a partial run and says so, loudly, before and after
-    const SUITES = { ui: ["babysitter.spec", "run.spec"], acceptance: ["acceptance.spec"], product: ["--project=product"] };
-    if (only && !SUITES[only]) { console.error(`babysitter e2e: --only ui | acceptance | product (got "${only}")`); process.exit(2); }
+    const SUITES = { ui: ["babysitter.spec", "run.spec"], acceptance: ["acceptance.spec"], content: ["content.spec"], product: ["--project=product"] };
+    if (only && !SUITES[only]) { console.error(`babysitter e2e: --only ui | acceptance | content | product (got "${only}")`); process.exit(2); }
     if (only) {
-      const skippedNames = { ui: "UI checks + states/languages/scroll (babysitter.spec, run.spec)", acceptance: "business acceptance (acceptance.spec: B1 copy leaks, B2–B4 money, H1/H2 hover and cursor, N1/N4/N6, F0–F5 footer, P1–P3 policies, D1–D3, C1/C2 cookies, M1 currency, A1–A9 sign-in)", product: "the product's own e2e/*.spec.ts" };
+      const skippedNames = { ui: "UI checks + states/languages/scroll (babysitter.spec, run.spec)", acceptance: "business acceptance (acceptance.spec: B1 copy leaks, B2–B4 money, H1/H2 hover and cursor, N1/N4/N6, F0–F5 footer, P1–P3 policies, D1–D3, C1/C2 cookies, M1 currency, A1–A9 sign-in)", content: "copy (content.spec: CT1–CT18 unfinished copy, test data, raw errors, punctuation, dates, plurals, email MX + mailto, translations, legal names, © line)", product: "the product's own e2e/*.spec.ts" };
       const off = Object.keys(SUITES).filter((k) => k !== only);
       console.error(`${"!".repeat(64)}\n!! PARTIAL RUN (--only ${only}). NOT RUN:\n${off.map((k) => `!!   ✗ ${skippedNames[k]}`).join("\n")}\n!! Defects those suites catch will not be found. Drop --only for a full check.\n${"!".repeat(64)}`);
     }
