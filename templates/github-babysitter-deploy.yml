@@ -1,0 +1,73 @@
+# Claude's Babysitter — the full suite against the DEPLOYED site, after every deploy of main.
+# Written by `babysitter init --ci`. A merge nobody re-checked locally (another session's commits, a rebase) is still
+# checked where users see it: UI checks + business acceptance + states (dialogs, empty submits, wizards, top-up in
+# no-pay mode) + every language + 360/390/768/1280/1440, then a fix plan in the job summary.
+#
+# Triggers:
+#   - deployment_status (Vercel, Netlify, Render … report deployments to GitHub): runs when a deployment of the
+#     default branch (or the Production environment) succeeds, against its environment_url;
+#   - push to main, only when the repository variable BABYSITTER_URL is set (a site deployed without deployment events);
+#   - by hand (workflow_dispatch) with any URL.
+# Secrets (optional): BABYSITTER_LOGIN_EMAIL / BABYSITTER_LOGIN_PASSWORD for signed-in pages, or BABYSITTER_SESSION_COOKIES;
+# more roles: BABYSITTER_ROLES (JSON, see playwright/prepare.mjs).
+name: Babysitter after deploy
+
+on:
+  deployment_status:
+  push:
+    branches: [main]
+  workflow_dispatch:
+    inputs:
+      url:
+        description: "Site to check"
+        required: true
+
+permissions:
+  contents: read
+
+concurrency:
+  group: babysitter-deploy-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  e2e:
+    name: Full babysitter run on the deployed site
+    if: >-
+      (github.event_name == 'deployment_status' && github.event.deployment_status.state == 'success' &&
+        (github.event.deployment.environment == 'Production' || github.event.deployment.ref == github.event.repository.default_branch))
+      || (github.event_name == 'push' && vars.BABYSITTER_URL != '')
+      || github.event_name == 'workflow_dispatch'
+    runs-on: ubuntu-latest
+    timeout-minutes: 120
+    env:
+      BASE_URL: ${{ github.event.deployment_status.environment_url || github.event.inputs.url || vars.BABYSITTER_URL }}
+      LOGIN_EMAIL: ${{ secrets.BABYSITTER_LOGIN_EMAIL }}
+      LOGIN_PASSWORD: ${{ secrets.BABYSITTER_LOGIN_PASSWORD }}
+      SESSION_COOKIES: ${{ secrets.BABYSITTER_SESSION_COOKIES }}
+      BABYSITTER_ROLES: ${{ secrets.BABYSITTER_ROLES }}
+      PW_CHANNEL: chrome
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: Install
+        run: {{INSTALL}}
+      - name: Babysitter — everything, every language, every viewport (findings are blocking)
+        run: {{RUN}} e2e
+      - name: Fix plan
+        if: always()
+        run: |
+          {{RUN}} fix-plan --format md > fix-plan.md || true
+          cat fix-plan.md >> "$GITHUB_STEP_SUMMARY"
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: babysitter-report
+          path: |
+            .babysitter/playwright-report
+            .babysitter/findings.json
+            .babysitter/fix-plan.md
+            .babysitter/crawl.json
+            .babysitter/locales.json
+          retention-days: 14

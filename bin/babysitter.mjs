@@ -18,11 +18,17 @@
 //   micro-check      → rendered contrast / row / overflow check on a running dev server
 //   prepare          → playwright/prepare.mjs (login + crawl)
 //   test-ui [...]    → playwright test with the bundled config
-//   e2e [--skip-prepare] [--only ui|acceptance|product] [...playwright args]
-//                    → prepare (login + crawl) + the UI checks + business acceptance (playwright/acceptance.spec.ts)
-//                      + the product's own e2e/*.spec.ts, in one Playwright run
+//   e2e [--skip-prepare] [--quick] [--only ui|acceptance|product] [--last-failed] [...playwright args]
+//                    → prepare (login per role + crawl + languages) + the UI checks + states / languages / scroll
+//                      (run.spec.ts) + business acceptance (acceptance.spec.ts) + the product's own e2e/*.spec.ts, in one
+//                      Playwright run at 360/390/768/1280/1440 (--quick: 390 + 1440). --only is a partial run and says so.
+//                      Ends with a summary of what did not run and the command that re-checks only the failures.
+//   fix-plan [--format md|agent|json]  → the last run's findings grouped into a fix list with the files to change
+//   after-merge      → the git post-merge / post-rewrite re-check: static check of what the merge changed, then the
+//                      runtime checks on the routes it reached (when a dev server / preview answers)
 import { spawnSync } from "node:child_process";
-import { dirname, join } from "node:path";
+import { dirname, join, relative } from "node:path";
+import { existsSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import { createRequire } from "node:module";
 
@@ -111,22 +117,51 @@ switch (cmd) {
   case "test-ui": process.exit(playwright(rest)); break;
   case "e2e": {
     const env = { ...process.env, BABYSITTER_ROOT: process.env.BABYSITTER_ROOT || process.cwd() };
+    const ROOT = env.BABYSITTER_ROOT;
     const args = [...rest];
     const take = (flag) => { const i = args.indexOf(flag); if (i < 0) return null; const v = args[i + 1]; args.splice(i, v && !v.startsWith("--") ? 2 : 1); return v || true; };
     const skipPrepare = take("--skip-prepare");
     const only = take("--only");
-    if (!skipPrepare) {
+    if (take("--quick")) env.BABYSITTER_PROFILE = "quick";
+    const lastFailed = args.includes("--last-failed");
+    const { wiringBanner } = await import("../lib/wiring.js");
+    const banner = wiringBanner(ROOT, { context: "e2e" });
+    if (banner) console.error(banner);
+    // everything runs by default; --only is a partial run and says so, loudly, before and after
+    const SUITES = { ui: ["babysitter.spec", "run.spec"], acceptance: ["acceptance.spec"], product: ["--project=product"] };
+    if (only && !SUITES[only]) { console.error(`babysitter e2e: --only ui | acceptance | product (got "${only}")`); process.exit(2); }
+    if (only) {
+      const skippedNames = { ui: "UI checks + states/languages/scroll (babysitter.spec, run.spec)", acceptance: "business acceptance (acceptance.spec: B1 copy leaks, B2–B4 money, H1/H2 hover and cursor, N1/N4/N6, F0–F5 footer, P1–P3 policies, D1–D3, C1/C2 cookies, M1 currency, A1–A9 sign-in)", product: "the product's own e2e/*.spec.ts" };
+      const off = Object.keys(SUITES).filter((k) => k !== only);
+      console.error(`${"!".repeat(64)}\n!! PARTIAL RUN (--only ${only}). NOT RUN:\n${off.map((k) => `!!   ✗ ${skippedNames[k]}`).join("\n")}\n!! Defects those suites catch will not be found. Drop --only for a full check.\n${"!".repeat(64)}`);
+    }
+    if (!skipPrepare && !lastFailed) {
       const st = spawnSync(process.execPath, [join(root, "playwright/prepare.mjs")], { stdio: "inherit", env }).status;
       if (st !== 0) { console.error("babysitter e2e: prepare failed (set BASE_URL or baseURL in babysitter.config.json; LOGIN_EMAIL / LOGIN_PASSWORD for signed-in pages). --skip-prepare to run on the last crawl."); process.exit(st ?? 1); }
     }
-    if (only === "ui") args.unshift("babysitter.spec");
-    else if (only === "acceptance") args.unshift("acceptance.spec");
-    else if (only === "product") args.unshift("--project=product");
-    else if (only) { console.error(`babysitter e2e: --only ui | acceptance | product (got "${only}")`); process.exit(2); }
-    process.exit(playwright(args, env));
+    if (only === "product") args.unshift("--project=product");
+    else if (only) args.unshift(...SUITES[only]);
+    const status = playwright(args, env);
+    // the summary: what ran, what did not, failures by page, and the command that re-checks only the failures
+    try {
+      const { summarize } = await import("../lib/run-summary.js");
+      const { loadConfig, viewports } = await import("../playwright/project.js");
+      process.env.BABYSITTER_ROOT = ROOT;
+      const cfg = loadConfig();
+      const vps = viewports(cfg, env).map((v) => v.name);
+      const full = viewports(cfg, { ...env, BABYSITTER_PROFILE: "", VIEWPORTS: "" }).map((v) => v.name);
+      const RUN = existsSync(join(ROOT, "node_modules/claudes-babysitter/bin/babysitter.mjs")) ? "npx --no babysitter" : `node ${relative(ROOT, join(root, "bin/babysitter.mjs")) || join(root, "bin/babysitter.mjs")}`;
+      const { text } = summarize({ root: ROOT, only, args, cfg, configured: { viewports: full }, rerun: `${RUN} e2e --skip-prepare --last-failed${only ? ` --only ${only}` : ""}${env.BABYSITTER_PROFILE === "quick" ? " --quick" : ""}` });
+      console.log(`\n${text}`);
+      if (vps.length < full.length) console.log(`(--quick / VIEWPORTS: ${vps.join(", ")} of ${full.join(", ")})`);
+    } catch (e) { console.error(`babysitter e2e: summary failed: ${e.message}`); }
+    if (banner) console.error(banner);
+    process.exit(status);
     break;
   }
+  case "fix-plan": node("bin/fix-plan.mjs", rest); break;
+  case "after-merge": node("bin/after-merge.mjs", rest); break;
   default:
-    console.log("usage: babysitter <init|check|audit|prepare|test-ui|e2e> [...]\n  init [repo] [--new|--existing] [--link|--vendor] [--ci] [--url URL] [--dev-url URL] [--dry-run] [--no-install] [--yes] [--force]");
+    console.log("usage: babysitter <init|check|audit|prepare|test-ui|e2e|fix-plan|after-merge> [...]\n  e2e [--skip-prepare] [--quick] [--only ui|acceptance|product] [--last-failed]\n  init [repo] [--new|--existing] [--link|--vendor] [--ci] [--url URL] [--dev-url URL] [--dry-run] [--no-install] [--yes] [--force]");
     process.exit(cmd ? 2 : 0);
 }

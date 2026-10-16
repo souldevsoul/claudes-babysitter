@@ -44,7 +44,7 @@ const desktopOnce = () => test.skip(!/desktop-1440/.test(test.info().project.nam
 
 /* ───────── every page ───────── */
 for (const route of ROUTES) {
-  test.describe(`acceptance ${route.auth ? "[signed-in] " : ""}${route.path}`, () => {
+  test.describe(`acceptance ${route.auth ? `[signed-in${route.role ? `: ${route.role}` : ""}] ` : ""}${route.path}`, () => {
     if (route.auth) test.use({ storageState: storageFor(route.role) });
     const r = route.path;
     test.beforeEach(() => twoWidths());

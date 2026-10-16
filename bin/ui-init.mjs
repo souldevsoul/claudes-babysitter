@@ -9,7 +9,8 @@
  *                    command init writes then goes through node_modules: the version pinned in package.json
  *     --vendor       copy the tool into <repo>/tools/claudes-babysitter (works without npm, for any teammate)
  *     --link         reference this checkout by absolute path instead (local machine only, nothing copied)
- *     --ci           also add the GitHub Actions workflow
+ *     --ci           also add the GitHub Actions workflows: the PR gate, and the full suite against the deployed
+ *                    site after each deploy of main (deployment_status)
  *     --no-git-hook  do not install the git pre-commit gate
  *     --new          a brand-new project: strict mode from the start (hooks block)
  *     --existing     an existing project: adoption mode (hooks warn only, BABYSITTER-ADOPTION.md checklist)
@@ -234,7 +235,7 @@ if (need.length) { write(giPath, `${gi.trimEnd()}\n\n# claudes-babysitter\n${nee
 if (!has("no-git-hook") && mode === "package") {
   // the same gate `prepare` installs on every npm install: runs node_modules/claudes-babysitter, keeps a foreign hook
   const r = DRY ? { status: 0 } : spawnSync(process.execPath, [join(TOOL, "bin/install-hooks.mjs"), repo, "--force"], { encoding: "utf8" });
-  if (r.status === 0) say("git pre-commit gate (runs the node_modules copy; reinstalled on every npm install by \"prepare\")", join(repo, ".git/hooks/pre-commit"));
+  if (r.status === 0) say("git pre-commit gate + post-merge / post-rewrite re-check (run the node_modules copy; reinstalled on every npm install by \"prepare\")", join(repo, ".git/hooks/pre-commit"));
 } else if (!has("no-git-hook")) {
   const gitDir = (() => { try { return execSync("git rev-parse --git-dir", { cwd: repo, encoding: "utf8" }).trim(); } catch { return null; } })();
   if (gitDir) {
@@ -249,6 +250,15 @@ if (!has("no-git-hook") && mode === "package") {
       : `${cur.trim() ? cur.trimEnd() + "\n\n" : "#!/bin/sh\n"}${MARK}\n${line}\n`;
     if (!DRY) { mkdirSync(dir, { recursive: true }); writeFileSync(file, body, { mode: 0o755 }); }
     say(cur && !cur.includes(MARK) ? "added the UI gate to the existing pre-commit hook" : "git pre-commit gate (blocks commits that add UI problems; --no-verify bypasses)", file);
+    // after a pull / merge / rebase: re-check what came in (never blocks git)
+    const after = mode === "vendor" ? `node "$(git rev-parse --show-toplevel)/${toolRel}/bin/after-merge.mjs" || true` : `node "${TOOL}/bin/after-merge.mjs" || true`;
+    for (const name of ["post-merge", "post-rewrite"]) {
+      const f = join(dir, name);
+      const c = existsSync(f) ? readFileSync(f, "utf8") : "";
+      const b = c.includes(MARK) ? c.replace(new RegExp(`${MARK}\\n.*\\n`), `${MARK}\n${after}\n`) : `${c.trim() ? c.trimEnd() + "\n\n" : "#!/bin/sh\n"}${MARK}\n${after}\n`;
+      if (!DRY) writeFileSync(f, b, { mode: 0o755 });
+    }
+    say("git post-merge / post-rewrite: re-check what a pull, merge or rebase brought in (static now, changed routes when the app answers)", join(dir, "post-merge"));
   }
 }
 
@@ -296,6 +306,17 @@ const runCmd = mode === "package" ? "babysitter" : mode === "vendor" ? `node ${t
 }
 
 /* ───────── 7. CI (opt-in) ───────── */
+if (has("ci")) {
+  // the full suite against the deployed site after every deploy of main (Vercel / Netlify / any deployment_status),
+  // so a merge that nobody re-checked locally is still checked where users see it
+  const wf = join(repo, ".github/workflows/babysitter-deploy.yml");
+  const run = mode === "package" ? "npx --no babysitter" : mode === "vendor" ? `node ${toolRel}/bin/babysitter.mjs` : null;
+  if (run) {
+    const install = mode === "package" ? "npm ci" : `npm ci --prefix ${toolRel}`;
+    write(wf, readFileSync(join(TOOL, "templates/github-babysitter-deploy.yml"), "utf8").replace(/\{\{RUN\}\}/g, run).replace(/\{\{INSTALL\}\}/g, install));
+    say("CI workflow: the full suite (UI + acceptance + states + languages) against the deployed site after each deploy of main", wf);
+  } else console.warn("  ! --ci after-deploy workflow needs --package or --vendor (link mode is this machine only)");
+}
 if (has("ci") && mode === "package") {
   const wf = join(repo, ".github/workflows/babysitter.yml");
   write(wf, readFileSync(join(TOOL, "templates/github-babysitter.yml"), "utf8"));
@@ -396,6 +417,12 @@ ${WHY}
     write(file, md);
     console.log(`  ✓ adoption checklist → ${relative(repo, file)}`);
   }
+}
+// what is still not wired (no CI, a hook another tool owns, …): said loudly, never silently
+{
+  const { wiringBanner } = await import(join(TOOL, "lib/wiring.js"));
+  const banner = wiringBanner(repo, { context: "after init" });
+  if (banner) console.warn(`\n${banner}`);
 }
 const done = installMode === "adoption"
   ? "✅ Babysitter установлен в режиме аудита! Откройте BABYSITTER-ADOPTION.md для получения дальнейших инструкций."

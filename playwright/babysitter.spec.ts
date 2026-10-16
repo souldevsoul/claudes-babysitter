@@ -38,7 +38,7 @@ function soft(list: c.Offender[], label: string) {
 }
 
 for (const route of ROUTES) {
-  test.describe(`${route.auth ? "[signed-in] " : ""}${route.path}`, () => {
+  test.describe(`${route.auth ? `[signed-in${route.role ? `: ${route.role}` : ""}] ` : ""}${route.path}`, () => {
     if (route.auth) test.use({ storageState: storageFor(route.role) });
     const r = route.path;
 

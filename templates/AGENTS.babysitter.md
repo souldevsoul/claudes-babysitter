@@ -2,6 +2,14 @@
 
 Hooks in `.claude/settings.json` run these checks automatically after each edit and before you finish; do not work around them.
 
+**Babysitter findings are blocking.** A task is not done while any babysitter finding on the pages it touched is open — static (`check`), runtime (`e2e`), acceptance, a state (dialog, empty submit, wizard step), a language or a viewport. Fix each one in the source before you report done; never call it "pre-existing", "out of scope" or "a false positive" without the user's explicit say-so, and never narrow the run (`--only`, `--project`, `LOCALES`, `ROUTES`) to make it pass. The Stop hook blocks finishing while the last run has findings on routes you changed.
+
+The loop:
+1. `{{RUN}} e2e` (BASE_URL = the dev server or preview; LOGIN_EMAIL / LOGIN_PASSWORD for signed-in pages) — every suite, every language, 360–1440 px. The summary at the end lists what did NOT run; a partial run is not a pass.
+2. `{{RUN}} fix-plan` — the findings grouped by cause, with the source files to change.
+3. Fix, then `{{RUN}} e2e --skip-prepare --last-failed` until it is clean; then one full `{{RUN}} e2e`.
+4. Report what you fixed, and name anything you could not fix and why.
+
 Before you say a UI task is done:
 
 1. Run `node tools/claudes-babysitter/bin/ui-check.mjs --changed --format agent`.

@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 // babysitter install-hooks [repo] [--verbose]
-// Installs the git pre-commit gate for a project that has claudes-babysitter as a dependency. Meant for the
+// Installs the git pre-commit gate (and the post-merge / post-rewrite re-check) for a project that has claudes-babysitter as a dependency. Meant for the
 // project's `prepare` script, so every clone gets the gate on `npm install` / `pnpm i`:
 //   - silent; never fails the install (always exit 0) — a missing gate is reported, not fatal
 //   - does nothing in CI or outside a git work tree (CI runs `babysitter audit --diff` instead)
@@ -16,6 +16,7 @@ const verbose = args.includes("--verbose");
 const say = (m) => verbose && console.log(m);
 const warn = (m) => console.warn(`babysitter install-hooks: ${m}`);
 const MARK = "# claudes-babysitter pre-commit gate";
+const AFTER_MARK = "# claudes-babysitter after-merge re-check";
 
 try {
   if (process.env.CI && !args.includes("--force")) { say("CI: skipped (the pipeline runs `babysitter audit --diff`)"); process.exit(0); }
@@ -39,17 +40,41 @@ exec node "$GATE" "$@"
 `;
   if (existsSync(hook)) {
     const cur = readFileSync(hook, "utf8");
-    if (cur === body) { say("already installed"); process.exit(0); }
-    if (!cur.includes(MARK) && !/claudes-babysitter|hook-pre-commit\.mjs/.test(cur)) {
-      if (custom) { warn(`${hook} belongs to another tool (core.hooksPath=${custom}). Add this line to it: node node_modules/claudes-babysitter/bin/hook-pre-commit.mjs`); process.exit(0); }
-      renameSync(hook, join(hooksDir, "pre-commit.local")); // kept, and run first
-      say("existing pre-commit kept as pre-commit.local");
+    if (cur === body) say("already installed");
+    else {
+      if (!cur.includes(MARK) && !/claudes-babysitter|hook-pre-commit\.mjs/.test(cur)) {
+        if (custom) { warn(`${hook} belongs to another tool (core.hooksPath=${custom}). Add this line to it: node node_modules/claudes-babysitter/bin/hook-pre-commit.mjs`); }
+        else { renameSync(hook, join(hooksDir, "pre-commit.local")); say("existing pre-commit kept as pre-commit.local"); } // kept, and run first
+      }
+      if (!custom || cur.includes(MARK) || /claudes-babysitter|hook-pre-commit\.mjs/.test(cur)) { mkdirSync(hooksDir, { recursive: true }); writeFileSync(hook, body); chmodSync(hook, 0o755); say(`installed ${hook}`); }
     }
+  } else {
+    mkdirSync(hooksDir, { recursive: true });
+    writeFileSync(hook, body);
+    chmodSync(hook, 0o755);
+    say(`installed ${hook}`);
   }
-  mkdirSync(hooksDir, { recursive: true });
-  writeFileSync(hook, body);
-  chmodSync(hook, 0o755);
-  say(`installed ${hook}`);
+  // after a pull / merge / rebase: re-check what came in (static now, the changed routes when the app answers).
+  // Never blocks git (a post-merge hook cannot undo the merge) and never fails.
+  for (const name of ["post-merge", "post-rewrite"]) {
+    const file = join(hooksDir, name);
+    const after = `#!/bin/sh
+${AFTER_MARK} — installed by \`babysitter install-hooks\`. Re-checks what a merge / rebase brought in.
+[ -x "$(dirname "$0")/${name}.local" ] && "$(dirname "$0")/${name}.local" "$@"
+GATE="$(git rev-parse --show-toplevel)/node_modules/claudes-babysitter/bin/after-merge.mjs"
+[ -f "$GATE" ] && node "$GATE" || true
+exit 0
+`;
+    const cur = existsSync(file) ? readFileSync(file, "utf8") : "";
+    if (cur === after) continue;
+    if (cur && !cur.includes(AFTER_MARK)) {
+      if (custom) { warn(`${file} belongs to another tool — add: node node_modules/claudes-babysitter/bin/after-merge.mjs || true`); continue; }
+      renameSync(file, join(hooksDir, `${name}.local`));
+    }
+    writeFileSync(file, after);
+    chmodSync(file, 0o755);
+    say(`installed ${file}`);
+  }
 } catch (e) {
   warn(`not installed (${e.message.split("\n")[0]}); commits are still checked in CI`);
 }

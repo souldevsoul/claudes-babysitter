@@ -31,6 +31,23 @@ if (!failed) {
   const m = spawnSync(process.execPath, [join(dirname(fileURLToPath(import.meta.url)), "micro-check.mjs"), "--repo", repo], { encoding: "utf8", timeout: 150000 });
   if (m.status === 1 && !toolFailure(m)) { failed = true; report = m.stdout; }
 }
+// the last runtime run (babysitter e2e → .babysitter/findings.json) still has findings on routes this work changed:
+// they are blocking — fix them and re-check (--last-failed) before reporting done
+if (!failed) {
+  try {
+    const CR = await import("../lib/changed-routes.js");
+    const cfg = (() => { try { return JSON.parse(readFileSync(join(repo, "babysitter.config.json"), "utf8")); } catch { return {}; } })();
+    const ch = CR.changedRoutes(repo, CR.changedFiles(repo, CR.branchBase(repo)), cfg);
+    const open = ch.ui ? CR.findingsOn(repo, ch).list : [];
+    if (open.length) {
+      failed = true;
+      const tool = join(dirname(fileURLToPath(import.meta.url)), "..");
+      const RUN = existsSync(join(repo, "node_modules/claudes-babysitter/bin/babysitter.mjs")) ? "npx --no babysitter" : `node ${join(tool, "bin/babysitter.mjs")}`;
+      const lines = open.slice(0, 40).map((f) => `- ${f.route || "site-wide"}${f.locale ? ` [${f.locale}]` : ""} @ ${f.project}: ${f.test.split(" [P")[0]}${f.items.length ? `\n${f.items.slice(0, 5).map((i) => `    • ${i.what} — ${i.where}`).join("\n")}${f.items.length > 5 ? `\n    • … ${f.items.length - 5} more (babysitter fix-plan lists all)` : ""}` : ""}`);
+      report = `Claude's Babysitter: the last runtime run has ${open.length} failed check(s) on routes you changed — babysitter findings are blocking:\n${lines.join("\n")}${open.length > 40 ? `\n… ${open.length - 40} more` : ""}\n\nFix list with source files: ${RUN} fix-plan\nThen re-check only what failed: ${RUN} e2e --skip-prepare --last-failed\n${open.length} problem(s)`;
+    }
+  } catch {}
+}
 if (!failed) {
   writeFileSync(counter, "0");
   // the checks are clean, but a human pinned notes in Babysitter Studio during this turn: they come first

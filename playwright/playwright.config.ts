@@ -1,26 +1,27 @@
 // node playwright/prepare.mjs && npx playwright test -c playwright/playwright.config.ts
+// Everything runs by default: the UI checks (babysitter.spec.ts), business acceptance (acceptance.spec.ts), the
+// locale / state / scroll runs (run.spec.ts) and the product's own e2e/*.spec.ts. Viewports: 360, 390, 768, 1280, 1440
+// (project.js → viewports; `--quick` / BABYSITTER_PROFILE=quick = 390 + 1440).
 import { defineConfig } from "@playwright/test";
 import { existsSync, readdirSync } from "node:fs";
+import { availableParallelism, totalmem } from "node:os";
 import { resolve } from "node:path";
-import { loadConfig, ROOT } from "./project.js";
+import { loadConfig, ROOT, viewports } from "./project.js";
 
 const cfg = loadConfig();
-const viewports = [
-  { name: "mobile-390", width: 390, height: 844 },
-  { name: "tablet-768", width: 768, height: 1024 },
-  { name: "laptop-1280", width: 1280, height: 800 },
-  { name: "desktop-1440", width: 1440, height: 900 },
-];
 const schemes = cfg.colorSchemes?.length ? cfg.colorSchemes : (["light"] as const);
 // the product's own journeys (e2e/*.spec.ts, scaffolded by `babysitter init`) run in the same pass
 const productE2E = resolve(ROOT, process.env.BABYSITTER_E2E_DIR || cfg.e2eDir || "e2e");
 const hasProductE2E = existsSync(productE2E) && readdirSync(productE2E).some((f) => /\.spec\.(t|j)s$/.test(f));
+// workers scale with the machine: one Chrome per ~2.5 GB of RAM, leaving two cores free; WORKERS overrides
+const workers = Number(process.env.WORKERS || Math.max(2, Math.min(8, availableParallelism() - 2, Math.floor(totalmem() / 2.5e9))));
 
 export default defineConfig({
   testDir: ".",
-  timeout: 120_000,
+  // a page checked in several states / languages takes longer; the state and locale tests set their own budgets
+  timeout: Number(process.env.TEST_TIMEOUT || 120_000),
   fullyParallel: true,
-  workers: Number(process.env.WORKERS || 4),
+  workers,
   // results land in the product, not inside the tool (node_modules / tools/ in package and vendor mode)
   outputDir: resolve(ROOT, ".babysitter/test-results"),
   reporter: [["list"], ["html", { open: "never", outputFolder: resolve(ROOT, ".babysitter/playwright-report") }], ["json", { outputFile: resolve(ROOT, ".babysitter/report.json") }]],
@@ -31,7 +32,7 @@ export default defineConfig({
   },
   projects: [
     ...schemes.flatMap((scheme) =>
-      viewports.map((v) => ({
+      viewports(cfg).map((v) => ({
         name: schemes.length > 1 ? `${v.name}-${scheme}` : v.name,
         use: { viewport: { width: v.width, height: v.height }, deviceScaleFactor: 2, isMobile: v.width < 768, hasTouch: v.width < 768, colorScheme: scheme },
       })),
