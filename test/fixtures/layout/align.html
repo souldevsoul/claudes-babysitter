@@ -1,0 +1,30 @@
+<!doctype html><html><head><title>Align</title>
+<style>body{margin:0;font-family:Arial,sans-serif} main{padding:24px;width:900px} p,h2,h3{margin:0 0 12px} td,th{padding:8px 12px} input{display:block;width:300px;height:36px;border:1px solid #888;margin-bottom:12px} label{display:block;margin-bottom:4px} .dot::before{content:"";width:4px;height:4px;background:#e50;display:block}</style></head>
+<body><main>
+<section id="stack"><h2>Our story</h2><p>First paragraph of the story.</p><p id="off" style="margin-left:6px">Second paragraph nudged by six pixels.</p><p>Third paragraph.</p>
+  <blockquote style="margin:0 0 0 32px"><p>An intentional quote indent.</p></blockquote>
+  <div style="text-align:center"><a href="/x" style="display:inline-block;padding:8px 16px;background:#000;color:#fff">Centred CTA</a></div>
+  <p>Fourth paragraph.</p></section>
+<section id="cols" style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:24px;margin-top:24px">
+  <div style="border:1px solid #ccc;padding:16px"><h3>Plan A</h3><p>Lorem ipsum dolor sit amet, consectetur.</p></div>
+  <div id="lower" style="border:1px solid #ccc;padding:21px 16px 16px"><h3>Plan B</h3><p>Lorem ipsum dolor.</p></div>
+  <div style="border:1px solid #ccc;padding:16px"><h3>Plan C</h3><p>Lorem.</p></div>
+</section>
+<section style="display:flex;align-items:center;gap:24px;margin-top:24px;height:120px">
+  <div style="height:80px;padding-top:10px"><h3>Centred row</h3></div><div style="height:50px"><h3>by design</h3></div>
+</section>
+<form style="margin-top:24px">
+  <label for="a">Name</label><input id="a">
+  <label for="b" id="lab-off" style="padding-left:5px">Email</label><input id="b">
+  <input id="c" style="margin-left:4px" placeholder="Nudged field">
+  <label for="d" class="dot" style="display:flex;gap:8px">Phone</label><input id="d">
+</form>
+<table id="t" style="border-collapse:collapse;margin-top:24px">
+  <thead><tr><th id="th-name" style="text-align:left">Item</th><th id="th-price" style="text-align:left">Price</th><th id="th-qty" style="text-align:right">Qty</th><th id="th-state" style="text-align:center">State</th></tr></thead>
+  <tbody>
+    <tr><td>Long item name</td><td style="text-align:right">$1,200.00</td><td style="text-align:right">3</td><td style="text-align:center"><span style="padding:2px 6px;background:#eee">New</span></td></tr>
+    <tr><td>Item</td><td style="text-align:right">$9.00</td><td style="text-align:right">12</td><td style="text-align:center"><span style="padding:2px 6px;background:#eee">Used</span></td></tr>
+    <tr><td>Other</td><td style="text-align:right">$75.50</td><td style="text-align:right">100</td><td style="text-align:center"><span style="padding:2px 6px;background:#eee">Refurbished</span></td></tr>
+  </tbody>
+</table>
+</main></body></html>

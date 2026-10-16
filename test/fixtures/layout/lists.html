@@ -1,0 +1,7 @@
+<!doctype html><html><head><title>Lists</title><style>body{margin:0;font-family:Arial} .grid{display:grid;grid-template-columns:repeat(4,1fr);gap:8px;list-style:none;padding:0} .card{border:1px solid #ccc;padding:8px} @keyframes m{to{transform:translateX(-50%)}} .marquee{display:flex;width:max-content;animation:m 20s linear infinite}</style></head>
+<body><main>
+<section id="s1"><h2>Specialists</h2><ul id="cards" class="grid">{CARDS}</ul>{MORE}</section>
+<section><h2>Terms</h2><ul id="prose">{PROSE}</ul></section>
+<section><div style="overflow:hidden"><div class="marquee" id="logos">{LOGOS}</div></div></section>
+<section><table><thead><tr><th>Date</th><th>Amount</th></tr></thead><tbody id="rows">{ROWS}</tbody></table></section>
+</main></body></html>

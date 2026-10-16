@@ -1,0 +1,10 @@
+<!doctype html><html><head><title>Pricing</title><style>body{font-family:Arial;margin:0;padding:16px} .price{font-size:32px;font-weight:700} .card{display:inline-block;border:1px solid #ccc;padding:16px;margin:8px}</style></head>
+<body><header><a href="/">Acme</a> <select id="cur" aria-label="Currency"><option value="usd">USD</option><option value="eur">EUR</option><option value="kzt">KZT</option></select></header>
+<main><h1>Pricing</h1><div id="cards"></div><p id="unit"></p></main>
+<script>
+const P = {RATES};
+const F = {FORMATS};
+function render(c){ const r = P[c]; document.getElementById('cards').innerHTML = [10,20,50].map((n,i)=>`<div class="card"><h3>${n*100} credits</h3><div class="price">${F[c](r*[9.99,19.99,44.99][i])}</div><button>Buy</button></div>`).join(''); document.getElementById('unit').textContent = 'From ' + F[c](r*0.01) + ' per credit'; }
+document.getElementById('cur').addEventListener('change', e => render(e.target.value));
+render('usd');
+</script></body></html>

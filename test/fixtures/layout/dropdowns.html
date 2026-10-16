@@ -1,0 +1,15 @@
+<!doctype html><html><head><title>Dropdowns</title><style>body{font-family:Arial;margin:0;padding:16px} [role=listbox]{position:absolute;background:#fff;border:1px solid #ccc;max-height:{MAXH};overflow:auto;width:200px} [role=option]{display:flex;justify-content:space-between;padding:6px 8px;height:20px} [role=option][aria-selected=true]{{SELSTYLE}} .tick{width:12px;height:12px}</style></head>
+<body>
+<select id="country"><option>Select country</option><option>Germany</option><option>Azerbaijan</option><option>France</option></select>
+<select id="size"><option>XS</option><option>S</option><option>M</option><option>L</option><option>XL</option></select>
+<select id="sort" aria-label="Sort by"><option>Newest</option><option>Price: low to high</option><option>Oldest</option></select>
+<div style="position:relative;margin-top:16px">
+  <button id="dd1" aria-haspopup="listbox" aria-controls="lb1" aria-expanded="false" onclick="document.getElementById('lb1').hidden=false;this.setAttribute('aria-expanded','true')">Topic</button>
+  <div role="listbox" id="lb1" hidden>{OPTIONS1}</div>
+</div>
+<div style="position:relative;margin-top:16px;margin-left:300px">
+  <button id="dd2" aria-haspopup="listbox" aria-controls="lb2" aria-expanded="false" onclick="document.getElementById('lb2').hidden=false;this.setAttribute('aria-expanded','true')">Currency</button>
+  <div role="listbox" id="lb2" hidden>{OPTIONS2}</div>
+</div>
+<script>addEventListener('keydown',e=>{if(e.key==='Escape')for(const l of document.querySelectorAll('[role=listbox]'))l.hidden=true})</script>
+</body></html>

@@ -1,0 +1,11 @@
+<!doctype html><html><head><title>Hover</title><style>body{font-family:Arial;margin:0;padding:24px} .btn{display:inline-block;padding:10px 18px;background:#123;color:#fff;border-radius:8px;border:0;cursor:pointer;margin:8px} .ok:hover{background:#345} .card{display:block;width:240px;padding:16px;border:1px solid #ccc;margin:8px;color:#000;text-decoration:none} .card-ok:hover{box-shadow:0 4px 12px rgba(0,0,0,.2)} .child-ok:hover span{color:#06c} .pseudo-ok::after{content:"";display:block;height:2px;background:#000;transform:scaleX(0);transition:transform .2s} .pseudo-ok:hover::after{transform:scaleX(1)}</style></head>
+<body>
+<button id="b-dead" class="btn">Dead button</button>
+<button id="b-ok" class="btn ok">Live button</button>
+<a id="a-dead" class="btn" href="/x">Dead link button</a>
+<a id="a-child" class="btn child-ok" href="/x"><span>Child changes</span></a>
+<a id="a-pseudo" class="btn pseudo-ok" href="/x">Bar grows</a>
+<button id="b-dis" class="btn" disabled>Disabled</button>
+<a id="c-dead" class="card" href="/x"><h3>Dead card</h3><p>Body</p></a>
+<a id="c-ok" class="card card-ok" href="/x"><h3>Live card</h3><p>Body</p></a>
+</body></html>

@@ -1,0 +1,9 @@
+<!doctype html><html><head><title>Menus</title><meta name="viewport" content="width=device-width"><style>body{margin:0;font-family:Arial} header{display:flex;justify-content:space-between;padding:12px} .panel{display:none;position:fixed;top:56px;left:0;right:0;background:#fff;padding:12px} .panel.open{display:block} .panel a{display:block;padding:8px}</style></head>
+<body><header><a href="/"><svg width="24" height="24" class="logo"><rect width="24" height="24"/></svg></a>
+<div><button id="avatar" aria-label="Account" aria-expanded="false" onclick="document.getElementById('p2').classList.toggle('open')">AB</button>
+<button id="burger" aria-label="Open menu" aria-expanded="false" onclick="document.getElementById('p1').classList.toggle('open')">≡</button></div></header>
+<div id="p1" class="panel"><a href="/pricing">Pricing</a><a href="/about">About</a><a href="/blog">Blog</a><a href="/faq">FAQ</a></div>
+<div id="p2" class="panel">{AVATAR}</div>
+<main><h1>Home</h1></main>
+<script>addEventListener('keydown',e=>{if(e.key==='Escape')for(const p of document.querySelectorAll('.panel'))p.classList.remove('open')})</script>
+</body></html>
