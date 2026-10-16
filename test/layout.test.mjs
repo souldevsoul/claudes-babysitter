@@ -97,6 +97,29 @@ try {
     const ok = await L.logoHome(page);
     assert.deepEqual(ok.hard, [], JSON.stringify(ok));
   }, mobile);
+  await test("3.5 active nav: an unstyled current item is hard; a second highlighted item is hard; colour, weight or a ::after bar pass", async (page) => {
+    const run = async (css) => { await page.unrouteAll(); await load(page, "active.html", { path: "/pricing", vars: { CSS: css } }); return L.activeNavStyle(page); };
+    let r = await run("");
+    assert.deepEqual(sel(r.hard), ["#n-pricing"], JSON.stringify(r));
+    r = await run("nav a[aria-current=page]{color:#000;font-weight:700}");
+    assert.deepEqual([...r.hard, ...r.soft], [], JSON.stringify(r));
+    r = await run("nav a[aria-current=page]::after{content:'';display:block;height:2px;background:#000}");
+    assert.deepEqual([...r.hard, ...r.soft], [], JSON.stringify(r));
+    r = await run("nav a[aria-current=page], #n-faq{color:#000}");
+    assert.deepEqual(sel(r.hard), ["#n-faq"], JSON.stringify(r));
+    await page.unrouteAll(); await load(page, fixture("active.html").replace(' aria-current="page"', ""), { path: "/", vars: { CSS: "#n-faq{color:#000}" } });
+    r = await L.activeNavStyle(page);
+    assert.deepEqual(sel(r.hard), ["#n-home"], "on / the Home item is current and plain");
+  });
+  await test("3.5 active nav: the burger menu's current item is judged too", async (page) => {
+    await load(page, "menu.html", { vars: { ACTIVE: "" } });
+    let r = await L.activeNavStyle(page);
+    assert.equal(r.hard.length, 1, JSON.stringify(r));
+    assert.match(r.hard[0].what, /mobile menu.*"Home"/);
+    await page.unrouteAll(); await load(page, "menu.html", { vars: { ACTIVE: "font-weight:700;color:#000" } });
+    r = await L.activeNavStyle(page);
+    assert.deepEqual(r.hard, [], JSON.stringify(r));
+  }, mobile);
 } finally {
   await browser.close();
 }

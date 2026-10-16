@@ -49,6 +49,12 @@ for (const route of ROUTES) {
       soft(p.soft, "logo links somewhere else than home");
       hard(p.hard);
     });
+    test("3.5 the current nav item looks different, and only it — desktop nav and burger [active-nav]", async ({ page }) => {
+      await open(page, r);
+      const p = await L.activeNavStyle(page);
+      soft(p.soft, "nav highlight");
+      hard(p.hard);
+    });
   });
 }
 

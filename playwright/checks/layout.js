@@ -217,3 +217,91 @@ export async function logoHome(page) {
   return { hard: all.filter((f) => f.level === "hard").map(strip), soft: all.filter((f) => f.level === "soft").map(strip) };
 }
 const strip = ({ level, ...f }) => f;
+
+/* ───────────────────────── 3. the current nav item looks current (3.5, active-nav) ───────────────────────── */
+const activeScan = (scope) => {
+  const W = window, L = W.__ly;
+  const roots = scope ? [document.querySelector(scope)].filter(Boolean) : L.header();
+  const out = [];
+  const here = location.pathname.replace(/\/+$/, "") || "/";
+  const props = ["color", "fontWeight", "textDecorationLine", "backgroundColor", "borderBottomWidth", "borderBottomColor", "borderTopWidth", "borderLeftWidth", "boxShadow", "opacity", "fontStyle"];
+  const look = (el) => {
+    const parts = [];
+    const one = (e, pseudo) => {
+      const cs = getComputedStyle(e, pseudo);
+      if (pseudo && (cs.content === "none" || cs.content === "normal" || cs.display === "none")) return "-";
+      const v = props.map((p) => (/Width$/.test(p) && parseFloat(cs[p]) === 0 ? "0" : cs[p]));
+      if (pseudo) v.push(cs.width, cs.height, cs.transform);
+      // a border of width 0 has no colour worth comparing
+      if (parseFloat(cs.borderBottomWidth) === 0) v[props.indexOf("borderBottomColor")] = "";
+      return v.join("|");
+    };
+    parts.push(one(el), one(el, "::before"), one(el, "::after"));
+    // the label inside (a span that takes the "active" colour), and an <li> that only wraps this link
+    const inner = Array.from(el.querySelectorAll("span, p, div")).find((e) => L.clean(e.textContent) === L.clean(el.textContent) && L.clean(e.textContent));
+    if (inner) parts.push(one(inner));
+    const li = el.parentElement;
+    if (li && li.matches("li") && li.querySelectorAll("a[href]").length === 1) parts.push(one(li), one(li, "::before"), one(li, "::after"));
+    return parts.join("‖");
+  };
+  for (const root of roots) {
+    const links = Array.from(root.querySelectorAll("a[href]")).filter((a) => {
+      if (!W.__uiVisible(a) || !L.label(a)) return false;
+      const d = L.dest(a); if (!d || !d.startsWith("/")) return false;
+      if (L.isHome(a) && a.querySelector("img, svg") && !L.clean(a.textContent).match(/^home$/i)) return false; // the logo
+      if (W.__uiButtonLike(a) && !a.closest("nav, [role=navigation], ul")) return false; // a CTA beside the nav
+      return !a.closest("[role=menu], [data-radix-popper-content-wrapper], footer");
+    });
+    // one group per list of siblings: the nearest nav/ul around the links
+    const groups = new Map();
+    for (const a of links) { const g = a.closest("ul, ol, nav, [role=navigation], [role=tablist]") || root; if (!root.contains(g) && g !== root) continue; if (!groups.has(g)) groups.set(g, []); groups.get(g).push(a); }
+    for (const [, g] of groups) {
+      // CTAs inside the list (a filled "Sign up" pill) are a different component, not a sibling item
+      const items = g.filter((a) => !W.__uiButtonLike(a) || g.filter((b) => W.__uiButtonLike(b)).length > g.length / 2);
+      if (items.length < 3) continue;
+      const path = (a) => { const d = L.dest(a); return d.includes("#") ? null : d; };
+      const exact = items.filter((a) => path(a) === here || a.getAttribute("aria-current") === "page");
+      const prefix = exact.length ? [] : items.filter((a) => { const p = path(a); return p && p !== "/" && here.startsWith(p + "/"); });
+      const cur = exact.length ? exact : prefix;
+      const looks = new Map(items.map((a) => [a, look(a)]));
+      const others = items.filter((a) => !cur.includes(a));
+      const count = new Map(); for (const a of others) count.set(looks.get(a), (count.get(looks.get(a)) || 0) + 1);
+      const base = [...count.entries()].sort((x, y) => y[1] - x[1])[0]?.[0];
+      if (!base) continue;
+      const where = scope ? "mobile menu" : "header nav";
+      for (const a of cur) {
+        if (looks.get(a) === base) out.push({ ...L.at(a, `${where}: the current page's item "${L.label(a)}" looks exactly like the other items — give it an active style (colour, weight, underline or background) as well as aria-current="page" [3.5]`), level: exact.includes(a) ? "hard" : "soft" });
+      }
+      const curLook = cur.length ? looks.get(cur[0]) : null;
+      for (const a of others) {
+        const l = looks.get(a);
+        if (l === base) continue;
+        if (curLook && l === curLook && curLook !== base) out.push({ ...L.at(a, `${where}: "${L.label(a)}" is highlighted like the current item "${L.label(cur[0])}" although it is not this page — only the current item should look active [3.5]`), level: "hard" });
+        else if (!cur.length && count.get(l) === 1) out.push({ ...L.at(a, `${where}: "${L.label(a)}" looks highlighted (different from the other items) on a page it does not open — an item looks active only on its own page [3.5]`), level: "soft" });
+      }
+    }
+  }
+  return out;
+};
+/**
+ * 3.5 — the current item is visibly different from its siblings (computed colour / weight / underline / background /
+ * border / pseudo-element bar), in the desktop nav and in the open burger menu; and only the current item is.
+ * aria-current alone is checked elsewhere (babysitter.spec 3.5): this is what the eye sees.
+ */
+export async function activeNavStyle(page) {
+  await ensure(page);
+  await page.mouse.move(0, 0).catch(() => {});
+  await page.evaluate(() => document.activeElement instanceof HTMLElement && document.activeElement.blur());
+  const all = await page.evaluate(activeScan, null);
+  const m = await openMobileMenu(page).catch(() => null);
+  if (m) {
+    try {
+      await page.mouse.move(0, 0).catch(() => {});
+      await page.evaluate(() => document.activeElement instanceof HTMLElement && document.activeElement.blur());
+      await settle(page);
+      await ensure(page);
+      all.push(...(await page.evaluate(activeScan, "[data-bs-menu-panel]")));
+    } finally { await closeMobileMenu(page, m); }
+  }
+  return { hard: all.filter((f) => f.level === "hard").map(strip), soft: all.filter((f) => f.level === "soft").map(strip) };
+}
