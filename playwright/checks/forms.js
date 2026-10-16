@@ -111,6 +111,9 @@ export function pageLib() {
     else if (pw >= 1 && (/new password|reset|set (a )?password|choose (a )?password/i.test(text) && !roles.includes("email"))) kind = "password-reset";
     else if (pw >= 2 || (pw === 1 && roles.includes("name")) || (pw === 1 && /sign ?up|register|create (an |your )?account|get started|join/i.test(btnText))) kind = "signup";
     else if (pw === 1) kind = "signin";
+    // passwordless (magic link / code): told apart by the button and the page
+    else if (/sign ?in|log ?in|magic link|continue with e-?mail|send (me )?(a )?(login|sign-?in) (link|code)|войти/i.test(btnText) || (/^\/(login|log-in|signin|sign-in)(\/|$)/i.test(location.pathname) && roles.includes("email") && !roles.includes("message"))) kind = "signin";
+    else if (/sign ?up|register|create (an |your |my )?account|регистр/i.test(btnText) || (/^\/(register|signup|sign-up)(\/|$)/i.test(location.pathname) && roles.includes("email") && !roles.includes("message"))) kind = "signup";
     else if (roles.length && roles.every((r) => r === "email" || r === "checkbox")) kind = /reset|forgot|recover|send (me )?(a )?(reset |magic )?link/i.test(text) ? "forgot" : "newsletter";
     else if (roles.includes("message") || roles.includes("subject")) kind = "contact";
     else if (roles.includes("name") && /setting|profile|account/i.test(location.pathname + " " + text)) kind = "profile";
@@ -563,6 +566,8 @@ export async function forgotPassword(page, signInPath) {
   await settle(page);
   await lib(page);
   const link = page.locator("a, button, [role=button]").filter({ hasText: FORGOT_RE }).filter({ visible: true }).first();
+  const hasPassword = await page.locator("input[type=password]").filter({ visible: true }).count().catch(() => 0);
+  if (!hasPassword && !(await link.count())) return [{ id: "FM7", na: true, what: `${signInPath} signs in without a password (magic link / code) — no reset needed`, where: signInPath }];
   if (!(await link.count())) return [{ id: "FM7", what: `${signInPath} has no "Forgot password?" link — add one under the password field, to a page that sends a reset link [FM7, forgot-pw]`, where: signInPath }];
   const label = (await link.innerText().catch(() => "")).trim().slice(0, 40);
   const href = await link.getAttribute("href").catch(() => null);

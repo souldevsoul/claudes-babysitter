@@ -90,7 +90,7 @@ Write the check's ID into `acceptance.skip`, and the reason into `acceptance.ski
 |---|---|---|
 | A1 | Every password field has a show/hide eye, and Tab skips it. | 1 product; BQA 10 |
 | A3 | Sign-up has one consent checkbox, linking both Terms and Privacy. | 2 products |
-| A6 | The sign-in and sign-up pages have the normal footer. | 2 products |
+| A6 | The sign-in and sign-up pages have a footer. A minimal one (legal links, ©, support email) is enough; the full site footer and nav there are FM8 findings (docs/checks-forms.md). | 2 products |
 | A5 | A signed-in user is never offered Sign in or Sign up, and `/login` redirects them away. | 1 product; BQA 6 |
 | A7 | Tours and pop-ups show once and can be closed. | 3 products |
 | A4 | Sign out works with one click, and the account stays closed afterwards. Runs last, in its own session. | 2 products |

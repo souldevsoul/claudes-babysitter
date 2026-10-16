@@ -237,7 +237,9 @@ test.describe("acceptance site-wide", () => {
     hard(out.slice(0, 25));
   });
 
-  test("A1/A3/A6 sign-in and sign-up: password eye, one consent checkbox, normal footer [BQA 10, BQA]", async ({ browser }) => {
+  // A6 asks only that a footer EXISTS on sign-in / sign-up. Its size is FM8 (forms.spec.ts): a minimal footer — legal
+  // links, ©, support email — is the target there, and the full site footer / nav is a finding. The two agree.
+  test("A1/A3/A6 sign-in and sign-up: password eye, one consent checkbox, a footer (minimal is enough — FM8) [BQA 10, BQA]", async ({ browser }) => {
     test.skip(!on("A1"), why("A1"));
     const out: O[] = [];
     // the password eye is checked on every form with a password: sign-in, sign-up, reset / forgot / change password
@@ -255,7 +257,7 @@ test.describe("acceptance site-wide", () => {
       await open(page, path);
       if (!acc.auth.passwordless) out.push(...(await a.passwordEye(page)).filter((o: any) => on(o.id)).map((o: O) => ({ ...o, where: `${path} ${o.where}` })));
       if (isSignUp && on("A3")) out.push(...(await a.signupConsent(page)));
-      if (!auth && (path === acc.auth.signIn || path === acc.auth.signUp) && on("A6")) out.push(...(await a.footer(page, acc)).filter((o) => o.id === "F0").map((o) => ({ ...o, what: `${path}: ${o.what} [A6]` })));
+      if (!auth && (path === acc.auth.signIn || path === acc.auth.signUp) && on("A6")) out.push(...(await a.footer(page, acc)).filter((o) => o.id === "F0").map((o) => ({ ...o, what: `${path}: ${o.what} — a minimal one (legal links, ©, support email) is enough on auth pages [A6, FM8]` })));
       await ctx.close();
     }
     test.skip(!pages.length, "acceptance.auth.signIn / signUp not set and no password pages crawled");
