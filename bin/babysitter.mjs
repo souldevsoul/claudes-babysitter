@@ -162,7 +162,7 @@ switch (cmd) {
       const vps = viewports(cfg, env).map((v) => v.name);
       const full = viewports(cfg, { ...env, BABYSITTER_PROFILE: "", VIEWPORTS: "" }).map((v) => v.name);
       const RUN = existsSync(join(ROOT, "node_modules/claudes-babysitter/bin/babysitter.mjs")) ? "npx --no babysitter" : `node ${relative(ROOT, join(root, "bin/babysitter.mjs")) || join(root, "bin/babysitter.mjs")}`;
-      const { text } = summarize({ root: ROOT, only, args, cfg, configured: { viewports: full }, rerun: `${RUN} e2e --skip-prepare --last-failed${only ? ` --only ${only}` : ""}${env.BABYSITTER_PROFILE === "quick" ? " --quick" : ""}` });
+      const { text } = summarize({ root: ROOT, only, args, cfg, configured: { viewports: full }, lastFailed, rerun: `${RUN} e2e --skip-prepare --last-failed${only ? ` --only ${only}` : ""}${env.BABYSITTER_PROFILE === "quick" ? " --quick" : ""}` });
       console.log(`\n${text}`);
       if (vps.length < full.length) console.log(`(--quick / VIEWPORTS: ${vps.join(", ")} of ${full.join(", ")})`);
     } catch (e) { console.error(`babysitter e2e: summary failed: ${e.message}`); }

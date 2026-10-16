@@ -471,8 +471,8 @@ export async function stateChecks(page, { reload, opts = {}, maxOpeners = 15, ma
                 fresh = !r || (!r.disappeared.length && !r.state.length);
                 continue;
             }
-            const label = `after opening "${pick.text.slice(0, 40)}": `;
-            states.push(`opened "${pick.text.slice(0, 40)}"`);
+            const label = `after clicking "${pick.text.slice(0, 40)}": `;
+            states.push(`clicked "${pick.text.slice(0, 40)}"`);
             for (const f of newIn(base, await measure(page, opts)))
                 findings.push({ ...f, what: `${label}${f.what}`, where: f.where });
             // a dialog with steps of its own (Add credits: amount → Continue → card): walk it, never pay

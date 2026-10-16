@@ -118,6 +118,9 @@ try {
     assert.match(s.text, /Switched off in babysitter\.config\.json:\n  · acceptance\.skip: B1/);
     assert.match(s.text, /\/pricing\n    ✗ 2\.1 no horizontal scroll @ mobile-390 — 1 item\(s\): extends to x=0\.\.420/);
     assert.match(s.text, /npx --no babysitter e2e --skip-prepare --last-failed/);
+    const again = summarize({ root: d, lastFailed: true, configured: { viewports: ["mobile-360", "mobile-390"] }, rerun: "x" });
+    assert.match(again.text, /Re-check of the last run's failures/);
+    assert.ok(!/NOT RUN/.test(again.text), again.text);
     const f = JSON.parse(readFileSync(join(d, ".babysitter/findings.json"), "utf8"));
     assert.equal(f.findings.length, 1);
     assert.deepEqual(f.findings[0].items, [{ what: "extends to x=0..420", where: "div.hero" }]);

@@ -41,16 +41,16 @@ try {
     const r = await run.stateChecks(page, { reload });
     const w = r.findings.map((f) => f.what);
     const has = (re, msg) => assert.ok(w.some((x) => re.test(x)), `${msg}\n${show(r)}`);
-    has(/after opening "Change password": .*sticks out of its card|after opening "Change password": .*cut off/, "button wider than the dialog");
-    has(/after opening "Change password": password field "Repeat password" has no show\/hide eye/, "A1 inside the dialog");
-    has(/after opening "Add credits": wizard step 2 \(after "Continue"\): "12100 credits" needs a thousands separator/, "B4 in the top-up step");
+    has(/after clicking "Change password": .*sticks out of its card|after clicking "Change password": .*cut off/, "button wider than the dialog");
+    has(/after clicking "Change password": password field "Repeat password" has no show\/hide eye/, "A1 inside the dialog");
+    has(/after clicking "Add credits": wizard step 2 \(after "Continue"\): "12100 credits" needs a thousands separator/, "B4 in the top-up step");
     assert.ok(r.findings.some((f) => /after submitting "Send message" empty: sticks out of its card/.test(f.what) && /Write another message/.test(f.where)), `button escaping its card after the empty submit\n${show(r)}`);
     has(/the first error: it starts .* above the screen/, "error above the screen");
     has(/after the pagination "2" the new page of results: (it starts .* above the screen|its top is \d+px under the sticky header)/, "pagination keeps the reader at the bottom");
     const paid = await page.evaluate(() => window.__paid).catch(() => false);
     assert.equal(paid, false, "Pay now was pressed");
     assert.deepEqual(posts, [], "a non-GET request reached the server");
-    assert.ok(r.states.some((s) => /opened "Add credits"/.test(s)), JSON.stringify(r.states));
+    assert.ok(r.states.some((s) => /clicked "Add credits"/.test(s)), JSON.stringify(r.states));
     await ctx.close();
   });
   await t("states FP: a fitting dialog, an eye per field, a separated total, an error next to its field, pagination that scrolls the list into view → nothing", async () => {
