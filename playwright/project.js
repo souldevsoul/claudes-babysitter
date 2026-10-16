@@ -3,12 +3,22 @@
 import { existsSync, readFileSync } from "node:fs";
 import { resolve } from "node:path";
 
-/** @typedef {{ path: string, auth: boolean }} Route */
+/** @typedef {{ path: string, auth: boolean, role?: string, template?: string }} Route */
 
 const root = process.env.BABYSITTER_ROOT || process.cwd();
 export const ROOT = root;
 export const STATE_DIR = resolve(root, ".babysitter");
 export const STORAGE = resolve(STATE_DIR, "storage.json");
+
+/**
+ * Signed-in storage of a role (babysitter.config.json → roles, see prepare.mjs). The default role (LOGIN_EMAIL /
+ * SESSION_COOKIES) keeps .babysitter/storage.json; every other role has .babysitter/storage-<name>.json.
+ * @param {string} [role]
+ */
+export function storageFor(role) {
+  if (!role || role === "user") return STORAGE;
+  return resolve(STATE_DIR, `storage-${String(role).replace(/[^\w-]/g, "_")}.json`);
+}
 
 /** babysitter.config.json of the product (env BABYSITTER_CONFIG overrides the path). */
 export function loadConfig() {

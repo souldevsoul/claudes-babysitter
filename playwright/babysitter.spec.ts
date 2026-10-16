@@ -4,7 +4,7 @@
 //   STRICT=0 turns the heuristic checks into warnings.
 import { test, expect, type Page } from "@playwright/test";
 import * as c from "./checks.js";
-import { loadConfig, loadRoutes, STORAGE } from "./project.js";
+import { loadConfig, loadRoutes, storageFor } from "./project.js";
 
 const cfg = loadConfig();
 const ROUTES = loadRoutes(cfg);
@@ -39,7 +39,7 @@ function soft(list: c.Offender[], label: string) {
 
 for (const route of ROUTES) {
   test.describe(`${route.auth ? "[signed-in] " : ""}${route.path}`, () => {
-    if (route.auth) test.use({ storageState: STORAGE });
+    if (route.auth) test.use({ storageState: storageFor(route.role) });
     const r = route.path;
 
     test("2.1 no horizontal scroll, nothing outside the viewport [P15 P16]", async ({ page }) => { await open(page, r); hard(await c.horizontalOverflow(page)); });
@@ -150,7 +150,7 @@ test.describe("site-wide interactions", () => {
       for (let route = queue.shift(); route; route = queue.shift()) {
         if (deadline - Date.now() < 10_000) { queue.unshift(route); return; }
         const t0 = Date.now();
-        const ctx = await browser.newContext({ ...info.project.use, storageState: route.auth ? STORAGE : undefined, baseURL: info.project.use.baseURL });
+        const ctx = await browser.newContext({ ...info.project.use, storageState: route.auth ? storageFor(route.role) : undefined, baseURL: info.project.use.baseURL });
         const page = await ctx.newPage();
         try {
           const opened = await within(open(page, route.path).then(() => true), Math.min(openBudget, deadline - Date.now()), false);
@@ -203,7 +203,7 @@ test.describe("site-wide consistency", () => {
     test.setTimeout(60_000 + ROUTES.length * 15_000);
     const sigs: c.Sig[] = [];
     for (const route of ROUTES) {
-      const ctx = await browser.newContext({ ...info.project.use, storageState: route.auth ? STORAGE : undefined, baseURL: info.project.use.baseURL });
+      const ctx = await browser.newContext({ ...info.project.use, storageState: route.auth ? storageFor(route.role) : undefined, baseURL: info.project.use.baseURL });
       const page = await ctx.newPage();
       await open(page, route.path);
       sigs.push(...(await c.collectSignatures(page, route.path)));
@@ -226,7 +226,7 @@ test.describe("site-wide consistency", () => {
     // 3.5 — the open mobile menu speaks the site's language: its buttons vs the CTA set above, its corners vs the cards
     if (/mobile/.test(info.project.name)) {
       const home = ROUTES.find((x) => !x.auth && x.path === "/") || ROUTES.find((x) => !x.auth) || ROUTES[0];
-      const ctx = await browser.newContext({ ...info.project.use, storageState: home.auth ? STORAGE : undefined, baseURL: info.project.use.baseURL });
+      const ctx = await browser.newContext({ ...info.project.use, storageState: home.auth ? storageFor(home.role) : undefined, baseURL: info.project.use.baseURL });
       const page = await ctx.newPage();
       await open(page, home.path);
       const menu = await c.mobileMenuConsistency(page, sigs);

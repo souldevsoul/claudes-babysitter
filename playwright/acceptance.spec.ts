@@ -6,7 +6,7 @@
 import { test, expect, type Page, type Browser } from "@playwright/test";
 import * as c from "./checks.js";
 import * as a from "./acceptance.js";
-import { loadConfig, loadRoutes, STORAGE } from "./project.js";
+import { loadConfig, loadRoutes, STORAGE, storageFor } from "./project.js";
 import { existsSync } from "node:fs";
 
 const cfg = loadConfig();
@@ -35,9 +35,9 @@ async function open(page: Page, route: string) {
   if (await c.applyColorScheme(page)) await page.waitForTimeout(300);
   await c.revealLazy(page);
 }
-async function ctxFor(browser: Browser, auth: boolean) {
+async function ctxFor(browser: Browser, auth: boolean, role?: string) {
   const info = test.info();
-  return browser.newContext({ ...info.project.use, storageState: auth ? STORAGE : undefined, baseURL: info.project.use.baseURL });
+  return browser.newContext({ ...info.project.use, storageState: auth ? storageFor(role) : undefined, baseURL: info.project.use.baseURL });
 }
 const twoWidths = () => test.skip(!/mobile-390|desktop-1440/.test(test.info().project.name), "runs at one mobile and one desktop width");
 const desktopOnce = () => test.skip(!/desktop-1440/.test(test.info().project.name), "site-wide: runs once, at desktop width");
@@ -45,7 +45,7 @@ const desktopOnce = () => test.skip(!/desktop-1440/.test(test.info().project.nam
 /* ───────── every page ───────── */
 for (const route of ROUTES) {
   test.describe(`acceptance ${route.auth ? "[signed-in] " : ""}${route.path}`, () => {
-    if (route.auth) test.use({ storageState: STORAGE });
+    if (route.auth) test.use({ storageState: storageFor(route.role) });
     const r = route.path;
     test.beforeEach(() => twoWidths());
 
@@ -59,7 +59,7 @@ for (const route of ROUTES) {
     test("B2–B4 exact prices, no VAT/tax, thousands separators [BQA 5/9/11]", async ({ page }) => {
       test.skip(!on("B2"), why("B2"));
       await open(page, r);
-      hard(await a.moneyText(page, { noTax: acc.noTax }));
+      hard(await a.moneyText(page, { noTax: acc.noTax, thousandsFrom: acc.thousandsFrom }));
     });
     test("H2 everything clickable shows the hand cursor [BQA 3]", async ({ page }) => {
       test.skip(!on("H2") || /mobile/.test(test.info().project.name), on("H2") ? "no cursor on touch" : why("H2"));
@@ -137,7 +137,7 @@ test.describe("acceptance site-wide", () => {
     test.setTimeout(60_000 + ROUTES.length * 15_000);
     const shapes: any[] = [];
     for (const route of ROUTES) {
-      const ctx = await ctxFor(browser, route.auth);
+      const ctx = await ctxFor(browser, route.auth, route.role);
       const page = await ctx.newPage();
       await open(page, route.path);
       shapes.push(...(await c.collectShapes(page, route.path)));
@@ -188,7 +188,7 @@ test.describe("acceptance site-wide", () => {
     test.setTimeout(120_000 + ROUTES.length * 10_000);
     const links = new Map<string, string>();
     for (const route of ROUTES) {
-      const ctx = await ctxFor(browser, route.auth);
+      const ctx = await ctxFor(browser, route.auth, route.role);
       const page = await ctx.newPage();
       await page.goto(route.path, { waitUntil: "domcontentloaded" }).catch(() => {});
       const base = new URL(page.url()).origin;
@@ -239,17 +239,25 @@ test.describe("acceptance site-wide", () => {
   test("A1/A3/A6 sign-in and sign-up: password eye, one consent checkbox, normal footer [BQA 10, BQA]", async ({ browser }) => {
     test.skip(!on("A1"), why("A1"));
     const out: O[] = [];
-    for (const [path, isSignUp] of [[acc.auth.signIn, false], [acc.auth.signUp, true]] as const) {
-      if (!path) continue;
-      const ctx = await ctxFor(browser, false);
+    // the password eye is checked on every form with a password: sign-in, sign-up, reset / forgot / change password
+    // and the settings pages (a dialog's Change password form is opened by the states suite, run.spec.ts)
+    const PW = /password|passwd|reset|forgot|recover|security|settings|account|profile/i;
+    const pages: [string, boolean, boolean, string | undefined][] = [];
+    const add = (path: string | null | undefined, signUp: boolean, auth: boolean, role?: string) => { if (path && !pages.some((p) => p[0] === path && p[2] === auth)) pages.push([path, signUp, auth, role]); };
+    add(acc.auth.signIn, false, false); add(acc.auth.signUp, true, false);
+    for (const r of PUBLIC) if (PW.test(r.path)) add(r.path, false, false);
+    if (SIGNED_IN) { add(acc.auth.settings, false, true); for (const r of AUTH) if (PW.test(r.path)) add(r.path, false, true, r.role); }
+    test.setTimeout(60_000 + pages.length * 20_000);
+    for (const [path, isSignUp, auth, role] of pages) {
+      const ctx = await ctxFor(browser, auth, role);
       const page = await ctx.newPage();
       await open(page, path);
-      if (!acc.auth.passwordless) out.push(...(await a.passwordEye(page)).filter((o: any) => on(o.id)));
+      if (!acc.auth.passwordless) out.push(...(await a.passwordEye(page)).filter((o: any) => on(o.id)).map((o: O) => ({ ...o, where: `${path} ${o.where}` })));
       if (isSignUp && on("A3")) out.push(...(await a.signupConsent(page)));
-      if (on("A6")) out.push(...(await a.footer(page, acc)).filter((o) => o.id === "F0").map((o) => ({ ...o, what: `${path}: ${o.what} [A6]` })));
+      if (!auth && (path === acc.auth.signIn || path === acc.auth.signUp) && on("A6")) out.push(...(await a.footer(page, acc)).filter((o) => o.id === "F0").map((o) => ({ ...o, what: `${path}: ${o.what} [A6]` })));
       await ctx.close();
     }
-    test.skip(!acc.auth.signIn && !acc.auth.signUp, "acceptance.auth.signIn / signUp not set");
+    test.skip(!pages.length, "acceptance.auth.signIn / signUp not set and no password pages crawled");
     hard(out);
   });
 

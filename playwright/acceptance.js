@@ -67,12 +67,23 @@ export const copyLeaks = (page) => page.evaluate(({ leak, defensive }) => {
     return out;
 }, { leak: LEAK_RE.source, defensive: DEFENSIVE_RE.source });
 
-/** B2 — no "≈" approximations, B3 — no VAT / tax lines, B4 — big numbers carry a thousands separator. */
-export const moneyText = (page, { noTax = true } = {}) => page.evaluate(({ noTax }) => {
+/**
+ * B2 — no "≈" approximations, B3 — no VAT / tax lines, B4 — amounts of money or credits from 1,000 up carry a thousands
+ * separator ("1,200 credits", "$12,100"). Only numbers next to a currency sign, code or the word credits count —
+ * years, ids, phone numbers and postcodes have none (Praxis Confirm hire, 2026-10: "1200 credits" passed the old
+ * 5-digit threshold). The currency may sit in a sibling element ("<b>1200</b> <span>credits</span>").
+ * acceptance.thousandsFrom (default 1000) moves the threshold; every finding is returned, none dropped.
+ */
+export const moneyText = (page, { noTax = true, thousandsFrom = 1000 } = {}) => page.evaluate(({ noTax, digits }) => {
     const out = [];
+    const CUR = "[$€£₸₼₽¥₹]";
+    const WORD = "(?:credits?|cr\\b|кредит\\w*|kredit\\w*|EUR|USD|KZT|AZN|GBP|RUB|PLN|UAH|CHF|руб\\w*|тг|теңге|manat)";
+    const NUM = `\\d{${digits},}`;
+    const BIG = new RegExp(`(?:${CUR}\\s?(${NUM})(?![\\d,.\\u00a0\\u202f']?\\d)|(?<![\\d.,\\u00a0\\u202f'])(${NUM})(?:[.,]\\d{1,2})?\\s?(?:${CUR}|${WORD}(?![a-zа-яё])))`, "i");
     const walker = document.createTreeWalker(document.body, NodeFilter.SHOW_TEXT);
     const push = (el, what) => out.push({ what, where: window.__uiDescribe(el), selector: window.__uiSelector(el), human: window.__uiHuman(el) });
-    for (let n = walker.nextNode(); n && out.length < 25; n = walker.nextNode()) {
+    const done = new Set();
+    for (let n = walker.nextNode(); n; n = walker.nextNode()) {
         const el = n.parentElement;
         const t = n.textContent || "";
         if (!el || !t.trim() || el.closest("script, style, noscript, code, pre, input, textarea") || !window.__uiVisible(el))
@@ -81,12 +92,29 @@ export const moneyText = (page, { noTax = true } = {}) => page.evaluate(({ noTax
             push(el, `approximate price "${t.trim().slice(0, 40)}" — show the exact amount in the chosen currency, no ≈ [B2, BQA 9]`);
         if (noTax && /\b(VAT|incl\.? tax|excl\.? tax|plus tax|\+ tax|sales tax|НДС)\b/i.test(t))
             push(el, `VAT / tax wording "${t.trim().slice(0, 50)}" — the owner rule is no VAT/tax anywhere [B3, BQA 11]`);
-        const big = t.match(/(?:[$€£₸₼]\s?\d{5,}|\d{5,}\s?(?:[$€£₸₼]|credits?|EUR|USD|KZT|AZN|GBP)\b)/i);
-        if (big)
-            push(el, `"${big[0]}" needs a thousands separator [B4, BQA 5]`);
+        if (!new RegExp(`\\d{${digits}}`).test(t))
+            continue;
+        // the number's own text, or the short line it sits in when the currency is a sibling element
+        let ctx = t, host = el;
+        if (!BIG.test(t))
+            for (let p = el, i = 0; p && i < 2; p = p.parentElement, i++) {
+                const pt = (p.textContent || "").replace(/\s+/g, " ");
+                if (pt.length > 120)
+                    break;
+                if (BIG.test(pt)) {
+                    ctx = pt;
+                    host = el;
+                    break;
+                }
+            }
+        const big = ctx.match(BIG);
+        if (big && !done.has(host)) {
+            done.add(host);
+            push(host, `"${big[0].trim()}" needs a thousands separator ("${Number(big[1] || big[2]).toLocaleString("en-US")}") [B4, BQA 5]`);
+        }
     }
     return out;
-}, { noTax });
+}, { noTax, digits: String(Math.max(1, Math.floor(thousandsFrom)).toString().length) });
 
 /* ─────────────── affordance ─────────────── */
 
@@ -303,12 +331,24 @@ export const footer = (page, acc = DEFAULTS) => page.evaluate((acc) => {
         if (cur)
             push("F4", "currency switcher repeated in the footer — keep the one in the header [F4, BQA]", cur);
     }
-    // F5 We accept + Visa/Mastercard, in the site's font
+    // F5 "We accept" + Visa/Mastercard, in the site's font. Logos without the label read as decoration or as a
+    // badge of a partner: the label is required next to them (Praxis footer, 2026-10: logos with no "We accept")
     if (acc.paymentLogos) {
-        const marks = Array.from(f.querySelectorAll("img, svg, [aria-label], [title]")).filter((x) => /visa|master ?card/i.test([x.getAttribute("alt"), x.getAttribute("aria-label"), x.getAttribute("title"), x.getAttribute("src"), x.getAttribute("class")].join(" ")));
+        const marks = Array.from(f.querySelectorAll("img, svg, [aria-label], [title]")).filter((x) => window.__uiVisible(x) && /visa|master ?card/i.test([x.getAttribute("alt"), x.getAttribute("aria-label"), x.getAttribute("title"), x.getAttribute("src"), x.getAttribute("class")].join(" ")));
+        const ACCEPT = /we accept|accepted (payments|cards)|payment methods|we take|мы принимаем|принимаем( к оплате)?|способы оплаты|qəbul edirik|ödəniş üsulları|қабылдаймыз|төлем (әдістері|тәсілдері)|wir akzeptieren|zahlungsmethoden|nous acceptons|moyens de paiement|aceptamos|métodos de pago|accettiamo|akceptujemy|metody płatności|приймаємо/i;
+        const acceptEl = Array.from(f.querySelectorAll("*")).filter((e) => window.__uiVisible(e) && ACCEPT.test(e.textContent || "") && (e.textContent || "").length < 80)
+            .sort((x, y) => (x.textContent || "").length - (y.textContent || "").length)[0];
         if (marks.length < 2 && !/visa/i.test(text))
             push("F5", 'footer has no "We accept" Visa / Mastercard logos [F5, BQA 6]');
-        const acceptEl = Array.from(f.querySelectorAll("*")).find((e) => e.children.length === 0 && /we accept|accepted payments|payment methods/i.test(e.textContent || ""));
+        else if (!acceptEl)
+            push("F5", 'payment logos without a "We accept" label — put "We accept" (in the page language) right before the Visa / Mastercard logos [F5, BQA 6]', marks[0]);
+        else if (marks.length) {
+            // the label belongs to the logos: within ~160 px of them, not somewhere else in the footer
+            const lr = acceptEl.getBoundingClientRect();
+            const near = marks.some((m) => { const r = m.getBoundingClientRect(); return Math.abs((r.top + r.bottom) / 2 - (lr.top + lr.bottom) / 2) < 160 && Math.min(Math.abs(r.left - lr.right), Math.abs(lr.left - r.right), Math.abs(r.left - lr.left)) < 400; });
+            if (!near)
+                push("F5", '"We accept" is far from the payment logos — keep the label next to the Visa / Mastercard logos [F5, BQA 6]', acceptEl);
+        }
         if (acceptEl) {
             const bodyFont = getComputedStyle(document.body).fontFamily.split(",")[0].trim();
             const font = getComputedStyle(acceptEl).fontFamily.split(",")[0].trim();
@@ -447,17 +487,31 @@ export const policyCrossLinks = (page) => page.evaluate(() => {
 
 /* ─────────────── auth & account ─────────────── */
 
-/** A1 — every password field has a show/hide eye, kept out of the Tab order. */
+/**
+ * A1 — every password field has its own show/hide eye, kept out of the Tab order. The eye is looked for only inside
+ * the field's own wrapper: the ancestors that hold this password field and no other one (Praxis sign-up, 2026-10:
+ * the search climbed three levels into the grid that held both fields, and the Password eye counted for Confirm
+ * password). Sign-up, sign-in, reset, change-password and settings forms alike — and dialogs, once opened.
+ */
 export const passwordEye = (page) => page.evaluate(() => {
     const out = [];
-    for (const inp of Array.from(document.querySelectorAll("input[type=password]")).filter((i) => window.__uiVisible(i))) {
-        let wrap = inp.parentElement, eye = null;
-        for (let i = 0; i < 3 && wrap && !eye; i++, wrap = wrap.parentElement)
-            eye = Array.from(wrap.querySelectorAll("button, [role=button]")).find((b) => b !== inp && /show|hide|password|eye|reveal|показ|скры/i.test([b.getAttribute("aria-label"), b.getAttribute("title"), b.textContent, b.className].join(" ")) && !/submit|sign|log ?in|continue|forgot/i.test(b.textContent || ""));
+    const EYE = /show|hide|password|eye|reveal|toggle|visib|показ|скры|göstər|gizlə|көрсет|жасыр/i;
+    const NOT = /submit|sign|log ?in|continue|forgot|reset|save|update|change|next/i;
+    const fields = Array.from(document.querySelectorAll("input[type=password]")).filter((i) => window.__uiVisible(i));
+    const all = Array.from(document.querySelectorAll("input[type=password]"));
+    for (const inp of fields) {
+        let eye = null;
+        for (let wrap = inp.parentElement, i = 0; wrap && wrap !== document.body && i < 4 && !eye; wrap = wrap.parentElement, i++) {
+            // the wrapper holds another password field: everything from here up is shared, not this field's own
+            if (all.some((o) => o !== inp && wrap.contains(o)))
+                break;
+            eye = Array.from(wrap.querySelectorAll("button, [role=button]")).find((b) => b !== inp && EYE.test([b.getAttribute("aria-label"), b.getAttribute("title"), b.textContent, typeof b.className === "string" ? b.className : ""].join(" ")) && !NOT.test(b.textContent || "") && !b.matches("[type=submit]"));
+        }
+        const label = (window.__uiHuman(inp) || {}).name || inp.getAttribute("name") || inp.id || "password";
         if (!eye)
-            out.push({ id: "A1", what: "password field has no show/hide eye [A1, BQA 10]", where: window.__uiDescribe(inp), selector: window.__uiSelector(inp) });
+            out.push({ id: "A1", what: `password field "${label}" has no show/hide eye of its own — every password field (confirm, new, current) gets its own toggle inside the field [A1, BQA 10]`, where: window.__uiDescribe(inp), selector: window.__uiSelector(inp), human: window.__uiHuman(inp) });
         else if (eye.getAttribute("tabindex") !== "-1")
-            out.push({ id: "A1", what: "the password eye takes a Tab stop — Tab from the password should go to the next field (tabindex=-1) [A1, BQA]", where: window.__uiDescribe(eye), selector: window.__uiSelector(eye) });
+            out.push({ id: "A1", what: `the eye of "${label}" takes a Tab stop — Tab from the password should go to the next field (tabindex=-1) [A1, BQA]`, where: window.__uiDescribe(eye), selector: window.__uiSelector(eye), human: window.__uiHuman(eye) });
     }
     return out;
 });
