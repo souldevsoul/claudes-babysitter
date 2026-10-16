@@ -130,10 +130,15 @@ switch (cmd) {
     const banner = wiringBanner(ROOT, { context: "e2e" });
     if (banner) console.error(banner);
     // everything runs by default; --only is a partial run and says so, loudly, before and after
-    const SUITES = { ui: ["babysitter.spec", "run.spec"], acceptance: ["acceptance.spec"], content: ["content.spec"], product: ["--project=product"] };
+    // ui = every spec next to the tool's that is not a suite of its own (babysitter, run, and the checks other areas
+    // add: layout, forms …) — a new spec file is never silently left out of --only ui
+    const { readdirSync } = await import("node:fs");
+    const OWN = ["acceptance", "content"];
+    const uiSpecs = readdirSync(join(root, "playwright")).filter((f) => /\.spec\.(t|j)s$/.test(f) && !OWN.some((o) => f.startsWith(`${o}.`))).map((f) => f.replace(/\.(t|j)s$/, ""));
+    const SUITES = { ui: uiSpecs, acceptance: ["acceptance.spec"], content: ["content.spec"], product: ["--project=product"] };
     if (only && !SUITES[only]) { console.error(`babysitter e2e: --only ui | acceptance | content | product (got "${only}")`); process.exit(2); }
     if (only) {
-      const skippedNames = { ui: "UI checks + states/languages/scroll (babysitter.spec, run.spec)", acceptance: "business acceptance (acceptance.spec: B1 copy leaks, B2–B4 money, H1/H2 hover and cursor, N1/N4/N6, F0–F5 footer, P1–P3 policies, D1–D3, C1/C2 cookies, M1 currency, A1–A9 sign-in)", content: "copy (content.spec: CT1–CT18 unfinished copy, test data, raw errors, punctuation, dates, plurals, email MX + mailto, translations, legal names, © line)", product: "the product's own e2e/*.spec.ts" };
+      const skippedNames = { ui: `UI checks + states/languages/scroll (${uiSpecs.join(", ")})`, acceptance: "business acceptance (acceptance.spec: B1 copy leaks, B2–B4 money, H1/H2 hover and cursor, N1/N4/N6, F0–F5 footer, P1–P3 policies, D1–D3, C1/C2 cookies, M1 currency, A1–A9 sign-in)", content: "copy (content.spec: CT1–CT18 unfinished copy, test data, raw errors, punctuation, dates, plurals, email MX + mailto, translations, legal names, © line)", product: "the product's own e2e/*.spec.ts" };
       const off = Object.keys(SUITES).filter((k) => k !== only);
       console.error(`${"!".repeat(64)}\n!! PARTIAL RUN (--only ${only}). NOT RUN:\n${off.map((k) => `!!   ✗ ${skippedNames[k]}`).join("\n")}\n!! Defects those suites catch will not be found. Drop --only for a full check.\n${"!".repeat(64)}`);
     }

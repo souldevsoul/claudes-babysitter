@@ -101,6 +101,9 @@ try {
   await t("run summary: titles parse to suite / route / role / locale; bullets; NOT RUN suites, viewports, languages, unreached routes; findings.json; the --last-failed command", async () => {
     assert.deepEqual(parseTitle(["run.spec.ts", "run [signed-in: specialist] /tasks/1", "states [az] 2.10 …"]), { suite: "states/locales", route: "/tasks/1", role: "specialist", auth: true, locale: "az" });
     assert.deepEqual(parseTitle(["acceptance.spec.ts", "acceptance /pricing", "B1 …"]).route, "/pricing");
+    assert.deepEqual(parseTitle(["content.spec.ts", "content [kk] [signed-in: buyer] /wallet", "CT1 …"]), { suite: "content", route: "/wallet", role: "buyer", auth: true, locale: "kk" });
+    assert.equal(parseTitle(["layout.spec.ts", "/pricing layout", "L1 …"]).route, "/pricing");
+    assert.equal(parseTitle(["forms.spec.ts", "forms [signed-in] /settings", "FM3 …"]).role, "user");
     assert.deepEqual(bullets("Error:   • a — b\n  • c — d e — f"), [{ what: "a", where: "b" }, { what: "c — d e", where: "f" }]);
     const d = mkdtempSync(join(tmpdir(), "bs-run-sum-")); dirs.push(d);
     mkdirSync(join(d, ".babysitter"));

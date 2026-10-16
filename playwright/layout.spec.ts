@@ -6,7 +6,7 @@ import * as c from "./checks.js";
 import * as L from "./checks/layout.js";
 import { existsSync, readFileSync } from "node:fs";
 import { resolve } from "node:path";
-import { loadConfig, loadRoutes, ROOT, STORAGE } from "./project.js";
+import { loadConfig, loadRoutes, ROOT, STORAGE, authTag, storageFor } from "./project.js";
 
 const cfg = loadConfig();
 const ROUTES = loadRoutes(cfg);
@@ -41,8 +41,8 @@ function soft(list: F[], label: string) {
 }
 
 for (const route of ROUTES) {
-  test.describe(`${route.auth ? "[signed-in] " : ""}${route.path} layout`, () => {
-    if (route.auth) test.use({ storageState: STORAGE });
+  test.describe(`${authTag(route)}${route.path} layout`, () => {
+    if (route.auth) test.use({ storageState: storageFor(route.role) });
     const r = route.path;
 
     test("3.7 header links are in the footer under the same name [nav-mismatch]", async ({ page }) => {
@@ -154,7 +154,7 @@ test.describe("site-wide layout", () => {
     const marks: { side: string; where: string; page: string }[] = [];
     const notTested: string[] = [];
     for (const route of ROUTES) {
-      const ctx = await browser.newContext({ ...info.project.use, storageState: route.auth ? STORAGE : undefined, baseURL: info.project.use.baseURL });
+      const ctx = await browser.newContext({ ...info.project.use, storageState: route.auth ? storageFor(route.role) : undefined, baseURL: info.project.use.baseURL });
       const page = await ctx.newPage();
       try {
         const status = await open(page, route.path);

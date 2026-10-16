@@ -9,7 +9,7 @@ import { test, expect, type Page, type Browser } from "@playwright/test";
 import * as c from "./checks.js";
 import * as k from "./checks/content.js";
 import { translationKeys } from "../lib/content-lint.js";
-import { loadConfig, loadRoutes, loadLocales, applyLocale as applyDetected, localize, STORAGE, STATE_DIR, ROOT } from "./project.js";
+import { loadConfig, loadRoutes, loadLocales, applyLocale as applyDetected, localize, STORAGE, STATE_DIR, ROOT, authTag, storageFor } from "./project.js";
 import { existsSync } from "node:fs";
 
 const cfg = loadConfig();
@@ -54,8 +54,8 @@ async function ctxFor(browser: Browser, auth: boolean) {
 
 /* ───────── every page ───────── */
 for (const route of ROUTES) {
-  test.describe(`content ${route.auth ? "[signed-in] " : ""}${route.path}`, () => {
-    if (route.auth) test.use({ storageState: STORAGE });
+  test.describe(`content ${authTag(route)}${route.path}`, () => {
+    if (route.auth) test.use({ storageState: storageFor(route.role) });
     test.beforeEach(() => once());
     const r = route.path;
 
@@ -80,8 +80,8 @@ for (const route of ROUTES) {
 /* ───────── each configured locale ───────── */
 for (const loc of LOCALES) {
   for (const route of ROUTES) {
-    test.describe(`content [${loc.code}] ${route.auth ? "[signed-in] " : ""}${route.path}`, () => {
-      if (route.auth) test.use({ storageState: STORAGE });
+    test.describe(`content [${loc.code}] ${authTag(route)}${route.path}`, () => {
+      if (route.auth) test.use({ storageState: storageFor(route.role) });
       test.beforeEach(() => once());
       test(`CT11–CT13 [${loc.code}] translated: no English left, no keys, lang/dir right; CT1–CT8 copy`, async ({ page }) => {
         await open(page, route.path, loc);

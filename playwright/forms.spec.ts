@@ -9,7 +9,7 @@ import { resolve } from "node:path";
 import * as c from "./checks.js";
 import * as a from "./acceptance.js";
 import * as fm from "./checks/forms.js";
-import { loadConfig, loadRoutes, STORAGE, ROOT, storageFor } from "./project.js";
+import { loadConfig, loadRoutes, STORAGE, ROOT, storageFor, authTag } from "./project.js";
 
 const cfg = loadConfig();
 const acc = a.acceptanceConfig(cfg);
@@ -57,7 +57,7 @@ const desktopOnce = () => test.skip(!/desktop-1440/.test(test.info().project.nam
 
 /* ───────── every page ───────── */
 for (const route of ROUTES) {
-  test.describe(`forms ${route.auth ? "[signed-in] " : ""}${route.path}`, () => {
+  test.describe(`forms ${authTag(route)}${route.path}`, () => {
     if (route.auth) test.use({ storageState: storageFor(route.role) });
     const r = route.path;
     test.beforeEach(() => desktopOnce());

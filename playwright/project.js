@@ -77,3 +77,6 @@ export function viewports(cfg = loadConfig(), env = process.env) {
   if (Array.isArray(cfg.viewports) && cfg.viewports.length) return cfg.viewports.map((v) => (typeof v === "object" ? v : named(v)));
   return VIEWPORTS;
 }
+
+/** "[signed-in] " / "[signed-in: specialist] " / "" — describe titles must differ per role, or Playwright refuses duplicates. */
+export const authTag = (route) => (route.auth ? `[signed-in${route.role && route.role !== "user" ? `: ${route.role}` : ""}] ` : "");
