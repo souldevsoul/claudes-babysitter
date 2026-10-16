@@ -184,7 +184,8 @@ export async function scrollAfterNavigation(page, { max = 2 } = {}) {
         if (page.url() !== home) {
             await page.goto(home, { waitUntil: "load", timeout: 30_000 }).catch(() => { });
             await page.waitForTimeout(500);
-            await page.evaluate((l) => { const el = Array.from(document.querySelectorAll("a[href]")).find((a) => { try { const u = new URL(a.href); return u.pathname + u.search === l.path; } catch { return false; } }); if (el) el.setAttribute("data-bs-nav", String(l.i)); }, l).catch(() => { });
+            // the same link again: same target (hash included) and label — the first "/contact" may be another link
+            await page.evaluate((l) => { const same = Array.from(document.querySelectorAll("a[href]")).filter((a) => { try { const u = new URL(a.href); return u.pathname + u.search === l.path && u.hash === l.hash; } catch { return false; } }); const el = same.find((a) => ((a.textContent || a.getAttribute("aria-label") || "").trim().replace(/\s+/g, " ").slice(0, 40) || "") === l.label) || same[0]; if (el) el.setAttribute("data-bs-nav", String(l.i)); }, l).catch(() => { });
         }
         const loc = page.locator(`[data-bs-nav="${l.i}"]`).first();
         if (!(await loc.count().catch(() => 0)))
@@ -204,19 +205,30 @@ export async function scrollAfterNavigation(page, { max = 2 } = {}) {
         await page.waitForLoadState("load", { timeout: 15_000 }).catch(() => { });
         await page.waitForTimeout(900);
         await c.settle(page, 1500);
+        await scrollRest(page, 4000); // a smooth scroll to a #hash target can take seconds (Praxis /contact#contact-form)
         const y = await page.evaluate(() => window.scrollY).catch(() => 0);
         if (l.hash) {
-            const r = await anchorPlacement(page, l.hash.slice(1));
+            // the router scrolls to the #target once the new page has rendered — up to seconds later (Praxis
+            // /about → /contact#contact-form landed after ~2.5 s): judge it only when it has had 6 s to get there
+            let r = await anchorPlacement(page, l.hash.slice(1));
+            for (const t0 = Date.now(); r && r.problem && Date.now() - t0 < 6000;) {
+                await page.waitForTimeout(300);
+                await scrollRest(page, 1500);
+                r = await anchorPlacement(page, l.hash.slice(1));
+            }
             if (r && r.problem)
                 out.push({ what: `after the link "${l.label}" to ${l.path}${l.hash} ${r.problem} [3.8, P52]`, where: l.where, selector: l.selector });
         }
-        else if (y > 2)
+        else if (y > 40) // a few px left over (a scroll-padding, a late banner) are not "opened in the middle" (Praxis: 3-4 px)
             out.push({ what: `after the in-app link "${l.label}" the new page ${l.path} opens scrolled ${Math.round(y)}px down instead of at its top — reset the scroll on route change (Next: do not pass scroll={false}; a custom scroll container must scrollTo(0,0) on pathname change) [3.8, P52]`, where: l.where, selector: l.selector });
     }
     if (page.url() !== home)
         await page.goto(home, { waitUntil: "load", timeout: 30_000 }).catch(() => { });
     return out;
 }
+
+/** Waits until the page stops scrolling (scrollY unchanged for ~500 ms, at most `cap` ms). */
+const scrollRest = (page, cap = 3000) => page.evaluate((cap) => new Promise((res) => { let last = -1, same = 0; const t0 = performance.now(); const tick = () => { const y = scrollY; same = y === last ? same + 1 : 0; last = y; if (same >= 30 || performance.now() - t0 > cap) res(null); else requestAnimationFrame(tick); }; tick(); }), cap).catch(() => { });
 
 /** Where an anchor's target landed: { problem } when it is under the sticky header or off-screen, null when no target. */
 async function anchorPlacement(page, id) {
@@ -269,8 +281,7 @@ export async function anchorTargets(page, { max = 6 } = {}) {
         if (!visible)
             continue; // inside a closed menu: the mobile-menu checks open it
         await loc.click({ timeout: 2500 }).catch(() => { });
-        // wait for smooth scrolling to stop (scrollY unchanged for 250 ms, at most 3 s)
-        await page.evaluate(() => new Promise((res) => { let last = -1, same = 0; const t0 = performance.now(); const tick = () => { const y = scrollY; same = y === last ? same + 1 : 0; last = y; if (same >= 15 || performance.now() - t0 > 3000) res(null); else requestAnimationFrame(tick); }; tick(); })).catch(() => { });
+        await scrollRest(page, 3000);
         const r = await anchorPlacement(page, x.id);
         if (r && r.problem)
             out.push({ what: `the #anchor link "${x.label}" ${r.problem} [3.8, P52]`, where: x.where, selector: x.selector });
@@ -574,7 +585,7 @@ export async function stateChecks(page, { reload, opts = {}, maxOpeners = 15, ma
                 // the list it pages: the nearest list/grid/table before the pagination
                 let list = null;
                 for (let p = (zone || next).parentElement; p && !list; p = p.parentElement)
-                    list = Array.from(p.querySelectorAll("ul, ol, table, [role=list], [role=grid], [class*=grid]")).filter((l) => window.__uiVisible(l) && !(zone || next).contains(l) && l.children.length >= 2 && (l.compareDocumentPosition(zone || next) & Node.DOCUMENT_POSITION_FOLLOWING)).pop() || null;
+                    list = Array.from(p.querySelectorAll("ul, ol, table, [role=list], [role=grid], [class*=grid]")).filter((l) => window.__uiVisible(l) && !(zone || next).contains(l) && !l.closest("nav, footer, header, aside, [role=navigation]") && l.children.length >= 2 && (l.compareDocumentPosition(zone || next) & Node.DOCUMENT_POSITION_FOLLOWING)).pop() || null;
                 if (!list)
                     return null;
                 next.setAttribute("data-bs-page-next", "");
@@ -591,10 +602,15 @@ export async function stateChecks(page, { reload, opts = {}, maxOpeners = 15, ma
                 const full = page.url() !== url && (await page.evaluate(() => performance.getEntriesByType("navigation")[0]?.name === location.href).catch(() => false));
                 if (!full) {
                     // the list may have been re-rendered: stamp it again (same place in the page)
-                    await page.evaluate(() => { if (!document.querySelector("[data-bs-list]")) { const l = Array.from(document.querySelectorAll("ul, ol, table, [role=list], [role=grid]")).filter((x) => window.__uiVisible(x) && x.children.length >= 2)[0]; if (l) l.setAttribute("data-bs-list", ""); } }).catch(() => { });
+                    // a list React replaced is not stamped any more: nothing reliable to measure, say so
+                    const still = await page.evaluate(() => !!document.querySelector("[data-bs-list]")).catch(() => false);
                     states.push(`pagination "${pag.label}"`);
-                    const p = await topVisible(page, "[data-bs-list]", `after the pagination "${pag.label}" the new page of results`);
-                    if (p)
+                    const p = still ? await topVisible(page, "[data-bs-list]", `after the pagination "${pag.label}" the new page of results`) : null;
+                    if (!still)
+                        notTested.push(`pagination "${pag.label}": the list was re-rendered, its top could not be measured`);
+                    // only the classic defect counts: the reader is left below the new results' top (or it is under the header);
+                    // a list that starts below the screen is ahead of the reader, not lost (Praxis /specialists "Next")
+                    if (p && !/starts below the screen/.test(p))
                         findings.push({ check: "4.4", what: `${p} [4.4, P52]`, where: await page.evaluate(() => { const e = document.querySelector("[data-bs-list]"); return e ? window.__uiDescribe(e) : "list"; }).catch(() => "list") });
                     for (const x of newIn(base, await measure(page, opts)))
                         findings.push({ ...x, what: `after the pagination "${pag.label}": ${x.what}` });
@@ -609,7 +625,15 @@ export async function stateChecks(page, { reload, opts = {}, maxOpeners = 15, ma
     return { findings, notTested, states };
 }
 
-/* ───────────────────────── locales: untranslated text ───────────────────────── */
+/* ───────────────────────── locales ───────────────────────── */
+
+/** 2.5 — HEADER navigation items that wrap (a longer language): footer columns and "On this page" lists may wrap. */
+export async function headerNavWraps(page) {
+    const all = await c.wrappedNavItems(page);
+    const keep = await page.evaluate((sels) => sels.map((s) => { const el = s && document.querySelector(s); return !!el && !!el.closest("header, [role=banner]") && !el.closest("footer, [role=contentinfo], aside, main"); }), all.map((f) => f.selector || null)).catch(() => all.map(() => true));
+    return all.filter((_, i) => keep[i]);
+}
+
 
 /** Visible text runs of the page (one per element with its own text), for the untranslated comparison. */
 export const textRuns = (page) => page.evaluate(() => {
@@ -650,7 +674,8 @@ export function untranslated(runs, defaultRuns, code, keep = []) {
         if (r.ownLang && lang(r.ownLang) !== lang(code))
             continue;
         const words = t.match(/\p{L}{2,}/gu) || [];
-        if (words.length < 2 || t.length < 8 || /@|https?:|www\./.test(t))
+        // one token with no space is an identifier (a cookie name "session-token", a slug), not prose (Praxis /cookies)
+        if (words.length < 2 || t.length < 8 || !/\s/.test(t) || /@|https?:|www\./.test(t))
             continue;
         if (words.every((x) => x === x.toUpperCase()))
             continue;

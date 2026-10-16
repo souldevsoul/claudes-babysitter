@@ -141,6 +141,15 @@ switch (cmd) {
       const st = spawnSync(process.execPath, [join(root, "playwright/prepare.mjs")], { stdio: "inherit", env }).status;
       if (st !== 0) { console.error("babysitter e2e: prepare failed (set BASE_URL or baseURL in babysitter.config.json; LOGIN_EMAIL / LOGIN_PASSWORD for signed-in pages). --skip-prepare to run on the last crawl."); process.exit(st ?? 1); }
     }
+    // a --reporter on the command line replaces the config's reporters: keep the JSON report the summary, findings.json,
+    // fix-plan and the Stop hook read (a live run with --reporter=line once left nothing to summarise)
+    for (let i = 0; i < args.length; i++) {
+      const m = args[i].match(/^--reporter(?:=(.*))?$/);
+      if (!m) continue;
+      const val = m[1] ?? args[i + 1];
+      if (val && !/(^|,)json(,|$)/.test(val)) { if (m[1] !== undefined) args[i] = `--reporter=${val},json`; else args[i + 1] = `${val},json`; }
+      env.PLAYWRIGHT_JSON_OUTPUT_NAME = join(ROOT, ".babysitter/report.json");
+    }
     if (only === "product") args.unshift("--project=product");
     else if (only) args.unshift(...SUITES[only]);
     const status = playwright(args, env);

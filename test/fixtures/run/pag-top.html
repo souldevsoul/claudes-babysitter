@@ -1,0 +1,8 @@
+<!doctype html><html lang="en"><head><meta name="viewport" content="width=device-width"><style>body{margin:0;font:16px Arial} main{padding:16px} button{height:40px}</style></head><body><main>
+<h1>Specialists</h1>
+<nav aria-label="Pagination"><button type="button" onclick="page(2)">Next</button></nav>
+<div style="height:1600px"></div>
+<ul id="list"></ul></main>
+<footer><ul><li>Specialists</li><li>Services</li></ul></footer>
+<script>function page(n){ const ul = document.getElementById("list"); ul.innerHTML = ""; for (let i = 0; i < 5; i++) { const li = document.createElement("li"); li.textContent = "Result " + (n * 5 + i); ul.appendChild(li); } } page(1);</script>
+</body></html>

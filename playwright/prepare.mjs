@@ -25,8 +25,18 @@ import { templateOf } from "../lib/route-map.js";
 const root = process.env.BABYSITTER_ROOT || process.cwd();
 const cfgPath = process.env.BABYSITTER_CONFIG || resolve(root, "babysitter.config.json");
 const cfg = existsSync(cfgPath) ? JSON.parse(readFileSync(cfgPath, "utf8")) : {};
-const base = process.env.BASE_URL || cfg.baseURL;
+let base = process.env.BASE_URL || cfg.baseURL;
 if (!base) { console.error("BASE_URL (or baseURL in babysitter.config.json) is required"); process.exit(2); }
+// vertex.boutique → 308 → www.vertex.boutique: every crawled link was "another origin" and the crawl found 0 pages,
+// silently. The site's own redirect to its www / apex twin is followed, and said.
+try {
+  const res = await fetch(base, { redirect: "follow", signal: AbortSignal.timeout(20_000) });
+  const to = new URL(res.url), from = new URL(base);
+  if (to.origin !== from.origin && to.hostname.replace(/^www\./, "") === from.hostname.replace(/^www\./, "")) {
+    console.log(`claudes-babysitter: ${from.origin} redirects to ${to.origin} — crawling ${to.origin}`);
+    base = to.origin;
+  }
+} catch {}
 const dir = resolve(root, ".babysitter");
 mkdirSync(dir, { recursive: true });
 const storage = resolve(dir, "storage.json");
@@ -229,6 +239,7 @@ const all = [...publicRoutes.map((path) => ({ path, auth: false })), ...routes.f
 const reached = new Set(all.map((r) => templateFor(r.path)).filter(Boolean));
 crawlReport.missingDynamic = dynamic.filter((t) => !reached.has(t) && !(cfg.sampleParams && Object.keys(cfg.sampleParams).length));
 writeFileSync(resolve(dir, "routes.json"), JSON.stringify(all, null, 2));
+if (!all.length) { writeFileSync(resolve(dir, "crawl.json"), JSON.stringify(crawlReport, null, 2)); console.error(`claudes-babysitter: the crawl found NO page on ${base} (every seed failed, answered ≥ 400 or left the site) — nothing would be checked`); process.exit(1); }
 writeFileSync(resolve(dir, "crawl.json"), JSON.stringify(crawlReport, null, 2));
 const byRole = crawlReport.roles.filter((r) => r.ok).map((r) => `${r.pages} as ${r.name}`).join(", ");
 log(`${publicRoutes.length} public${byRole ? ` + ${byRole}` : ""} pages → .babysitter/routes.json`);

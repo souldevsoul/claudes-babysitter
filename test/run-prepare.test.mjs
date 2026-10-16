@@ -74,7 +74,7 @@ try {
     assert.equal(kk.verified, true, JSON.stringify(kk));
   });
   await t("e2e --only ui: run.spec checks every language (az: the CTA sticks out of its card, untranslated title) and the summary says what did not run + --last-failed", async () => {
-    const e = await sh([join(TOOL, "bin/babysitter.mjs"), "e2e", "--skip-prepare", "--only", "ui", "--project=mobile-360", "--grep", "i18n", "--workers=2"], { cwd: repo, env: { ...env, ROUTES: "" }, timeout: 600_000 });
+    const e = await sh([join(TOOL, "bin/babysitter.mjs"), "e2e", "--skip-prepare", "--only", "ui", "--project=mobile-360", "--grep", "i18n", "--workers=2", "--reporter=line"], { cwd: repo, env: { ...env, ROUTES: "" }, timeout: 600_000 });
     const o = e.stdout + e.stderr;
     assert.equal(e.status, 1, o.slice(-3000));
     assert.match(o, /PARTIAL RUN \(--only ui\)\. NOT RUN:[\s\S]*business acceptance/);
@@ -103,6 +103,14 @@ try {
     assert.match(fp.stdout, /on: \/ .*mobile-360 in az/);
     assert.match(fp.stdout, /look at: app\/page\.tsx \(page\)/);
     assert.match(fp.stdout, /e2e --skip-prepare --last-failed/);
+  });
+  await t("prepare: a crawl that finds no page fails loudly instead of writing an empty route list", async () => {
+    const d = mkdtempSync(join(tmpdir(), "bs-run-empty-"));
+    writeFileSync(join(d, "babysitter.config.json"), JSON.stringify({ baseURL: site.url, routes: ["/no-such-page"] }));
+    const e = await sh([join(TOOL, "playwright/prepare.mjs")], { cwd: d, env: { ...process.env, BABYSITTER_ROOT: d, BASE_URL: site.url, LOCALES: "" }, timeout: 120_000 });
+    rmSync(d, { recursive: true, force: true });
+    assert.equal(e.status, 1, e.stdout + e.stderr);
+    assert.match(e.stderr, /the crawl found NO page/);
   });
 } finally {
   site.close();

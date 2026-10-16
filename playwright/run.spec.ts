@@ -80,7 +80,7 @@ for (const route of ROUTES) {
         const missing = run.untranslated(runs, defRuns, loc.code, cfg.locales?.keep || []);
         if (cfg.locales?.untranslated === "warn") soft(missing, `untranslated text in ${loc.code}`); else list.push(...missing);
         const p2 = await openIn(browser, route, loc);
-        soft([...(await c.wrappedNavItems(p2.page)), ...(await c.overlappingText(p2.page))].map((o) => ({ ...o, what: `[${loc.code}] ${o.what}` })), `nav wraps / text covered in ${loc.code}`);
+        soft([...(await run.headerNavWraps(p2.page)), ...(await c.overlappingText(p2.page))].map((o) => ({ ...o, what: `[${loc.code}] ${o.what}` })), `nav wraps / text covered in ${loc.code}`);
         await p2.ctx.close();
         hard(list);
       });

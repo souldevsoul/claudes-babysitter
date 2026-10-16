@@ -27,6 +27,7 @@ button{height:40px;padding:0 12px}
 <ul id="list"></ul>
 <nav aria-label="Pagination"><button type="button" onclick="page(1)">1</button><button type="button" onclick="page(2)">2</button></nav>
 </main>
+<footer><ul><li>Specialists</li><li>Services</li><li>Pricing</li></ul><div style="height:1200px"></div></footer>
 <script>
 window.__paid = false; window.__posts = 0;
 const _f = window.fetch; window.fetch = (u, o) => { if (o && o.method && o.method !== "GET") window.__posts++; return _f(u, o); };

@@ -15,7 +15,7 @@ const srv = createServer((req, res) => {
   const u = new URL(req.url, "http://x");
   if (req.method !== "GET") posts.push(`${req.method} ${u.pathname}`);
   let body;
-  if (u.pathname.startsWith("/spa")) body = readFileSync(join(FX, "nav.html"), "utf8").replace("__RESET__", u.searchParams.get("reset") === "1" ? "true" : "false").replaceAll("__PM__", u.searchParams.get("pm") === "1" ? 'style="scroll-margin-top:80px"' : "");
+  if (u.pathname.startsWith("/spa")) body = readFileSync(join(FX, "nav.html"), "utf8").replace("__RESET__", u.searchParams.get("reset") === "1" ? "true" : u.searchParams.get("reset") === "4" ? "4" : "false").replaceAll("__PM__", u.searchParams.get("pm") === "1" ? 'style="scroll-margin-top:80px"' : "").replace("__EXTRA__", u.searchParams.get("extra") === "1" ? '<a href="/spa/contact">Contact</a> <a href="/spa/contact#form">Write to us</a>' : "");
   else if (/^\/[\w-]+\.html$/.test(u.pathname)) body = readFileSync(join(FX, u.pathname.slice(1)), "utf8");
   else { res.writeHead(404); return res.end(); }
   res.writeHead(200, { "content-type": "text/html; charset=utf-8" });
@@ -61,6 +61,12 @@ try {
     assert.ok(r.states.length >= 3, JSON.stringify(r.states));
     await ctx.close();
   });
+  await t("pagination FP: a list that starts below the screen after \"Next\" is ahead of the reader, not lost (Praxis /specialists)", async () => {
+    const { page, ctx, reload } = await fresh("/pag-top.html", 360);
+    const r = await run.stateChecks(page, { reload });
+    assert.ok(!r.findings.some((f) => /pagination/.test(f.what)), show(r));
+    await ctx.close();
+  });
   await t("wizard TP: after Next the reader is left 1500 px down while step 2 starts above the screen; the final \"Submit application\" is never pressed", async () => {
     const { page, ctx, reload } = await fresh("/wizard.html#noscroll", 390);
     const r = await run.stateChecks(page, { reload });
@@ -88,6 +94,24 @@ try {
     assert.deepEqual(await run.scrollAfterNavigation(page), []);
     await ctx.close();
   });
+  await t("3.8 FP: a link to /contact#form whose router scrolls to the form 2.5 s later, next to a plain /contact link, is judged on its own target (Praxis \"Write to support\")", async () => {
+    const { page, ctx } = await fresh("/spa/home?reset=1&extra=1");
+    assert.deepEqual(await run.scrollAfterNavigation(page, { max: 5 }), []);
+    await ctx.close();
+  });
+  await t("3.8 FP: a page that opens 4 px down (scroll-padding, a late banner) is not \"opened in the middle\" (Praxis logo link)", async () => {
+    const { page, ctx } = await fresh("/spa/home?reset=4");
+    assert.deepEqual(await run.scrollAfterNavigation(page), []);
+    await ctx.close();
+  });
+  await t("2.5 in another language: a wrapping HEADER nav item is reported; footer columns and an \"On this page\" list may wrap", async () => {
+    const { page, ctx } = await fresh("/states-ok.html", 1280);
+    await page.setContent(`<header style="display:flex;width:300px"><nav><a href="/a" style="display:inline-block;width:80px">Mütəxəssis kimi müraciət et</a></nav></header><main><nav><a href="#x" style="display:inline-block;width:80px">02 Əvvəlcədən mövcud materiallar</a></nav></main><footer><nav><a href="/b" style="display:inline-block;width:80px">Маман ретінде өтініш беру</a></nav></footer>`);
+    const out = await run.headerNavWraps(page);
+    assert.equal(out.length, 1, JSON.stringify(out));
+    assert.match(out[0].where, /header/);
+    await ctx.close();
+  });
   await t("3.8 TP: #anchor targets hidden under a 64 px sticky header are reported", async () => {
     const { page, ctx } = await fresh("/spa/home?reset=1");
     const out = await run.anchorTargets(page);
@@ -101,7 +125,7 @@ try {
     await ctx.close();
   });
   await t("untranslated: identical multi-word strings are reported; brand words, codes, emails, numbers, lang-tagged and kept strings are not", async () => {
-    const def = ["Find a specialist for your task", "Praxis", "USD EUR", "support@praxis.ai", "1,200 credits", "Hire the best people", "Sign in"].map((text) => ({ text }));
+    const def = ["__Secure-authjs.session-token", "Find a specialist for your task", "Praxis", "USD EUR", "support@praxis.ai", "1,200 credits", "Hire the best people", "Sign in"].map((text) => ({ text }));
     const az = [
       { text: "Find a specialist for your task", where: "h1" },
       { text: "Praxis", where: "logo" },
@@ -111,6 +135,7 @@ try {
       { text: "Hire the best people", where: "q", ownLang: "en" },
       { text: "Sign in", where: "b" },
       { text: "Mütəxəssis tapın", where: "p" },
+      { text: "__Secure-authjs.session-token", where: "cookie name" },
     ];
     const out = run.untranslated(az, def, "az", []);
     assert.deepEqual(out.map((o) => o.where), ["h1"], JSON.stringify(out));
