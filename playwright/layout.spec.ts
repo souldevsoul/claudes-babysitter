@@ -57,14 +57,18 @@ for (const route of ROUTES) {
       soft(p.soft, "logo links somewhere else than home");
       hard(p.hard);
     });
-    test("2.5 no word broken mid-word, no number split across lines; no orphan word in headings — at 390 and 360 [text-overflow]", async ({ page }, info) => {
+    test("2.5 no word broken mid-word, no number split across lines; no orphan word in headings — phone widths (360 and 390) [text-overflow]", async ({ page }, info) => {
       test.skip(!/mobile/.test(info.project.name), "narrow screens only");
       await open(page, r);
       const a = await L.textBreaks(page);
-      const vp = page.viewportSize()!;
-      await page.setViewportSize({ width: 360, height: vp.height });
-      await page.waitForTimeout(400);
-      const b = await L.textBreaks(page);
+      // 360 is its own project in the full run; a quick run (390 + 1440) checks it from the 390 project
+      let b = { hard: [] as F[], soft: [] as F[] };
+      if (/mobile-390/.test(info.project.name) && !info.config.projects.some((p) => /mobile-360/.test(p.name))) {
+        const vp = page.viewportSize()!;
+        await page.setViewportSize({ width: 360, height: vp.height });
+        await page.waitForTimeout(400);
+        b = await L.textBreaks(page);
+      }
       const merge = (x: F[], y: F[]) => [...x, ...y.filter((f) => !x.some((g) => g.where === f.where))];
       soft(merge(a.soft, b.soft), "orphan words in headings");
       hard(merge(a.hard, b.hard));
