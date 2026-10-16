@@ -1,0 +1,22 @@
+<!doctype html><html><head><style>
+body{margin:0;height:900px;font:16px Arial}
+.wrap{position:absolute;left:20px}
+button{height:40px;padding:0 12px}
+ul{position:absolute;left:0;margin:0;padding:0;list-style:none;background:#fff;border:1px solid #333;width:220px;overflow:auto}
+li{height:36px;line-height:36px;padding:0 8px}
+</style></head><body>
+<div class="wrap" id="w" style="top:__TOP__px">
+<button id="t" aria-haspopup="listbox" aria-expanded="false" onclick="open_()">Category</button>
+</div>
+<script>
+const N = __N__, MODE = "__MODE__";
+function open_() {
+  const t = document.getElementById("t"), r = t.getBoundingClientRect();
+  const ul = document.createElement("ul"); ul.setAttribute("role", "listbox");
+  for (let i = 0; i < N; i++) { const li = document.createElement("li"); li.setAttribute("role", "option"); li.textContent = "Option " + (i + 1); ul.appendChild(li); }
+  if (MODE === "down") { ul.style.top = "40px"; ul.style.maxHeight = (innerHeight - r.bottom - 8) + "px"; }
+  else { ul.style.bottom = "40px"; ul.style.maxHeight = (r.top - 8) + "px"; }
+  document.getElementById("w").appendChild(ul); t.setAttribute("aria-expanded", "true");
+  addEventListener("keydown", (e) => { if (e.key === "Escape") { ul.remove(); t.setAttribute("aria-expanded", "false"); } }, { once: true });
+}
+</script></body></html>

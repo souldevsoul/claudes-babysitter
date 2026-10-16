@@ -1151,19 +1151,34 @@ async function settle(page, cap = 1500) {
     ]), cap).catch(() => { });
 }
 /* ───────────────────────── interactive states: P02 P18 P19 P22 ───────────────────────── */
-const openPopups = (page) => page.evaluate(() => {
+// trig: the trigger's viewport rect after it opened its popup ({top, bottom}), for the flip-up check
+const openPopups = (page, trig = null) => page.evaluate((trig) => {
     const W = window;
     return Array.from(document.querySelectorAll('[role=listbox], [role=menu], [role=dialog], [role=alertdialog], [data-radix-popper-content-wrapper], [data-state=open][role]'))
         .filter((el) => W.__uiVisible(el))
         .map((el) => {
         const r = el.getBoundingClientRect();
         const cs = getComputedStyle(el);
-        const scrollable = [el, ...Array.from(el.querySelectorAll("*"))].some((n) => /(auto|scroll)/.test(getComputedStyle(n).overflowY) && n.scrollHeight > n.clientHeight + 1);
+        const scrollers = [el, ...Array.from(el.querySelectorAll("*"))].filter((n) => /(auto|scroll)/.test(getComputedStyle(n).overflowY) && n.scrollHeight > n.clientHeight + 1);
+        const scrollable = scrollers.length > 0;
         const clipped = r.bottom > innerHeight + 1 || r.top < -1 || r.right > innerWidth + 1 || r.left < -1;
         const overflowing = el.scrollHeight > el.clientHeight + 1 && cs.overflowY !== "visible" && !scrollable;
-        return { where: W.__uiDescribe(el), selector: W.__uiSelector(el), human: W.__uiHuman(el), role: el.getAttribute("role") || "popper", clipped, overflowing, rect: [r.top, r.bottom, r.left, r.right].map(Math.round) };
+        // 1.2 — a list opened downward near the bottom of the screen, squeezed into an inner scroll that hides options,
+        // while the whole list would fit above the trigger: it should open upwards (Praxis category list at 360 px,
+        // 2026-10). A list too long for either side may scroll; a dialog is not a dropdown.
+        let squeezed = null;
+        const role = el.getAttribute("role") || "popper";
+        if (trig && scrollable && !/dialog/.test(role) && !el.querySelector("[role=dialog], [role=alertdialog]")) {
+            const sc = scrollers.sort((a, b) => (b.scrollHeight - b.clientHeight) - (a.scrollHeight - a.clientHeight))[0];
+            const need = r.height + (sc.scrollHeight - sc.clientHeight);
+            const below = innerHeight - trig.bottom, above = trig.top;
+            const opensDown = r.top >= trig.bottom - 6;
+            if (opensDown && need > below + 1 && need <= above - 8)
+                squeezed = { hidden: Math.round(sc.scrollHeight - sc.clientHeight), shown: Math.round(r.height), need: Math.round(need), above: Math.round(above), below: Math.round(below) };
+        }
+        return { where: W.__uiDescribe(el), selector: W.__uiSelector(el), human: W.__uiHuman(el), role, clipped, overflowing, squeezed, rect: [r.top, r.bottom, r.left, r.right].map(Math.round) };
     });
-});
+}, trig);
 const headerRect = (page) => page.evaluate(() => { const h = document.querySelector("header"); if (!h)
     return null; const r = h.getBoundingClientRect(); return [r.top, r.left, r.width].map(Math.round).join(","); });
 /** Opens every dropdown/menu/dialog trigger on the page and checks the open state. */
@@ -1194,9 +1209,12 @@ export async function interactiveStates(page, max = 8) {
         // native-control check never sees it (TrueLogos "Cancel this project?" <select>, 2026-10).
         for (const n of await nativeControls(page, '[role=dialog], [role=alertdialog], [data-radix-popper-content-wrapper]'))
             out.push({ what: `${n.what} [1.1, P01]`, where: n.where });
-        for (const p of await openPopups(page)) {
+        const tb = await t.boundingBox().catch(() => null);
+        for (const p of await openPopups(page, tb ? { top: tb.y, bottom: tb.y + tb.height } : null)) {
             if (p.clipped)
                 out.push({ what: `open ${p.role} goes off-screen (top/bottom/left/right ${p.rect.join("/")}) [1.2, P02]`, where: p.where });
+            if (p.squeezed)
+                out.push({ what: `open ${p.role} opens downward into the last ${p.squeezed.below}px of the screen and hides ${p.squeezed.hidden}px of options behind an inner scroll, though the whole list (${p.squeezed.need}px) fits above the trigger (${p.squeezed.above}px) — let it open upwards (Radix side="top" / avoidCollisions, Floating UI flip()) [1.2, P02]`, where: p.where, selector: p.selector, human: p.human });
             if (p.overflowing)
                 out.push({ what: `open ${p.role} clips its content without scrolling [5.2, P18]`, where: p.where });
         }
