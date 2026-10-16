@@ -1,6 +1,6 @@
 <!doctype html><html><body><header><a href="/">Logo</a><a href="/wallet">3,900</a><span id="who">Arman Test</span></header><main><h1>Settings</h1>
 <section class="card"><h2>Profile</h2><p>EMAIL</p><p>demo@example.com</p><label for="dn">Display name</label><input id="dn" name="name" value="Arman Test"><button id="save">Save changes</button></section>
-<section class="card"><h2>Security</h2><button id="chg">Change password</button>
+<section class="card"><h2>Security</h2><button id="chg"><span>Change password</span><span>Choose a new password for signing in.</span></button>
 <div id="dlg" role="dialog" hidden><form id="pw"><h3>Change password</h3><label for="a">Current password</label><input id="a" type="password"><label for="b">New password</label><input id="b" type="password"><button type="submit">Update password</button></form></div></section>
 <section><h2>Hire</h2><div class="card"><h3>Pipeline</h3><p>5,000 credits</p><button>Hire specialist</button></div></section>
 <script>document.getElementById('save').onclick = async () => { await fetch('/api/me', { method: 'PATCH', body: JSON.stringify({ name: document.getElementById('dn').value }) }); };

@@ -664,7 +664,7 @@ export async function forgotPassword(page, signInPath) {
 export async function openPasswordChange(page) {
   const has = async () => (await describeForms(page)).some((f) => f.kind === "password-change");
   if (await has()) return true;
-  const btn = page.locator("button, [role=button], a[href^='#']").filter({ hasText: /^\s*(change|update|set|reset) (your |my )?password\s*$/i }).filter({ visible: true }).first();
+  const btn = page.locator("button, [role=button], a[href^='#']").filter({ hasText: /^\s*(change|update|set|reset) (your |my )?password/i }).filter({ visible: true }).first();
   if (!(await btn.count())) return false;
   await btn.click().catch(() => {});
   await page.waitForTimeout(700);
