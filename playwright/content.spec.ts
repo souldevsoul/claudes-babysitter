@@ -9,7 +9,7 @@ import { test, expect, type Page, type Browser } from "@playwright/test";
 import * as c from "./checks.js";
 import * as k from "./checks/content.js";
 import { translationKeys } from "../lib/content-lint.js";
-import { loadConfig, loadRoutes, STORAGE, STATE_DIR, ROOT } from "./project.js";
+import { loadConfig, loadRoutes, loadLocales, applyLocale as applyDetected, localize, STORAGE, STATE_DIR, ROOT } from "./project.js";
 import { existsSync } from "node:fs";
 
 const cfg = loadConfig();
@@ -20,6 +20,11 @@ const STRICT = process.env.STRICT !== "0";
 const on = (id: string) => !(cc.skip || []).includes(id);
 const why = (id: string) => `${id} switched off in babysitter.config.json → content.skip${cc.skipReasons?.[id] ? `: ${cc.skipReasons[id]}` : ""}`;
 const DNS = process.env.BABYSITTER_DNS !== "0";
+// languages: content.locales when set, else the ones `babysitter prepare` found and verified (.babysitter/locales.json)
+const DETECTED: any = (() => { try { return loadLocales(cfg); } catch { return { locales: [] }; } })();
+const DEF = (DETECTED.locales || []).find((l: any) => l.default) || null;
+const LOCALES: any[] = cc.locales?.length ? cc.locales : (DETECTED.locales || []).filter((l: any) => !l.default).map((l: any) => ({ ...l, detected: true }));
+const DEFAULT_LOCALE = cc.defaultLocale || DETECTED.default || DEF?.code || null;
 const CACHE = k.dnsCache(STATE_DIR);
 let KEYS: Set<string> | null = null;
 const keys = () => (KEYS ??= (() => { try { const s = translationKeys(ROOT); return s.size ? s : null; } catch { return null; } })());
@@ -33,7 +38,10 @@ const once = () => test.skip(!/desktop-1440/.test(test.info().project.name), "co
 
 async function open(page: Page, route: string, loc: any = null) {
   await c.install(page);
-  const path = await k.applyLocale(page, loc, route, test.info().project.use.baseURL);
+  const baseURL = test.info().project.use.baseURL;
+  let path = route;
+  if (loc?.detected) { await applyDetected(page.context(), loc, baseURL); path = localize(route, loc, DEF); }
+  else path = await k.applyLocale(page, loc, route, baseURL);
   await page.goto(path, { waitUntil: "load", timeout: 45_000 }).catch(() => page.goto(path, { waitUntil: "domcontentloaded", timeout: 30_000 }));
   await page.waitForLoadState("networkidle", { timeout: 8_000 }).catch(() => {});
   await page.waitForTimeout(700);
@@ -64,13 +72,13 @@ for (const route of ROUTES) {
     });
     test("CT12/CT13 no translation keys on screen; <html lang>/dir match the language", async ({ page }) => {
       await open(page, r);
-      hard((await k.languageFindings(page, { cfg, keys: keys(), locale: cc.defaultLocale })).hard);
+      hard((await k.languageFindings(page, { cfg, keys: keys(), locale: DEFAULT_LOCALE })).hard);
     });
   });
 }
 
 /* ───────── each configured locale ───────── */
-for (const loc of cc.locales || []) {
+for (const loc of LOCALES) {
   for (const route of ROUTES) {
     test.describe(`content [${loc.code}] ${route.auth ? "[signed-in] " : ""}${route.path}`, () => {
       if (route.auth) test.use({ storageState: STORAGE });
@@ -114,25 +122,25 @@ test.describe("content site-wide", () => {
 
   test("CT15/CT16 one name per legal document (footer = <h1> = <title> = mentions), one © line on every page", async ({ browser }) => {
     test.skip(!on("CT15") && !on("CT16"), why("CT15"));
-    test.setTimeout(120_000 + ROUTES.length * 20_000 * (1 + (cc.locales || []).length));
+    test.setTimeout(120_000 + ROUTES.length * 20_000 * (1 + LOCALES.length));
     const out: O[] = [];
     out.push(...k.namingFindings(await crawl(browser), cfg));
-    for (const loc of cc.locales || []) out.push(...k.namingFindings(await crawl(browser, loc), cfg).map((o: O) => ({ ...o, what: `[${loc.code}] ${o.what}` })));
+    for (const loc of LOCALES) out.push(...k.namingFindings(await crawl(browser, loc), cfg).map((o: O) => ({ ...o, what: `[${loc.code}] ${o.what}` })));
     hard(out);
   });
 
   test("CT17 one term per concept (content.glossary is enforced per page; mixed Sign in / Log in listed here) · CT18 numbers agree across pages · CT7 one date per document in every language", async ({ browser }) => {
-    test.setTimeout(120_000 + ROUTES.length * 20_000 * (1 + (cc.locales || []).length));
+    test.setTimeout(120_000 + ROUTES.length * 20_000 * (1 + LOCALES.length));
     const base = await crawl(browser);
-    const byLocale = new Map([[cc.defaultLocale || "default", base]]);
-    for (const loc of cc.locales || []) byLocale.set(loc.code, await crawl(browser, loc));
+    const byLocale = new Map([[DEFAULT_LOCALE || "default", base]]);
+    for (const loc of LOCALES) byLocale.set(loc.code, await crawl(browser, loc));
     if (on("CT17")) note(k.variantFindings(base), "the same thing named two ways");
     if (on("CT18")) note(k.factFindings(base), "numbers that disagree between pages — check which one is true");
     hard(on("CT7") ? k.localeDateFindings(byLocale) : []);
   });
 
   test("CT11 other languages the site offers (hreflang) are translated", async ({ browser }) => {
-    test.skip((cc.locales || []).length > 0, "content.locales is set: each locale has its own tests");
+    test.skip(LOCALES.length > 0, "the languages are known (content.locales or prepare): each has its own tests");
     test.skip(!on("CT11"), why("CT11"));
     test.setTimeout(120_000 + PUBLIC.length * 15_000 * 4);
     const ctx = await ctxFor(browser, false);

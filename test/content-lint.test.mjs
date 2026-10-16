@@ -195,7 +195,12 @@ await t("CT18 numeric facts: the same keyword with different values conflicts; t
   assert.equal(R.factConflicts([...a, ...facts("Refund requests: within 14 days.", "/faq")]).length, 0);
   assert.equal(R.factConflicts([...a, ...c]).length, 0, "refund days vs reply hours are different facts");
   assert.equal(R.factConflicts([...c, ...d]).length, 1, "fee 20% vs 15%");
-  assert.deepEqual(R.numericFacts("10 credits = $1").map((x) => [x.key, x.value]), [["credit price", "10:1"]]);
+  assert.equal(R.factConflicts([...facts("We decide on a refund within 5 business days.", "/refund"), ...a]).length, 0, "a decision time in business days is not the refund window (Praxis /refund)");
+  assert.deepEqual(R.numericFacts("10 credits = $1").map((x) => [x.key, x.unit, x.value]), [["credit price", "credit price ($)", "0.1"]]);
+  // Vertex live: "a 20% fee … the other 80% is yours" is one fact; € packs vs a $ base rate are not comparable
+  assert.equal(R.factConflicts([...facts("Vertex keeps a 20% platform fee from each engagement", "/"), ...facts("Vertex keeps a platform fee of 20% of each engagement's credit price; the other 80% is yours.", "/terms")]).length, 0);
+  assert.equal(R.factConflicts([...facts("Purchase 100 Credits for €8.92", "/pricing"), ...facts("The base rate is 10 credits = $1.00 (US dollars).", "/terms")]).length, 0);
+  assert.equal(R.factConflicts([...facts("10 credits = $1.00", "/pricing"), ...facts("1 credit = $0.50", "/faq")]).length, 1, "the same currency at another price is a conflict");
 });
 
 /* parsers */
