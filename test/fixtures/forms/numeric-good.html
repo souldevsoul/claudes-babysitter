@@ -1,0 +1,19 @@
+<!doctype html><html><body><main>
+<h1>Order</h1>
+<form id="order"><h2>Order seats</h2>
+<label for="seats">Seats</label><input id="seats" name="seats" type="number" min="1" max="50" step="1">
+<p>From 1 to 50 seats</p>
+<button type="submit">Place order</button></form>
+<section id="calc"><h2>Custom top-up</h2>
+<label for="amt">Amount (€)</label><input id="amt" name="amount" inputmode="decimal" min="1" max="20000">
+<p>From €1 to €20,000</p>
+<button id="buy" type="button">Buy credits</button></section>
+<section id="calc2"><h2>Credits</h2>
+<label for="cr">Credits</label><input id="cr" name="credits" inputmode="numeric"><p id="err" role="alert"></p>
+<button id="buy2" type="button">Buy</button></section>
+<script>
+const clamp = (el, lo, hi, int) => { const v = Number(el.value.replace(',', '.')); if (!Number.isFinite(v) || el.value.trim() === '') { el.value = String(lo); return; } el.value = String(Math.min(hi, Math.max(lo, int ? Math.round(v) : v))); };
+document.getElementById('amt').addEventListener('blur', (e) => clamp(e.target, 1, 20000, false));
+document.getElementById('cr').addEventListener('input', (e) => { const v = e.target.value; const ok = /^\d+$/.test(v) && +v >= 10 && +v <= 100000; document.getElementById('err').textContent = ok ? '' : 'Enter a whole number between 10 and 100,000'; document.getElementById('buy2').disabled = !ok; });
+document.getElementById('order').addEventListener('submit', async (e) => { e.preventDefault(); await fetch('/api/order', { method: 'POST', body: e.target.seats.value }); });
+</script></main></body></html>

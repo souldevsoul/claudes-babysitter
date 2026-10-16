@@ -1,0 +1,7 @@
+<!doctype html><html><body><main><h1>Sign in</h1>
+<form id="a"><label for="e">Email</label><input id="e" name="email" type="email">
+<label for="p">Password</label><input id="p" name="password" type="password">
+<button type="submit">Sign in</button><p id="st"></p></form>
+<script>document.getElementById('a').addEventListener('submit', async (e) => { e.preventDefault();
+const r = await fetch('/api/login', { method: 'POST', body: '{}' }); document.getElementById('st').textContent = r.ok ? '' : 'Invalid email or password'; });</script>
+</main></body></html>

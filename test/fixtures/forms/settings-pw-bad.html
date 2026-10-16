@@ -1,0 +1,5 @@
+<!doctype html><html><body><main><h1>Security</h1>
+<form id="f"><h2>Change password</h2><label for="a">Current password</label><input id="a" type="password" name="currentPassword"><button type="button" tabindex="-1" aria-label="Show password">o</button>
+<div><label for="b">New password</label><input id="b" type="password" name="newPassword"><button type="button" tabindex="-1" aria-label="Show password">o</button></div>
+<button type="submit">Update password</button><p id="st" role="status"></p></form>
+<script>document.getElementById('f').addEventListener('submit', async (e) => { e.preventDefault(); await fetch('/api/password', { method: 'POST', body: '{}' }); document.getElementById('st').textContent = 'Password updated'; });</script></main></body></html>

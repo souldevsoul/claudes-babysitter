@@ -1,0 +1,8 @@
+<!doctype html><html><body><main><h1>Security</h1>
+<form id="f"><h2>Change password</h2><div><label for="a">Current password</label><input id="a" type="password" name="currentPassword"><button type="button" tabindex="-1" aria-label="Show password">o</button></div>
+<div><label for="b">New password</label><input id="b" type="password" name="newPassword"><button type="button" tabindex="-1" aria-label="Show password">o</button></div>
+<div><label for="c">Confirm new password</label><input id="c" type="password" name="confirm"><button type="button" tabindex="-1" aria-label="Show password">o</button></div>
+<p id="err"></p><button type="submit">Update password</button></form>
+<script>document.getElementById('f').addEventListener('submit', async (e) => { e.preventDefault(); const f = e.target;
+if (f.currentPassword.value === f.newPassword.value) { document.getElementById('err').textContent = 'New password must be different from the current one'; return; }
+await fetch('/api/password', { method: 'POST', body: '{}' }); });</script></main></body></html>

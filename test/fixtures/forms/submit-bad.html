@@ -1,0 +1,9 @@
+<!doctype html><html><body><main><h1>Contact</h1>
+<form id="a"><h2>Write to us</h2><label for="n">Name</label><input id="n" name="name">
+<label for="e">Email</label><input id="e" name="email" type="email">
+<label for="m">Message</label><textarea id="m" name="message"></textarea>
+<button type="submit">Send</button><p id="st"></p></form>
+<script>document.getElementById('a').addEventListener('submit', async (e) => { e.preventDefault(); const body = JSON.stringify(Object.fromEntries(new FormData(e.target)));
+e.target.reset(); document.getElementById('st').textContent = 'Thanks! Your message was sent.';
+fetch('/api/contact', { method: 'POST', body }); });</script>
+</main></body></html>

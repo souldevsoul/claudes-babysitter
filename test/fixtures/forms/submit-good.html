@@ -1,0 +1,9 @@
+<!doctype html><html><body><main><h1>Contact</h1>
+<form id="a"><h2>Write to us</h2><label for="n">Name</label><input id="n" name="name">
+<label for="e">Email</label><input id="e" name="email" type="email">
+<label for="m">Message</label><textarea id="m" name="message"></textarea>
+<button type="submit">Send</button><p id="st" role="status" aria-live="polite"></p></form>
+<script>document.getElementById('a').addEventListener('submit', async (e) => { e.preventDefault(); const f = e.target; const st = document.getElementById('st'); st.textContent = 'Sending…';
+const r = await fetch('/api/contact', { method: 'POST', body: JSON.stringify(Object.fromEntries(new FormData(f))) }).catch(() => null);
+if (r && r.ok) { st.textContent = 'Message sent — we reply within a day.'; } else { st.textContent = 'Could not send your message. Please try again.'; } });</script>
+</main></body></html>

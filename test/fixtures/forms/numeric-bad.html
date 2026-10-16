@@ -1,0 +1,13 @@
+<!doctype html><html><body><main>
+<h1>Order</h1>
+<form id="order"><h2>Order seats</h2>
+<label for="seats">Seats</label><input id="seats" name="seats" type="number">
+<label for="em">Email</label><input id="em" name="email" type="email">
+<button type="submit">Place order</button></form>
+<section id="calc"><h2>Custom top-up</h2>
+<label for="amt">Amount (€)</label><input id="amt" name="amount" inputmode="decimal">
+<button id="buy" type="button">Buy credits</button></section>
+<script>
+document.getElementById('order').addEventListener('submit', async (e) => { e.preventDefault();
+  await fetch('/api/order', { method: 'POST', headers: {'content-type':'application/json'}, body: JSON.stringify({ seats: e.target.seats.value }) }); });
+</script></main></body></html>

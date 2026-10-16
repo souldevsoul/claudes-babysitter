@@ -1,0 +1,8 @@
+<!doctype html><html><body><header><a href="/">Logo</a><span id="who" aria-label="Account">Jane Doe</span></header><main><h1>Settings</h1>
+<form id="p"><h2>Profile</h2><label for="dn">Display name</label><input id="dn" name="displayName" value="Jane Doe">
+<button type="submit">Save</button><p id="st" role="status"></p></form>
+<script>const MODE = "good"; document.getElementById('p').addEventListener('submit', async (e) => { e.preventDefault(); const v = e.target.displayName.value;
+const r = await fetch('/api/profile', { method: 'PATCH', headers: {'content-type':'application/json'}, body: JSON.stringify({ displayName: v }) });
+document.getElementById('st').textContent = r.ok ? 'Saved' : 'Could not save';
+if (MODE === 'good' && r.ok) document.getElementById('who').textContent = (await r.json()).displayName;
+if (MODE === 'refetch') await fetch('/api/me'); });</script></main></body></html>

@@ -1,0 +1,4 @@
+<!doctype html><html><body><main><h1>Reset your password</h1>
+<form id="f"><label for="e">Email</label><input id="e" type="email" name="email"><button type="submit">Send reset link</button><p id="st" role="status"></p></form>
+<script>document.getElementById('f').addEventListener('submit', async (e) => { e.preventDefault(); await fetch('/api/reset', { method: 'POST', body: e.target.email.value });
+document.getElementById('st').textContent = "If an account exists for that email, we've sent a reset link."; });</script></main></body></html>

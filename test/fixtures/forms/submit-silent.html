@@ -1,0 +1,6 @@
+<!doctype html><html><body><main><h1>Feedback</h1>
+<form id="a"><h2>Feedback</h2><label for="n">Name</label><input id="n" name="name">
+<label for="m">Message</label><textarea id="m" name="message"></textarea>
+<button type="submit">Send</button></form>
+<script>document.getElementById('a').addEventListener('submit', async (e) => { e.preventDefault(); await fetch('/api/feedback', { method: 'POST', body: new FormData(e.target) }).catch(() => {}); });</script>
+</main></body></html>
