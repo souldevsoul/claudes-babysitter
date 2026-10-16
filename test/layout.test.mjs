@@ -142,19 +142,23 @@ try {
   }, mobile);
   await test("6.5 headings: looks (with size) and faces (without) per level across pages; tracking in em, all-caps as rendered; sr-only and chrome headings left out", async (page) => {
     const all = [];
-    const looks = ["font:700 40px Arial", "font:700 56px Arial", "font:600 36px Georgia;letter-spacing:-1px", "font:700 40px Arial;text-transform:uppercase", "font:700 40px Arial;letter-spacing:0.1px"];
+    const looks = ["font:700 40px Arial", "font:700 56px Arial", "font:600 36px Georgia;letter-spacing:-1px", "font:700 40px Arial;text-transform:uppercase", "font:700 40px Arial;letter-spacing:0.05px"];
     for (const [i, css] of looks.entries()) {
       await page.unrouteAll();
       await load(page, `<!doctype html><title>p${i}</title><header><h1 style="font:400 12px Arial">In header</h1></header><main><h1 style="${css}">Page ${i}</h1><h2 style="font:600 24px Arial">Section</h2><h2 class="sr-only" style="position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0,0,0,0)">Hidden</h2></main>`, { path: `/p${i}` });
       all.push(...(await L.collectHeadings(page, `/p${i}`)));
     }
     const h1 = L.headingVariants(all, "h1");
-    // 40px Arial ×2 (p0, p4: 0.1px tracking rounds to 0em), 56px Arial, Georgia, caps
+    // 40px Arial ×2 (p0, p4: 0.05px tracking rounds to 0em), 56px Arial, Georgia, caps
     assert.equal(h1.length, 4, JSON.stringify(h1));
     assert.deepEqual(h1[0].pages, ["/p0", "/p4"]);
     assert.match(h1.map((v) => v.look).join(" "), /Georgia 36px\/600 ls -0.03em/);
     assert.match(h1.map((v) => v.look).join(" "), /Arial 40px\/700 caps/);
     assert.equal(L.headingVariants(all, "h1", "face").length, 3, "faces ignore size only");
+    // -0.025em at 88 px and at 48 px is one tracking (praxis)
+    const tr = [];
+    for (const [i, px] of [88, 48].entries()) { await load(page, `<!doctype html><title>t</title><main><h1 style="font:300 ${px}px Georgia;letter-spacing:-0.025em">T${i}</h1></main>`, { path: `/t${i}` }); tr.push(...(await L.collectHeadings(page, `/t${i}`))); }
+    assert.equal(L.headingVariants(tr, "h1", "face").length, 1, JSON.stringify(tr.map((x) => x.face)));
     assert.equal(L.headingVariants(all, "h2").length, 1, "one h2 look; the sr-only one is not counted");
   });
   await test("2.5 orphans: a heading whose number sits on its own line by layout is no orphan", async (page) => {
@@ -291,11 +295,11 @@ try {
     r = await L.dropdowns(page);
     assert.deepEqual(r.hard.map((f) => /scrolled out of sight/.test(f.what)), [true], JSON.stringify(r.hard));
   });
-  await test("1.6 hover: dead button and dead link-button are hard, dead card soft; fill, child colour, pseudo bar and shadow changes pass; disabled skipped", async (page) => {
+  await test("1.6 hover: dead button and dead link-button are hard, dead card and accordion text button soft; fill, child colour, pseudo bar and shadow changes pass; disabled skipped", async (page) => {
     await load(page, "hover.html");
     const r = await L.hoverFeedback(page);
     assert.deepEqual(sel(r.hard).sort(), ["#a-dead", "#b-dead"], JSON.stringify(r.hard.map((f) => f.selector)));
-    assert.deepEqual(sel(r.soft), ["#c-dead"], JSON.stringify(r.soft.map((f) => f.selector)));
+    assert.deepEqual(sel(r.soft).sort(), ["#acc", "#c-dead"], JSON.stringify(r.soft.map((f) => f.selector)));
   });
   await test("2.10 one mobile menu: burger + avatar both showing the nav is hard; an avatar with account items only passes", async (page) => {
     await load(page, "menus.html", { vars: { AVATAR: '<a href="/pricing">Pricing</a><a href="/about">About</a><a href="/blog">Blog</a><a href="/profile">Profile</a>' } });

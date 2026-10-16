@@ -334,7 +334,8 @@ export async function collectHeadings(page, route = "") {
         const size = parseFloat(cs.fontSize);
         // letter-spacing relative to the size (-0.02em at 96px and at 48px is one style); case as rendered (all-caps
         // source text and text-transform:uppercase look the same — sprout.boutique, Bebas Neue)
-        const ls = cs.letterSpacing === "normal" ? 0 : Math.round((parseFloat(cs.letterSpacing) / size) * 100) / 100;
+        // to the half-hundredth: tracking-tight (-0.025em) must not round to -0.02 at one size and -0.03 at another
+        const ls = cs.letterSpacing === "normal" ? 0 : Math.round((parseFloat(cs.letterSpacing) / size) * 200) / 200;
         const txt = L.clean(h.innerText);
         const caps = /\p{L}/u.test(txt) && txt === txt.toUpperCase() ? "caps" : cs.textTransform === "capitalize" ? "capitalize" : "";
         const face = `${fam} ${cs.fontWeight}${ls ? ` ls ${ls}em` : ""}${caps ? ` ${caps}` : ""}${cs.fontStyle !== "normal" ? ` ${cs.fontStyle}` : ""}`;
@@ -465,7 +466,7 @@ export async function alignment(page) {
       let count = 0;
       for (let n = tw.nextNode(); n; n = tw.nextNode(), count++) {
         if (count > 400) return null; // too big to measure here; its parts are compared at their own level
-        if (!n.nodeValue.trim() || !W.__uiVisible(n.parentElement) || !flowAll(n.parentElement, el)) continue;
+        if (!n.nodeValue.trim() || !W.__uiPainted(n.parentElement) || !flowAll(n.parentElement, el)) continue;
         rng.selectNodeContents(n);
         const rs = Array.from(rng.getClientRects());
         for (const rc of rs) add(rc);
@@ -476,11 +477,11 @@ export async function alignment(page) {
       // a ::before marker (a dot, a bar, an icon font) starts where its element's box starts (praxis /login: an orange
       // dot before "EMAIL" sits on the field's edge; the text is 12 px in by design)
       const marker = (e) => { const b = getComputedStyle(e, "::before"); return b.content !== "none" && b.content !== "normal" && b.display !== "none" && (b.content !== '""' || parseFloat(b.width) > 0 || W.__uiRGBA(b.backgroundColor)[3] > 0.1); };
-      for (const e of [el, ...kids]) if (marker(e) && W.__uiVisible(e) && flowAll(e, el)) { const b = e.getBoundingClientRect(), cs = getComputedStyle(e); add({ left: b.left + parseFloat(cs.paddingLeft) + parseFloat(cs.borderLeftWidth), right: b.left + parseFloat(cs.paddingLeft) + 1, top: b.top, bottom: b.bottom, width: 1, height: b.height }); }
+      for (const e of [el, ...kids]) if (marker(e) && W.__uiPainted(e) && flowAll(e, el)) { const b = e.getBoundingClientRect(), cs = getComputedStyle(e); add({ left: b.left + parseFloat(cs.paddingLeft) + parseFloat(cs.borderLeftWidth), right: b.left + parseFloat(cs.paddingLeft) + 1, top: b.top, bottom: b.bottom, width: 1, height: b.height }); }
       for (const e of kids) {
         if (e.closest("svg") && e.tagName !== "svg") continue;
         const media = /^(IMG|SVG|VIDEO|CANVAS|INPUT|SELECT|TEXTAREA|BUTTON)$/i.test(e.tagName) || e.matches("[role=button]");
-        if ((media || painted(e)) && W.__uiVisible(e) && flowAll(e, el)) add(e.getBoundingClientRect());
+        if ((media || painted(e)) && W.__uiPainted(e) && flowAll(e, el)) add(e.getBoundingClientRect());
       }
       if (painted(el)) add(el.getBoundingClientRect());
       return l === Infinity ? null : { l, r, t, b, firstTop, firstSize };
@@ -952,7 +953,8 @@ export async function dropdowns(page, max = 8) {
 
 /* ───────────────────────── 12. hover feedback (1.6, hover-state) ───────────────────────── */
 /**
- * Pointer screens only. Buttons, links dressed as buttons (hard) and clickable cards (soft) change how they look under
+ * Pointer screens only. Filled/boxed buttons and links dressed as buttons (hard), text buttons such as accordion
+ * questions (soft) and clickable cards (soft) change how they look under
  * the pointer — colour, fill, border, shadow, transform, opacity, filter, underline, or a pseudo-element / child
  * that does. A cursor change alone is not feedback. At most `max` per page; the rest are listed in notTested.
  * Elements covered by something else at their centre are not hovered (listed too).
@@ -983,7 +985,9 @@ export async function hoverFeedback(page, max = 40) {
       const r = e.getBoundingClientRect();
       if (r.width < 16 || r.height < 16) continue;
       let kind = null;
-      if (W.__uiButtonLike(e, true) || (e.matches("button, [role=button]") && r.width >= 24)) kind = "button";
+      if (W.__uiButtonLike(e, true)) kind = "button";
+      // an unfilled, unboxed button (an accordion question, a text toggle) still wants a hover cue, but softer
+      else if (e.matches("button, [role=button]") && r.width >= 24) kind = "plain";
       else if (r.width >= 120 && r.height >= 80 && e.querySelector("h2, h3, h4, p, img") && getComputedStyle(e).cursor === "pointer") kind = "card";
       if (!kind || e.closest("[role=dialog] [aria-label*=close i]") || /close|dismiss|закрыть/i.test(e.getAttribute("aria-label") || "")) continue;
       seen.add(e);
@@ -1015,7 +1019,7 @@ export async function hoverFeedback(page, max = 40) {
     const after = await snap(i);
     await page.mouse.move(1, 1).catch(() => {});
     if (before === null || after === null) continue;
-    if (before === after) (f.kind === "button" ? hard : soft).push({ what: `${f.kind === "button" ? "button" : "clickable card"} does not change on hover — give it a hover state from the kit (fill/colour/shadow/underline), not only cursor:pointer [1.6]`, where: f.where, selector: f.selector, human: f.human });
+    if (before === after) (f.kind === "button" ? hard : soft).push({ what: `${f.kind === "button" ? "button" : f.kind === "plain" ? "text button" : "clickable card"} does not change on hover — give it a hover state from the kit (fill/colour/shadow/underline), not only cursor:pointer [1.6]`, where: f.where, selector: f.selector, human: f.human });
   }
   await page.evaluate(() => { for (const e of document.querySelectorAll("[data-bs-hv]")) e.removeAttribute("data-bs-hv"); }).catch(() => {});
   return { hard, soft, notTested };
@@ -1141,7 +1145,7 @@ export function moneyIssues(tokens, { baseNice = null, label = "" } = {}) {
     }
     if (p.value >= 1000 && !p.group && p.intPart.length >= 4) hard.push({ what: `${pre}"${p.raw}" has no thousands separator — group digits from 4 (1,000 / 1 000) [money]`, ...at(x) });
   }
-  if (units.length) { const ex = [...new Set(units.map((x) => x.p.raw))]; soft.push({ what: `${pre}${units.length} unit price(s) with 3 decimals (${ex.slice(0, 5).join(", ")}${ex.length > 5 ? ", …" : ""}) — round them, or price the unit in a larger quantity ("per 100 credits") [money]`, ...at(units[0]) }); }
+  if (units.length) { const ex = [...new Set(units.map((x) => x.p.raw))]; soft.push({ what: `${pre}${units.length} unit price(s) with ${Math.min(...units.map((x) => x.p.decimals.length))}+ decimals (${ex.slice(0, 5).join(", ")}${ex.length > 5 ? ", …" : ""}) — round them, or price the unit in a larger quantity ("per 100 credits") [money]`, ...at(units[0]) }); }
   const byCode = new Map();
   for (const x of all) { if (!byCode.has(x.p.code)) byCode.set(x.p.code, new Map()); const m = byCode.get(x.p.code); if (!m.has(x.p.style)) m.set(x.p.style, x); }
   for (const [code, styles] of byCode) if (styles.size > 1) {
