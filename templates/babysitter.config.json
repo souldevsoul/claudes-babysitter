@@ -29,6 +29,16 @@
   },
   "consistency": { "buttonRadii": 2, "buttonFonts": 1, "buttonHeights": 3, "cardRadii": 3, "cardStyles": 4, "inputHeights": 2, "inputRadii": 2 },
   "motion": { "maxClicks": 30 },
+  "viewports": [360, 390, 768, 1280, 1440],
+  "roles": [
+    { "name": "specialist", "env": { "LOGIN_EMAIL": "SPECIALIST_EMAIL", "LOGIN_PASSWORD": "SPECIALIST_PASSWORD" } }
+  ],
+  "locales": { "list": ["en", "az"], "default": "en", "cookie": "NEXT_LOCALE", "keep": ["Acme Pro"], "untranslated": "fail" },
+  "states": { "enabled": true, "maxOpeners": 15, "maxForms": 3, "maxSteps": 6, "wallet": true, "pageBudget": 240000 },
+  "acceptance": { "auth": { "signIn": "/login", "signUp": "/register", "settings": "/settings" }, "skip": [], "skipReasons": {} },
+  "content": { "dateFormat": "DD.MM.YYYY", "dashes": "forbid", "brandTerms": ["Acme"], "glossary": {}, "skip": [], "skipReasons": {} },
+  "forms": { "zeroBalanceRole": "", "protectedRoute": "/dashboard", "skip": [], "skipReasons": {} },
+  "layout": { "headingVariants": 2, "stickyHeader": true, "maxListItems": 20, "registerFavicon": true },
   "domSniper": { "allowProps": [], "skip": [], "strict": false },
   "ignore": ["src/legacy/"],
   "audit": { "exclude": ["design-lab"] }

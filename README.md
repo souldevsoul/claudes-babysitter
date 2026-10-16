@@ -45,6 +45,10 @@ npm run babysitter -- audit           # the whole picture: AST, CSS, contrast, d
 npm run babysitter -- enable-hooks    # adoption → strict, once the audit is green (--force to switch anyway)
 npm run babysitter -- check --changed --format agent   # what a generator sees
 npm run babysitter -- fingerprint . --register         # theme fingerprint / look-alikes
+npm run babysitter -- content                          # static copy lint (every locale, JSX copy, email MX)
+npm run babysitter -- e2e                              # the full runtime run (every suite, viewport, language, role)
+npm run babysitter -- e2e --quick                      # fast profile while iterating: 390 + 1440
+npm run babysitter -- fix-plan                         # the last run's findings grouped by cause, with files to change
 ```
 
 > Use `npm run babysitter`, not a bare `npx babysitter`. The tool is vendored, not an npm dependency, so `npx babysitter` would download an unrelated package with that name from the registry.
@@ -63,6 +67,51 @@ Or install it as a dev dependency: `npm i -D github:souldevsoul/claudes-babysitt
 | `templates/` | Config, CI workflow, agent instructions, Claude settings |
 | `docs/` | The guidelines the rules enforce |
 | `test/`, `fixtures/` | `npm test`: RuleTester, Stylelint fixtures, end-to-end cases |
+
+## What changed in 5.0.0 (every check runs everywhere it can fail; copy, forms and layout suites) — major
+
+Full list: [`CHANGELOG.md`](CHANGELOG.md). Details: [`docs/checks-run.md`](docs/checks-run.md),
+[`docs/checks-content.md`](docs/checks-content.md), [`docs/checks-forms.md`](docs/checks-forms.md),
+[`docs/checks-layout.md`](docs/checks-layout.md).
+
+**The default run changed.** `npm run babysitter -- e2e` (BASE_URL = dev server or preview; LOGIN_EMAIL /
+LOGIN_PASSWORD for signed-in pages) now runs, in one pass:
+
+| Suite | Spec | What |
+|---|---|---|
+| UI | `babysitter.spec.ts` | the guideline checks on every page |
+| Layout | `layout.spec.ts` | nav parity and names, logos home, current nav item, heading styles, mid-word breaks, alignment, empty space, sticky header, long lists, favicon, dropdowns, hover, one mobile menu, money in every currency |
+| Forms | `forms.spec.ts` | FM1–FM10 in a network sandbox: bounds, gibberish, failed/successful submit, stale header, credits up front, password lifecycle, auth shell, redirect flash, settings email |
+| States, languages, scroll | `run.spec.ts` | every dialog / menu / empty submit / wizard step / pagination, every language, 3.8 after navigation and `#anchors` |
+| Acceptance | `acceptance.spec.ts` | money, footer, cookies, sign-in, policies, dead links … |
+| Copy | `content.spec.ts` | CT1–CT18 in every language: unfinished copy, test data, raw errors, dates, untranslated text, emails that receive mail, legal names, numbers that agree |
+| Product | `e2e/*.spec.ts` | your own journeys |
+
+- **Viewports 360, 390, 768, 1280, 1440.** `--quick` (390 + 1440) is for iterating; config `viewports` or
+  `VIEWPORTS=360,1280` pick others.
+- **`--only ui|acceptance|content|product` is a partial run** and prints a loud "PARTIAL RUN … NOT RUN" banner before
+  and after. A partial run is not a pass.
+- **Languages** are found and verified by `prepare` (hreflang, the switcher, the repo). Config fallback:
+  `"locales": { "list": ["en","az"], "default": "en", "cookie": "NEXT_LOCALE" | "storageKey": "…" | "prefix": true,
+  "keep": ["Brand Pro"], "untranslated": "warn" }`, or `false` to switch the matrix off; `LOCALES=az` narrows a run.
+- **Roles:** `"roles": [{ "name": "specialist", "env": { "LOGIN_EMAIL": "SPECIALIST_EMAIL", "LOGIN_PASSWORD":
+  "SPECIALIST_PASSWORD" } }]` (values name env variables) — every signed-in check runs once per role.
+- **The summary** lists what did not run and the re-check command; **`babysitter fix-plan`** groups the findings by
+  cause with the pages, viewports, languages and source files to change; `e2e --skip-prepare --last-failed` re-checks
+  only the failures.
+- **`babysitter after-merge`** (git post-merge / post-rewrite hooks installed by `init`) re-checks what a merge or
+  rebase brought in; `init --ci` adds a deploy workflow that runs the full suite against the deployed URL. Findings
+  are blocking (agent block + Stop hook).
+- **`babysitter content [repo] [--offline]`**: the static copy lint (every locale's i18n files, JSX copy, email
+  addresses with an MX lookup); also part of `check`.
+- **ESLint:** `ui/numeric-input-bounds` (error) and `ui/mutation-refreshes-ui` (warn).
+- **New config keys:** `name`, `viewports`, `roles`, `locales`, `states` (`enabled`, `maxOpeners`, `maxForms`,
+  `maxSteps`, `wallet`, `pageBudget`), `acceptance.thousandsFrom`, `content` (`dateFormat`, `dashes`, `allowDash`,
+  `allowPhrases`, `glossary`, `brandTerms`, `defaultLocale`, `locales`, `skip`), `forms` (`zeroBalanceRole`,
+  `zeroBalanceStorage`, `protectedRoute`, `forgot`, `skip`), `layout` (`headingVariants`, `emptySpaceRatio`,
+  `stickyHeader`, `stickyDistance`, `maxListItems`, `maxHover`, `maxCurrencies`, `registerFavicon`). See
+  `templates/babysitter.config.json`.
+- One report per defect: acceptance B1 is CT1 (it runs only in `--only acceptance`); untranslated text is CT11 only.
 
 ## What changed in 4.11.1 (two false alarms: a modal menu's aria-hidden backdrop; a banner exit the probe started watching too early)
 
@@ -536,7 +585,7 @@ These need review or the design system itself:
 ## Self-test
 
 ```bash
-npm install && npm test        # RuleTester for 23 rules, Stylelint fixtures, runtime fixtures
+npm install && npm test        # RuleTester for every rule, Stylelint fixtures, runtime fixtures, end-to-end runs
 npx eslint fixtures/bad.jsx    # 17 errors
 npx eslint fixtures/good.jsx   # clean
 ```

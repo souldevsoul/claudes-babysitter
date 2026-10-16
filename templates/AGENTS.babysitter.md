@@ -5,7 +5,7 @@ Hooks in `.claude/settings.json` run these checks automatically after each edit 
 **Babysitter findings are blocking.** A task is not done while any babysitter finding on the pages it touched is open — static (`check`), runtime (`e2e`), acceptance, a state (dialog, empty submit, wizard step), a language or a viewport. Fix each one in the source before you report done; never call it "pre-existing", "out of scope" or "a false positive" without the user's explicit say-so, and never narrow the run (`--only`, `--project`, `LOCALES`, `ROUTES`) to make it pass. The Stop hook blocks finishing while the last run has findings on routes you changed.
 
 The loop:
-1. `{{RUN}} e2e` (BASE_URL = the dev server or preview; LOGIN_EMAIL / LOGIN_PASSWORD for signed-in pages) — every suite, every language, 360–1440 px. The summary at the end lists what did NOT run; a partial run is not a pass.
+1. `{{RUN}} e2e` (BASE_URL = the dev server or preview; LOGIN_EMAIL / LOGIN_PASSWORD for signed-in pages) — every suite (UI, layout, forms, states/languages, acceptance, copy, your journeys), every language, every role, 360–1440 px. `--quick` (390 + 1440) is for iterating only. The summary at the end lists what did NOT run; a partial run is not a pass.
 2. `{{RUN}} fix-plan` — the findings grouped by cause, with the source files to change.
 3. Fix, then `{{RUN}} e2e --skip-prepare --last-failed` until it is clean; then one full `{{RUN}} e2e`.
 4. Report what you fixed, and name anything you could not fix and why.
@@ -32,7 +32,10 @@ End-to-end tests (`npm run test:e2e`):
   - **Money:** the chosen currency applies everywhere; no "≈"; no VAT/tax wording; thousands separators.
   - **Sign-in:** a password eye that Tab skips; one consent checkbox linking Terms and Privacy; sign-in pages have the site footer; a signed-in user is never offered Sign in; Sign out works with one click; settings offer two-factor sign-in and Delete account.
   - **Policies:** text spans its column; a sticky "On this page"; pages they name are links.
-  - **Pages and content:** no build notes or self-justifying copy; no dead links; no `/gdpr`, `/press` or `/currency` page; no duplicate links or images; paged grids end on a full row.
+  - **Pages and content:** no dead links; no `/gdpr`, `/press` or `/currency` page; no duplicate links or images; paged grids end on a full row.
+  - **Copy (content.spec, CT1–CT18; `{{RUN}} content` statically):** no build notes, "not live yet" or self-justifying copy; no test data or raw errors; one date format; no em dashes; every language translated (nothing left in English or word for word the default language); support emails that receive mail and are mailto links; one name per legal document; numbers that agree across pages.
+  - **Forms (forms.spec, FM1–FM10):** amount fields bounded; gibberish and failed submits answered on screen; the header updates after a save; prices in credits before the click; the password lifecycle; settings email read-only.
+  - **Layout (layout.spec):** header and footer nav agree; the current nav item marked; logos link home; one heading style per level; no words broken mid-word; dropdowns sorted with the selection marked; money formatted in every currency.
 - Owner decisions live in `babysitter.config.json` → `acceptance` (2FA, footer "Manage cookies", currencies, company line). Turning a check off needs `acceptance.skip` plus a reason in `acceptance.skipReasons`, approved by a human.
 
 Order of work on a new product:
