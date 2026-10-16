@@ -1,0 +1,43 @@
+<!doctype html><html lang="en"><head><meta name="viewport" content="width=device-width"><style>
+body{margin:0;font:16px Arial;color:#111;background:#fff}
+header{position:sticky;top:0;height:64px;background:#fff;border-bottom:1px solid #ccc;z-index:5}
+main{padding:16px}
+[role=dialog]{position:fixed;left:20px;top:100px;width:300px;background:#fff;border:1px solid #333;padding:16px;z-index:9}
+button{height:40px;padding:0 12px}
+.spacer{height:1400px}
+#list{scroll-margin-top:80px}
+</style></head><body>
+<header><b>Shop</b></header>
+<main>
+<h1>Wallet</h1>
+<p>Balance: 1,200 credits</p>
+<button type="button" aria-haspopup="dialog" onclick="openTopup()">Add credits</button>
+<button type="button" aria-haspopup="dialog" onclick="openPw()">Change password</button>
+<div class="spacer"></div>
+<form novalidate onsubmit="event.preventDefault(); this.querySelector('.e').hidden=false;">
+  <label>Name <input name="name" required></label>
+  <p class="e" role="alert" hidden style="color:#b00">Enter your name</p>
+  <button type="submit">Send message</button>
+</form>
+<h2>Results</h2>
+<ul id="list"></ul>
+<nav aria-label="Pagination"><button type="button" onclick="page(1)">1</button><button type="button" onclick="page(2); document.getElementById('list').scrollIntoView({block:'start'})">2</button></nav>
+</main>
+<script>
+window.__paid = false;
+function openTopup(){
+  const d = document.createElement("div"); d.setAttribute("role","dialog"); d.setAttribute("aria-label","Add credits");
+  d.innerHTML = '<h2>Add credits</h2><button type="button" id="cont">Continue</button>';
+  document.body.appendChild(d);
+  d.querySelector("#cont").onclick = () => { d.innerHTML = '<h2>Confirm payment</h2><p>Total 12,100 credits</p><button type="button" onclick="window.__paid=true">Pay now</button>'; };
+  addEventListener("keydown", (e) => { if (e.key === "Escape") d.remove(); }, { once: true });
+}
+function openPw(){
+  const d = document.createElement("div"); d.setAttribute("role","dialog"); d.setAttribute("aria-label","Change password");
+  d.innerHTML = '<h2>Change password</h2><div><label for="n">New password</label><span><input id="n" type="password"><button type="button" tabindex="-1" aria-label="Show password">eye</button></span></div><div><label for="r">Repeat password</label><span><input id="r" type="password"><button type="button" tabindex="-1" aria-label="Show password">eye</button></span></div><button type="button">Update</button>';
+  document.body.appendChild(d);
+  addEventListener("keydown", (e) => { if (e.key === "Escape") d.remove(); }, { once: true });
+}
+function page(n){ const ul = document.getElementById("list"); ul.innerHTML = ""; for (let i = 0; i < 12; i++) { const li = document.createElement("li"); li.style.height = "60px"; li.textContent = "Result " + (n * 12 + i); ul.appendChild(li); } }
+page(1);
+</script></body></html>

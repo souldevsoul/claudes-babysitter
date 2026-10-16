@@ -1,0 +1,49 @@
+<!doctype html><html lang="en"><head><meta name="viewport" content="width=device-width"><style>
+body{margin:0;font:16px Arial;color:#111;background:#fff}
+header{position:sticky;top:0;height:64px;background:#fff;border-bottom:1px solid #ccc;z-index:5}
+main{padding:16px}
+.card{background:#f3f3f3;border:1px solid #bbb;border-radius:8px;padding:12px;max-width:300px}
+[role=dialog]{position:fixed;left:20px;top:100px;width:300px;background:#fff;border:1px solid #333;padding:16px;z-index:9}
+button{height:40px;padding:0 12px}
+.wide{white-space:nowrap;width:420px}
+.spacer{height:1400px}
+</style></head><body>
+<header><b>Shop</b></header>
+<main>
+<h1>Wallet</h1>
+<p>Balance: 1,200 credits</p>
+<button id="topup" type="button" aria-haspopup="dialog" onclick="openTopup()">Add credits</button>
+<button id="pw" type="button" aria-haspopup="dialog" onclick="openPw()">Change password</button>
+<div class="spacer"></div>
+<h2>Contact</h2>
+<div id="err" role="alert" hidden style="color:#b00">Please fill in every field.</div>
+<div class="spacer"></div>
+<form id="contact" novalidate onsubmit="event.preventDefault(); document.getElementById('err').hidden=false; document.getElementById('again').hidden=false;">
+  <label>Name <input name="name" required></label>
+  <div class="card"><button id="again" type="button" class="wide" hidden>Write another message please now</button></div>
+  <button type="submit">Send message</button>
+</form>
+<h2>Results</h2>
+<ul id="list"></ul>
+<nav aria-label="Pagination"><button type="button" onclick="page(1)">1</button><button type="button" onclick="page(2)">2</button></nav>
+</main>
+<script>
+window.__paid = false; window.__posts = 0;
+const _f = window.fetch; window.fetch = (u, o) => { if (o && o.method && o.method !== "GET") window.__posts++; return _f(u, o); };
+function close_(d){ d.remove(); }
+function openTopup(){
+  const d = document.createElement("div"); d.setAttribute("role","dialog"); d.setAttribute("aria-label","Add credits");
+  d.innerHTML = '<h2>Add credits</h2><div><button type="button" role="radio" aria-checked="false" onclick="this.setAttribute(\'aria-checked\',\'true\')">500</button></div><button type="button" id="cont">Continue</button>';
+  document.body.appendChild(d);
+  d.querySelector("#cont").onclick = () => { d.innerHTML = '<h2>Confirm payment</h2><p>Total 12100 credits</p><button type="button" onclick="window.__paid=true; fetch(\'/pay\',{method:\'POST\'})">Pay now</button>'; };
+  addEventListener("keydown", (e) => { if (e.key === "Escape") d.remove(); }, { once: true });
+}
+function openPw(){
+  const d = document.createElement("div"); d.setAttribute("role","dialog"); d.setAttribute("aria-label","Change password");
+  d.innerHTML = '<h2>Change password</h2><div><label for="n">New password</label><span><input id="n" type="password"><button type="button" tabindex="-1" aria-label="Show password">eye</button></span></div><div><label for="r">Repeat password</label><span><input id="r" type="password"></span></div><button type="button" class="wide">Update password and sign out everywhere</button>';
+  document.body.appendChild(d);
+  addEventListener("keydown", (e) => { if (e.key === "Escape") d.remove(); }, { once: true });
+}
+function page(n){ const ul = document.getElementById("list"); ul.innerHTML = ""; for (let i = 0; i < 12; i++) { const li = document.createElement("li"); li.style.height = "60px"; li.textContent = "Result " + (n * 12 + i); ul.appendChild(li); } }
+page(1);
+</script></body></html>

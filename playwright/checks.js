@@ -2955,7 +2955,9 @@ const ixProbe = () => {
         return !!el;
     };
     /** Candidates: everything a person can click on this page, one per component look (signature), with why others were not clicked. */
-    P.candidates = () => {
+    // openers: true → every control that opens something (haspopup / expanded / controls / combobox / top-up), not
+    // one per component look — the states checks need each dialog, not each dialog *button style* (run.js)
+    P.candidates = (openers = false) => {
         const sel = 'button, a[href], [role=button], [role=tab], [role=switch], [role=menuitem], [role=option], [role=checkbox], [role=radio], summary, [aria-expanded], [aria-controls], [aria-haspopup], [data-state], label[for], [onclick], input[type=checkbox], input[type=radio]';
         const list = new Set(document.querySelectorAll(sel));
         // cursor:pointer things with no interactive element around or inside them (a clickable card or div)
@@ -2995,11 +2997,14 @@ const ixProbe = () => {
         const active = (el) => el.matches('[aria-selected=true], [aria-pressed=true], [aria-checked=true], [aria-expanded=true], [data-state=active], [data-state=on], [data-state=open], [data-state=checked], [aria-current]') || (el.matches("input") && el.checked);
         const picks = [];
         let lookalikes = 0;
+        const opens = (el) => el.matches("[aria-haspopup]:not([aria-haspopup=false]), [aria-expanded], [aria-controls], [role=combobox], summary") || /add (credits|funds)|top ?-?up|buy credits|deposit|change|edit|open|details|filter|sort|share|invite|new\b|create|пополн|изменить|редакт/i.test(label(el));
         for (const [sig, els] of groups) {
             const el = els.find((e) => !active(e)) || els[0];
-            lookalikes += els.length - 1;
             const all = Array.from(document.body.querySelectorAll("*")).filter((e) => P.sig(e) === sig);
-            picks.push({ sig, text: label(el), ord: all.indexOf(el), selector: W.__uiSelector(el), where: W.__uiDescribe(el), human: W.__uiHuman(el), toggle: el.matches("[aria-expanded], [aria-pressed], [role=switch], [role=checkbox], summary, input, label[for]") });
+            const take = openers ? [el, ...els.filter((e) => e !== el && opens(e))] : [el];
+            lookalikes += els.length - take.length;
+            for (const x of take)
+                picks.push({ sig, text: label(x), ord: all.indexOf(x), selector: W.__uiSelector(x), where: W.__uiDescribe(x), human: W.__uiHuman(x), toggle: x.matches("[aria-expanded], [aria-pressed], [role=switch], [role=checkbox], summary, input, label[for]") });
         }
         return { picks, skipped, lookalikes };
     };
@@ -3261,3 +3266,6 @@ export async function translationSurvives(page, max = 10) {
     }
     return out;
 }
+
+// shared with playwright/checks/run.js (states, locales, scroll checks): the opener discovery of interactionMotion
+export { ixProbe, settle, uncover };

@@ -1,0 +1,23 @@
+<!doctype html><html lang="en"><head><meta name="viewport" content="width=device-width"><style>
+body{margin:0;font:16px Arial}
+header{position:sticky;top:0;height:64px;background:#fff;border-bottom:1px solid #ccc;z-index:5}
+main{padding:16px} .tall{height:1500px} button{height:40px} #w{scroll-margin-top:80px}
+</style></head><body><header>Onboarding</header><main><h1>Apply as a specialist</h1>
+<form id="w" novalidate onsubmit="event.preventDefault(); step()">
+<div id="s"></div>
+</form></main>
+<script>
+window.__final = false; let n = 1; const SCROLL = location.hash !== "#noscroll";
+function render(){
+  const s = document.getElementById("s");
+  if (n === 1) s.innerHTML = '<h2>Step 1: About you</h2><div class="tall"></div><label>Email <input type="email" name="email" required></label><button type="submit">Next</button>';
+  else if (n === 2) s.innerHTML = '<h2 id="h2">Step 2: Rate</h2><p>Your rate: 1500 credits per task</p><label>Bio <textarea name="bio" minlength="20" required></textarea></label><div class="tall"></div><button type="submit">Continue</button>';
+  else s.innerHTML = '<h2>Step 3: Review</h2><button type="button" onclick="window.__final=true">Submit application</button>';
+}
+function step(){
+  const f = document.getElementById("w");
+  for (const el of f.querySelectorAll("[required]")) if (!el.value || (el.minLength > 0 && el.value.length < el.minLength)) return;
+  n++; render(); if (SCROLL) document.getElementById("w").scrollIntoView({ block: "start" });
+}
+render();
+</script></body></html>

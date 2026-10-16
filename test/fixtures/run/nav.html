@@ -1,0 +1,13 @@
+<!doctype html><html lang="en"><head><meta name="viewport" content="width=device-width"><style>
+body{margin:0;font:16px Arial} header{position:sticky;top:0;height:64px;background:#fff;border-bottom:1px solid #ccc;z-index:5}
+.tall{height:2400px} h2{margin:0}
+</style></head><body><header>Site <a href="#pricing">Pricing</a> <a href="#faq">FAQ</a></header>
+<main id="app"></main>
+<footer><a href="/spa/about">About</a> <a href="/spa/terms">Terms</a></footer>
+<script>
+const RESET = __RESET__;
+const views = { "/spa/home": "<h1>Home</h1><div class=tall></div><h2 id=pricing __PM__>Pricing</h2><div class=tall></div><h2 id=faq __PM__>FAQ</h2><div class=tall></div>", "/spa/about": "<h1>About</h1><div class=tall></div>", "/spa/terms": "<h1>Terms</h1><div class=tall></div>" };
+function show(){ document.getElementById("app").innerHTML = views[location.pathname] || "<h1>?</h1>"; }
+document.addEventListener("click", (e) => { const a = e.target.closest("a"); if (!a || a.getAttribute("href").startsWith("#")) return; e.preventDefault(); history.pushState({}, "", a.getAttribute("href")); show(); if (RESET) scrollTo(0, 0); });
+show();
+</script></body></html>
