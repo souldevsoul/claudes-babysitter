@@ -105,6 +105,9 @@ try {
     assert.deepEqual(parseTitle(["content.spec.ts", "content [kk] [signed-in: buyer] /wallet", "CT1 …"]), { suite: "content", route: "/wallet", role: "buyer", auth: true, locale: "kk" });
     assert.equal(parseTitle(["layout.spec.ts", "/pricing layout", "L1 …"]).route, "/pricing");
     assert.equal(parseTitle(["forms.spec.ts", "forms [signed-in] /settings", "FM3 …"]).role, "user");
+    // layout and forms are suites of their own in the summary (5.0.1): a run that left one out says so
+    assert.equal(parseTitle(["layout.spec.ts", "/pricing layout", "L1 …"]).suite, "layout");
+    assert.equal(parseTitle(["forms.spec.ts", "forms /signin", "FM3 …"]).suite, "forms");
     assert.deepEqual(bullets("Error:   • a — b\n  • c — d e — f"), [{ what: "a", where: "b" }, { what: "c — d e", where: "f" }]);
     const d = mkdtempSync(join(tmpdir(), "bs-run-sum-")); dirs.push(d);
     mkdirSync(join(d, ".babysitter"));

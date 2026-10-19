@@ -2,6 +2,17 @@
 
 Earlier releases (4.11.1 and before) are described in the README under "What changed in …".
 
+## 5.0.2 — three false alarms from the first 5.0 runs (Compass, Kindred, Threshold) (2026-10-19)
+
+- FM6 read a year printed before a price as part of it ("14 Oct 2026 800 credits" → 2026800 credits, on every
+  Compass task card). Balances and prices are now whole numbers or numbers in thousands groups, never glued to the
+  digits before them.
+- 3.5 "looks highlighted on a page it does not open" (soft) no longer fires for a call to action drawn as a link
+  ("Sign in", "Open a case", "Post a brief", "Become a partner" …, or a link to /login, /signup, /new …): its emphasis
+  is the same on every page by design. An emphasised page link (Pricing on /faq) still fires.
+- The run summary names the layout and forms suites on their own (they were counted under "ui", so a run that left
+  one of them out looked complete).
+
 ## 5.0.1 — the shared legal identity placeholder is not test data (2026-10-19)
 
 - CT2 (test data) and CT11 (untranslated) no longer report the studio's shared legal identity placeholder,

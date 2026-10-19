@@ -253,6 +253,9 @@ const activeScan = (scope) => {
     if (li && li.matches("li") && li.querySelectorAll("a[href]").length === 1) parts.push(one(li), one(li, "::before"), one(li, "::after"));
     return parts.join("‖");
   };
+  // a call to action drawn as a link: its emphasis is the same on every page, so it is not a stale active state
+  const ACTION_ITEM = /^(sign ?in|log ?in|sign ?up|register|join|get started|start( now| here)?|post an? (brief|task|job|request)|open an? (case|request|task)|new (task|request|brief|case)|book( now| a \w+)?|hire( now| an? \w+)?|request( an? \w+)?|create( an? \w+)?|apply( now)?|become an? \w+|daxil ol|qeydiyyat|кіру|тіркелу|войти|регистрация)$/i;
+  const ACTION_DEST = /^\/(log-?in|sign-?in|sign-?up|register|join|get-started|onboarding|new|request|post|create|book|apply|hire)(\/|\?|$)|\/new(\/|\?|$)/i;
   for (const root of roots) {
     const links = Array.from(root.querySelectorAll("a[href]")).filter((a) => {
       if (!W.__uiVisible(a) || !L.label(a)) return false;
@@ -287,7 +290,9 @@ const activeScan = (scope) => {
         const l = looks.get(a);
         if (l === base) continue;
         if (curLook && l === curLook && curLook !== base) out.push({ ...L.at(a, `${where}: "${L.label(a)}" is highlighted like the current item "${L.label(cur[0])}" although it is not this page — only the current item should look active [3.5]`), level: "hard" });
-        else if (!cur.length && count.get(l) === 1) out.push({ ...L.at(a, `${where}: "${L.label(a)}" looks highlighted (different from the other items) on a page it does not open — an item looks active only on its own page [3.5]`), level: "soft" });
+        // an emphasised action item (sign in / sign up / "Post a brief" / "Open a case") looks different on every page by
+        // design: it is a call to action drawn as a link, not an active state left on (Threshold, Kindred 2026-10)
+        else if (!cur.length && count.get(l) === 1 && !ACTION_ITEM.test(L.label(a)) && !ACTION_DEST.test(L.dest(a))) out.push({ ...L.at(a, `${where}: "${L.label(a)}" looks highlighted (different from the other items) on a page it does not open — an item looks active only on its own page [3.5]`), level: "soft" });
       }
     }
   }

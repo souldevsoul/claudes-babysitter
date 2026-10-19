@@ -116,6 +116,11 @@ try {
     const good = real_(await forms.creditsUpFront(page));
     assert.deepEqual(good, [], show(good));
   });
+  await test("FM6 a year printed before a price is not part of it (Compass: '2026 800 credits' read as 2026800)", async (page) => {
+    await go(page, "credits-dated.html");
+    const list = real_(await forms.creditsUpFront(page));
+    assert.ok(list.length === 1 && /costs 12500 credits/.test(list[0].what) && /balance is 1000/.test(list[0].what), show(list));
+  });
   await test("FM7a a real reset page with a neutral confirmation passes; a 'not available' pop-up fails", async (page) => {
     const good = await forms.forgotPassword(page, BASE + "signin.html");
     assert.deepEqual(good, [], show(good));

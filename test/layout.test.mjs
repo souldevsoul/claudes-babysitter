@@ -131,6 +131,15 @@ try {
     r = await L.activeNavStyle(page);
     assert.deepEqual(sel(r.hard), ["#n-home"], "on / the Home item is current and plain");
   });
+  await test("3.5 an emphasised call-to-action link (Sign in, Open a case) is not a stale active state; an emphasised page link is", async (page) => {
+    const html = fixture("active.html").replace(' aria-current="page"', "").replace('<a href="/#faq" id="n-faq">FAQ</a>', '<a href="/#faq" id="n-faq">FAQ</a><a href="/login" id="n-signin">Sign in</a><a href="/cases/new" id="n-case">Open a case</a>');
+    await page.unrouteAll(); await load(page, html, { path: "/terms", vars: { CSS: "#n-signin{color:#06c;font-weight:700} #n-case{color:#c60;font-weight:700}" } });
+    let r = await L.activeNavStyle(page);
+    assert.deepEqual([...r.hard, ...r.soft], [], JSON.stringify(r));
+    await page.unrouteAll(); await load(page, html, { path: "/terms", vars: { CSS: "#n-about{color:#06c;font-weight:700}" } });
+    r = await L.activeNavStyle(page);
+    assert.deepEqual(sel(r.soft), ["#n-about"], JSON.stringify(r));
+  });
   await test("3.5 active nav: the burger menu's current item is judged too", async (page) => {
     await load(page, "menu.html", { vars: { ACTIVE: "" } });
     let r = await L.activeNavStyle(page);

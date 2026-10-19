@@ -574,21 +574,21 @@ export const creditsUpFront = async (page) => (await lib(page), page.evaluate(()
   for (const e of Array.from(document.querySelectorAll("body *")).filter((x) => x.children.length < 5 && B.vis(x))) {
     const t = text(e);
     if (t.length > 80) continue;
-    const named = t.match(/(?:balance|credits? (?:left|available|remaining)|available credits|wallet)\s*[:·\-]?\s*([\d][\d,  ]*)/i);
+    const named = t.match(/(?:balance|credits? (?:left|available|remaining)|available credits|wallet)\s*[:·\-]?\s*((?<![\d.,])(?:\d{1,3}(?:[,  ]\d{3})+|\d+)(?![\d]))/i);
     // "120 credits" alone is a balance only in the header / sidebar / a balance widget — in a card it is a price
-    const bare = !named && e.closest("header, nav, aside, [class*=balance i], [class*=wallet i]") && t.match(/^([\d][\d,  ]*)\s*(?:credits?|cr)\s*(?:left|available|remaining)?$/i);
+    const bare = !named && e.closest("header, nav, aside, [class*=balance i], [class*=wallet i]") && t.match(/^((?<![\d.,])(?:\d{1,3}(?:[,  ]\d{3})+|\d+)(?![\d]))\s*(?:credits?|cr)\s*(?:left|available|remaining)?$/i);
     const m = named || bare;
     if (m && (balance === null || (named && !balanceNamed))) { const n = num(m[1]); if (Number.isFinite(n)) { balance = n; balanceEl = e; balanceNamed = !!named; } }
   }
   if (balance === null) {
     // a label and its figure in separate elements ("AVAILABLE" / "3,900" / "credits"), or a header chip linking to the wallet
     for (const e of Array.from(document.querySelectorAll("body *")).filter((x) => x.children.length === 0 && B.vis(x) && /^(available( balance)?|balance|your balance|credit balance|wallet balance|credits available|current balance)$/i.test(text(x)))) {
-      const m = text(e.parentElement).replace(text(e), "").match(/^\s*[:·]?\s*([\d][\d,  ]*)/) || text(e.parentElement.parentElement || e).match(new RegExp(text(e).replace(/[.*+?^${}()|[\]\\]/g, "\\$&") + "\\s*[:·]?\\s*([\\d][\\d,  ]*)", "i"));
+      const m = text(e.parentElement).replace(text(e), "").match(/^\s*[:·]?\s*((?<![\d.,])(?:\d{1,3}(?:[,  ]\d{3})+|\d+)(?![\d]))/) || text(e.parentElement.parentElement || e).match(new RegExp(text(e).replace(/[.*+?^${}()|[\]\\]/g, "\\$&") + "\\s*[:·]?\\s*([\\d][\\d,  ]*)", "i"));
       if (m) { balance = num(m[1]); balanceEl = e.parentElement; break; }
     }
     if (balance === null) {
-      const chip = Array.from(document.querySelectorAll("a[href*=wallet i], a[href*=credit i], a[href*=balance i], a[href*=billing i]")).find((x) => B.vis(x) && /^[\d][\d,  ]*\b/.test(text(x)));
-      if (chip) { balance = num(text(chip).match(/^[\d][\d,  ]*/)[0]); balanceEl = chip; }
+      const chip = Array.from(document.querySelectorAll("a[href*=wallet i], a[href*=credit i], a[href*=balance i], a[href*=billing i]")).find((x) => B.vis(x) && /^(?<![\d.,])(?:\d{1,3}(?:[,  ]\d{3})+|\d+)(?![\d])\b/.test(text(x)));
+      if (chip) { balance = num(text(chip).match(/^(?<![\d.,])(?:\d{1,3}(?:[,  ]\d{3})+|\d+)(?![\d])/)[0]); balanceEl = chip; }
     }
   }
   if (balance === null) return [{ id: "FM6", na: true, what: "no credit balance on this page", where: location.pathname }];
@@ -597,7 +597,7 @@ export const creditsUpFront = async (page) => (await lib(page), page.evaluate(()
     if (balanceEl && (balanceEl.contains(b) || b.contains(balanceEl))) continue;
     let box = b, price = null;
     for (let d = 0; d < 3 && box && price === null; d++, box = box.parentElement) {
-      const m = text(box).match(/([\d][\d,  ]*)\s*(?:credits?|cr)\b/i);
+      const m = text(box).match(/((?<![\d.,])(?:\d{1,3}(?:[,  ]\d{3})+|\d+)(?![\d]))\s*(?:credits?|cr)\b/i);
       if (m && text(box).length < 300) price = num(m[1]);
     }
     const label = text(b);
