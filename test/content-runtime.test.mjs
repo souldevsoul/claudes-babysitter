@@ -36,7 +36,7 @@ try {
     fired(hard, "promise", /We don't promise.*\[CT1\]/);
     fired(hard, "tpl", /#highlighted#/);
     fired(hard, "mustache", /\{\{name\}\}/);
-    fired(hard, "company", /New Company 1.*\[CT2\]/);
+    fired(hard, "company", /New Company 2.*\[CT2\]/);
     fired(hard, "nan", /NaN.*\[CT3\]/);
     fired(hard, "obj", /object Object/);
     fired(hard, "dash", /—.*\[CT5\]/);

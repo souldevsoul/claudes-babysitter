@@ -36,7 +36,7 @@
   "locales": { "list": ["en", "az"], "default": "en", "cookie": "NEXT_LOCALE", "keep": ["Acme Pro"], "untranslated": "fail" },
   "states": { "enabled": true, "maxOpeners": 15, "maxForms": 3, "maxSteps": 6, "wallet": true, "pageBudget": 240000 },
   "acceptance": { "auth": { "signIn": "/login", "signUp": "/register", "settings": "/settings" }, "skip": [], "skipReasons": {} },
-  "content": { "dateFormat": "DD.MM.YYYY", "dashes": "forbid", "brandTerms": ["Acme"], "glossary": {}, "skip": [], "skipReasons": {} },
+  "content": { "dateFormat": "DD.MM.YYYY", "dashes": "forbid", "brandTerms": ["Acme"], "legalIdentity": ["New Company 1", "New Address 1", "000000000"], "glossary": {}, "skip": [], "skipReasons": {} },
   "forms": { "zeroBalanceRole": "", "protectedRoute": "/dashboard", "skip": [], "skipReasons": {} },
   "layout": { "headingVariants": 2, "stickyHeader": true, "maxListItems": 20, "registerFavicon": true },
   "domSniper": { "allowProps": [], "skip": [], "strict": false },

@@ -39,12 +39,26 @@ await t("CT1 ordinary copy, transient errors and i18n placeholders stay quiet", 
 
 /* CT2 test data */
 await t("CT2 test data fires; input hints do not", () => {
-  for (const s of ["© 2026 New Company 1. All rights reserved.", "New Address 1", "Signed in as Test User", "John Doe", "asdf", "qwerty123", "Contact test@example.com", "Company number 000000000"]) fires(s, "content/test-data");
+  for (const s of ["© 2026 New Company 2. All rights reserved.", "New Address 7", "Signed in as Test User", "John Doe", "asdf", "qwerty123", "Contact test@example.com", "Order 0000000 placed"]) fires(s, "content/test-data");
   quiet("you@example.com", "content/test-data", "placeholder");
   quiet("Enter a valid email address, like you@example.com.", "content/test-data");
   quiet("E-poçt ünvanı daxil edin, məsələn you@example.com", "content/test-data");
   quiet("Latest test results are in", "content/test-data");
   quiet("John Doe", "content/test-data", "body", undefined, { example: true });
+});
+
+await t("CT2/CT11 the studio legal identity placeholder is required copy, not test data; off with legalIdentity: []", () => {
+  for (const s of ["New Company 1", "New Address 1", "Company number 000000000", "© 2026 New Company 1. All rights reserved.", "New Company 1, New Address 1, company number 000000000"]) quiet(s, "content/test-data");
+  const off = R.contentConfig({ content: { legalIdentity: [] } });
+  for (const s of ["© 2026 New Company 1. All rights reserved.", "New Address 1", "Company number 000000000"]) fires(s, "content/test-data", "body", off);
+  // real test data next to the placeholder still fires
+  fires("New Company 1 · Signed in as Test User", "content/test-data");
+  const def = new Set(["New Company 1", "New Address 1", "Company No.: 000000000"]); def.locale = "en";
+  assert.equal(R.untranslatedReason("New Company 1", "kk", { defaults: def }), null);
+  assert.equal(R.untranslatedReason("New Address 1", "az", { defaults: def }), null);
+  // the label around the placeholder is still copy to translate
+  assert.equal(R.untranslatedReason("Company No.: 000000000", "kk", { defaults: def })?.kind, "same");
+  assert.equal(R.untranslatedReason("New Company 1", "kk", { defaults: def, legal: [] })?.kind, "same", "with legalIdentity off it is ordinary copy again");
 });
 
 /* CT3 raw errors */
@@ -257,7 +271,7 @@ await t("fixture repo: every planted problem is found, nothing else", async () =
   const expect = [
     ["messages/en.json", "content/trailing-period", /home\.title/], ["messages/en.json", "content/unfinished", /open at launch/],
     ["messages/en.json", "content/date-format", /October 1, 2026/], ["messages/en.json", "content/last-updated", /legal\.terms: "last updated" dates differ/],
-    ["messages/en.json", "content/test-data", /New Company 1/], ["messages/en.json", "content/grammar", /1 profiles/], ["messages/en.json", "content/email-domain", /vercel\.app/],
+    ["messages/en.json", "content/test-data", /New Company 2/], ["messages/en.json", "content/grammar", /1 profiles/], ["messages/en.json", "content/email-domain", /vercel\.app/],
     ["messages/en.json", "content/missing-key", /onlyEn exists in en but is missing in az/], ["messages/az.json", "content/missing-key", /onlyAz exists in az but is missing in en/],
     ["messages/az.json", "content/unfinished", /tezliklə/], ["messages/az.json", "content/untranslated", /pricing\.fee in az contains English/],
     ["messages/az.json", "content/last-updated", /az says 2026-10-05, en says 2026-10-01/], ["messages/az.json", "content/untranslated", /footer\.company in az is the en text unchanged/],

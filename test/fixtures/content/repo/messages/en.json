@@ -15,7 +15,7 @@
     },
     "privacy": { "updated": "Last updated: 01.10.2026" }
   },
-  "footer": { "company": "New Company 1" },
+  "footer": { "company": "New Company 2" },
   "catalog": { "count": "{count} profiles", "one": "1 profiles offer this task" },
   "auth": { "emailPlaceholder": "you@example.com", "invalid": "Enter an email like you@example.com" },
   "contact": { "email": "Write to support@acme.vercel.app" },

@@ -15,7 +15,7 @@
     },
     "privacy": { "updated": "Son yenilənmə: 01.10.2026" }
   },
-  "footer": { "company": "New Company 1" },
+  "footer": { "company": "New Company 2" },
   "catalog": { "count": "{count} profil", "one": "1 profil" },
   "auth": { "emailPlaceholder": "you@example.com", "invalid": "E-poçt ünvanı daxil edin, məsələn you@example.com" },
   "contact": { "email": "support@acme.vercel.app ünvanına yazın" },

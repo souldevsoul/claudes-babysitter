@@ -19,7 +19,7 @@ the base version; translation files trigger the edit hook too.
 | Id | Rule | Hard? | Detects | Fix |
 |---|---|---|---|---|
 | CT1 | `content/unfinished` | hard | build notes, not-yet copy, defensive copy, template markers: "not live yet", "open at launch", "switched off", "isn't available yet", "isn't working yet", "not available on the platform yet", "has not launched", "coming soon", "we don't promise", "there is nothing else", "does not review deliverables", "example profile", "placeholder", "lorem", TBD / TODO / FIXME, `#highlighted#`, `{{name}}` on a page, a `*.vercel.app` preview host in copy; acceptance B1 delegates here (one source of truth); az / kk / ru variants ("hələ mümkün deyil", "söz vermirik", "әзірге қолжетімсіз", "уәде бермейміз", "пока недоступно" …). A transient "isn't available yet, try again" error passes. | say what works now or remove the block |
-| CT2 | `content/test-data` | hard | "New Company 1", "New Address 1", "Test User", "test … account", "John Doe", asdf, qwerty, `@example.com`, 000000000. Input placeholders, `*Placeholder` / `*Example` keys and "like you@example.com" hints pass. | real content |
+| CT2 | `content/test-data` | hard | "New Company 2", "New Address 7", "Test User", "test … account", "John Doe", asdf, qwerty, `@example.com`, 0000000. Input placeholders, `*Placeholder` / `*Example` keys and "like you@example.com" hints pass. The studio's shared legal identity placeholder ("New Company 1", "New Address 1", "000000000"; canon R-OWN-08) is required copy and passes, here and in CT11 (`content.legalIdentity`; `[]` turns the exception off for a product with its own entity). | real content |
 | CT3 | `content/raw-error` | hard | `[object Object]`, NaN, undefined, null, Invalid Date, a leading "Error:", JS / Prisma / Auth.js error names, stack frames, "Internal Server Error", "error 500". In message files only the unambiguous ones. | catch it, show a plain message |
 | CT4 | `content/trailing-period` | hard | h1–h3 (the last line of a split heading), button labels, nav items, `<title>`; i18n keys `*title` / `*heading` / `*button` / `cta` / `nav.*`. Ellipsis and "Inc." pass. | drop the period |
 | CT5 | `content/dash` | hard | "—" and "--" in copy (studio rule), incl. "—" as an empty table value. En-dash ranges pass. `content.dashes: "allow"`, `content.allowDash: [regex]`. | comma, colon, brackets, "Not set" |
@@ -48,6 +48,7 @@ the base version; translation files trigger the edit hook too.
     "allowPhrases": [],
     "glossary": { "specialist": ["freelancer", "expert"] },
     "brandTerms": ["PRAXIS"],
+    "legalIdentity": ["New Company 1", "New Address 1", "000000000"],
     "defaultLocale": "en",
     "locales": [
       { "code": "az", "localStorage": { "praxis-locale": "az" } },

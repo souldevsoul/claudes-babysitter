@@ -2,6 +2,16 @@
 
 Earlier releases (4.11.1 and before) are described in the README under "What changed in …".
 
+## 5.0.1 — the shared legal identity placeholder is not test data (2026-10-19)
+
+- CT2 (test data) and CT11 (untranslated) no longer report the studio's shared legal identity placeholder,
+  "New Company 1" / "New Address 1" / "000000000". The canon (R-OWN-08) requires it in the footer, the © line, Terms
+  and Contact, identical in every language, until the owner assigns an entity; on Compass it was about half of the
+  copy findings (every page, every language). New config key `content.legalIdentity` (default: those three strings;
+  `[]` for a product with its own entity, where they are test data again). Only text made of the placeholder is exempt:
+  real test data next to it still fires, and a label around it ("Company No.:" left in English on a Kazakh page) is
+  still untranslated. Fixtures that stood for test data now use "New Company 2".
+
 ## 5.0.0 — every check runs everywhere it can fail (2026-10-16)
 
 **Major: the default run model changed.** `babysitter e2e` now runs every suite, at five viewports, in every language

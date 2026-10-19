@@ -255,7 +255,7 @@ export async function languageFindings(page, { cfg = {}, copy = null, locale = n
       def.locale = defaultLocale || defaults.lang || cc.defaultLocale || "";
     }
     for (const s of copy.segs) {
-      const r = untranslatedReason(s.text, code, { brand, defaults: def, keep, ownLang: s.ownLang });
+      const r = untranslatedReason(s.text, code, { brand, defaults: def, keep, ownLang: s.ownLang, legal: cc.legalIdentity });
       if (!r) continue;
       out.push({ i: s.i, x: { id: "CT11", what: untranslatedWhat(r, s.text, code), fix: `translate it (the ${code} messages file, or the CMS / database field; locales.keep / content.brandTerms for names that stay as they are)` } });
     }

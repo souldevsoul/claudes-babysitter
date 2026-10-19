@@ -68,6 +68,13 @@ Or install it as a dev dependency: `npm i -D github:souldevsoul/claudes-babysitt
 | `docs/` | The guidelines the rules enforce |
 | `test/`, `fixtures/` | `npm test`: RuleTester, Stylelint fixtures, end-to-end cases |
 
+## What changed in 5.0.1 (the shared legal identity placeholder is not test data)
+
+CT2 and CT11 pass the studio's legal identity placeholder ("New Company 1" / "New Address 1" / "000000000", canon
+R-OWN-08), which every product carries until the owner assigns an entity. `content.legalIdentity` lists the strings
+(that default); `[]` turns the exception off. Real test data next to it, and an untranslated label around it, still
+fail. Details: [`CHANGELOG.md`](CHANGELOG.md).
+
 ## What changed in 5.0.0 (every check runs everywhere it can fail; copy, forms and layout suites) — major
 
 Full list: [`CHANGELOG.md`](CHANGELOG.md). Details: [`docs/checks-run.md`](docs/checks-run.md),
