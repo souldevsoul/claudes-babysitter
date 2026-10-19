@@ -184,6 +184,9 @@ await t("CT12 translation keys printed as text are recognised; domains, files an
   for (const k of ["home.title", "common.viewAll", "auth.errors.invalid_email", "pricing.calc.clamped"]) assert.ok(R.looksLikeKey(k), k);
   for (const k of ["praxis.com", "vertex.boutique", "file.pdf", "e.g.", "Next.js", "node.js", "support@acme.com", "v1.2"]) assert.ok(!R.looksLikeKey(k), k);
   assert.ok(R.looksLikeKey("brand.name", new Set(["brand.name"])));
+  // a plain word that is also a key name is copy (Compass/Kindred "credits", 2026-10); a structured key still is a key
+  assert.ok(!R.looksLikeKey("credits", new Set(["credits"])));
+  assert.ok(R.looksLikeKey("walletBalance", new Set(["walletBalance"])));
 });
 
 /* CT17 / CT18 */

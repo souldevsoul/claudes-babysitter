@@ -581,6 +581,10 @@ export async function alignment(page) {
       const hi = rows.findIndex((r) => r.length && r.every((c) => c.matches("th, [role=columnheader]")));
       if (hi < 0) continue;
       const head = rows[hi];
+      // a header row hidden for the eye and kept for screen readers (the sr-only pattern of a table that turns into
+      // labelled cards on phones) has no position to align: nothing to compare (Threshold / Compass at 390, 2026-10)
+      const hidden = (c) => { for (let e = c; e && e !== t; e = e.parentElement) { const r = e.getBoundingClientRect(), cs = getComputedStyle(e); if (r.width <= 2 || r.height <= 2 || cs.visibility === "hidden" || /rect\(0|inset\(50%/.test(cs.clip + " " + cs.clipPath)) return true; } return false; };
+      if (head.every(hidden)) continue;
       const body = rows.slice(hi + 1).filter((r) => r.length === head.length && r.every((c) => !(c.colSpan > 1)) && r.some((c) => c.matches("td, [role=cell], [role=gridcell], [role=rowheader], th")));
       if (body.length < 2 || head.some((c) => c.colSpan > 1)) continue;
       const box = (c) => { const r = c.getBoundingClientRect(), cs = getComputedStyle(c); return { l: r.left + parseFloat(cs.paddingLeft) + parseFloat(cs.borderLeftWidth), r: r.right - parseFloat(cs.paddingRight) - parseFloat(cs.borderRightWidth) }; };

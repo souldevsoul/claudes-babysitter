@@ -72,6 +72,14 @@ try {
     await load(footer(""));
     assert.ok((await f5()).some((o) => /has no "We accept"/.test(o.what)));
   });
+  const f3 = async () => (await a.footer(page, a.acceptanceConfig({}))).filter((o) => o.id === "F3" && /company line/.test(o.what));
+  await t("F3: the studio legal identity placeholder is the company line; a footer with neither it nor a legal form fails", async () => {
+    const bare = (company) => `<body><main><h1>x</h1></main><footer><a href="/terms">Terms of Service</a> <a href="/privacy">Privacy Policy</a><p>© 2026 ${company}. All rights reserved.</p>${company === "New Company 1" ? "<p>New Company 1 · New Address 1 · Company number 000000000</p>" : ""}<p>We accept ${LOGOS}</p></footer></body>`;
+    await load(bare("New Company 1"));
+    assert.deepEqual(await f3(), []);
+    await load(bare("Acme"));
+    assert.equal((await f3()).length, 1);
+  });
 } finally {
   await browser.close();
 }

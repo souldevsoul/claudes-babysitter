@@ -294,7 +294,11 @@ export const footer = (page, acc = DEFAULTS) => page.evaluate((acc) => {
     }
     // F3 company line + support email on the site's own domain
     const company = acc.company?.name;
-    if (company ? !text.toLowerCase().includes(company.toLowerCase()) : !/\b(ltd|limited|llc|l\.l\.c|inc|gmbh|sp\.? z o\.?o\.?|oü|ou|s\.?r\.?o|bv|b\.v\.|sarl|s\.a\.|ag|plc|ug|kft|sia|uab|too|тоо)\b/i.test(text))
+    // the studio's shared legal identity placeholder (canon R-OWN-08: "New Company 1" / "New Address 1" / "000000000",
+    // no legal form until the owner assigns an entity) is the company line; acceptance.legalIdentity overrides it
+    const legalId = acc.legalIdentity || ["New Company 1", "New Address 1", "000000000"];
+    const placeholder = legalId.length > 0 && legalId.every((x) => text.includes(x));
+    if (placeholder) { /* the placeholder company line */ } else if (company ? !text.toLowerCase().includes(company.toLowerCase()) : !/\b(ltd|limited|llc|l\.l\.c|inc|gmbh|sp\.? z o\.?o\.?|oü|ou|s\.?r\.?o|bv|b\.v\.|sarl|s\.a\.|ag|plc|ug|kft|sia|uab|too|тоо)\b/i.test(text))
         push("F3", `footer has no company line (name · address · registration number · jurisdiction)${company ? ` — "${company}" not found` : ""} [F3, BQA 6]`);
     if (company && acc.company?.number && !text.includes(acc.company.number))
         push("F3", `company registration number ${acc.company.number} missing from the footer [F3]`);

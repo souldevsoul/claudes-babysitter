@@ -2,6 +2,17 @@
 
 Earlier releases (4.11.1 and before) are described in the README under "What changed in …".
 
+## 5.0.3 — three more false alarms from the fix round on Compass, Kindred, Threshold (2026-10-19)
+
+- F3 accepts the studio's shared legal identity placeholder ("New Company 1" / "New Address 1" / "000000000") as the
+  footer's company line; it has no legal form or jurisdiction until the owner assigns an entity
+  (`acceptance.legalIdentity` overrides the strings; a footer with neither the placeholder nor a legal form still fails).
+- CT12 no longer calls a plain word a translation key because a key has that name ("credits" on an English page is the
+  unit word). Structured keys (`wallet.balance`, `walletBalance`, `wallet_balance`) still count; a plain English word
+  left on another locale's page is CT11's untranslated text.
+- 2.4 skips a table whose header row is hidden for the eye and kept for screen readers (the sr-only header of a table
+  that becomes labelled cards on phones): there is no header position to align.
+
 ## 5.0.2 — three false alarms from the first 5.0 runs (Compass, Kindred, Threshold) (2026-10-19)
 
 - FM6 read a year printed before a price as part of it ("14 Oct 2026 800 credits" → 2026800 credits, on every

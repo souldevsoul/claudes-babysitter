@@ -193,6 +193,12 @@ try {
     assert.deepEqual(sel(r.hard), ["#th-price"], JSON.stringify(r.hard.map((f) => f.selector + " " + f.what)));
     assert.match(r.hard[0].what, /header is left but its values line up on the right edge/);
   });
+  await test("2.4 a header row kept only for screen readers (sr-only on phones) is not compared with the cells", async (page) => {
+    const html = fixture("align.html").replace('<thead>', '<thead style="position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0,0,0,0);white-space:nowrap">');
+    await load(page, html);
+    const r = await L.alignment(page);
+    assert.ok(!sel(r.hard).includes("#th-price"), JSON.stringify(r.hard.map((f) => f.selector + " " + f.what)));
+  });
   await test("2.7 empty space: a 540 px gap among 80 px gaps and a 2000 px section that is mostly air are soft (with crops); even gaps and a pictured hero pass", async (page) => {
     await load(page, "space.html", { vars: { GAP: "540", HERO: "2000", HEROBG: "" } });
     let r = await L.emptySpace(page);
