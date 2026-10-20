@@ -346,5 +346,43 @@
   "why": "legal decision",
   "by": "claude (LLM)",
   "confirmed": false
+ },
+ "cmvgvlfuu005ola06vbuzbnam": {
+  "bucket": "MISSED",
+  "summary": "Date-of-birth day picker shows 'Da…' (truncated) on onboarding",
+  "check": "N6 / 2.14 ellipsis — the step is behind onboarding validation",
+  "fixture": "deferred",
+  "oldPassed": "the run never reached that onboarding step (Continue needs data the check cannot invent); N6 and 2.14 would report the truncated trigger there",
+  "why": "in scope; needs the wizard walk to reach step 2",
+  "by": "claude (LLM)",
+  "confirmed": false
+ },
+ "cmvgvmfdf005tla06pp5nviws": {
+  "bucket": "OUT OF SCOPE",
+  "summary": "Year of birth should start at 2008",
+  "why": "product decision",
+  "by": "claude (LLM)",
+  "confirmed": false
+ },
+ "cmvgvkkmq0057la069i447g30": {
+  "bucket": "OUT OF SCOPE",
+  "summary": "Add a 'I have read the sanctions list' tick on onboarding",
+  "why": "compliance decision",
+  "by": "claude (LLM)",
+  "confirmed": false
+ },
+ "cmvgvhmo7004sla06tsmxo41j": {
+  "bucket": "OUT OF SCOPE",
+  "summary": "Hide the browser's link preview on hover",
+  "why": "browser behaviour, not the product",
+  "by": "claude (LLM)",
+  "confirmed": false
+ },
+ "cmvgvfe5g004ela068uhrfa71": {
+  "bucket": "OUT OF SCOPE",
+  "summary": "Centre the cookie banner buttons",
+  "why": "design decision",
+  "by": "claude (LLM)",
+  "confirmed": false
  }
 }

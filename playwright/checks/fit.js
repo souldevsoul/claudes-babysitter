@@ -59,6 +59,10 @@ export const textCutOff = (page) => page.evaluate(() => {
     const faint = col[3] * op <= 0.25;
     const report = (what, kind) => add(faint ? eye : hard, el, what, kind);
     if (done.has(el)) continue;
+    // a line clamp (on the element or a box above it) truncates on purpose
+    let clamped = false;
+    for (let p = el; p && p !== document.body && !clamped; p = p.parentElement) clamped = parseFloat(getComputedStyle(p).webkitLineClamp || "0") > 0;
+    if (clamped) continue;
 
     /* ellipsis — the element (or the one it sits in, up to the option) truncates its text */
     let trunc = null;
@@ -134,9 +138,12 @@ export const textCutOff = (page) => page.evaluate(() => {
     if (scrolled) continue;
 
     /* spill — out of the painted box it sits in (button, badge, card) */
+    if (reachX || reachY) continue; // inside a scroller that scrolls: what is past its box is reachable
     for (let child = el, a = el; a && a !== document.body; child = a, a = a.parentElement) {
       if (a !== el && /^(absolute|fixed)$/.test(getComputedStyle(child).position)) break; // hung on the box on purpose
       const as = getComputedStyle(a);
+      // a box that clips or scrolls is judged by the "cut" rules above, a line clamp is deliberate
+      if (a !== el && (as.overflowX !== "visible" || as.overflowY !== "visible" || parseFloat(as.webkitLineClamp || "0") > 0)) break;
       if (!paints(a, as)) continue;
       const q = a.getBoundingClientRect();
       if (q.width >= vw - 2 || q.height >= vh * 0.9) break; // a page band, not a box

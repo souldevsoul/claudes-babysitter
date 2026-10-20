@@ -240,6 +240,16 @@ const reached = new Set(all.map((r) => templateFor(r.path)).filter(Boolean));
 crawlReport.missingDynamic = dynamic.filter((t) => !reached.has(t) && !(cfg.sampleParams && Object.keys(cfg.sampleParams).length));
 writeFileSync(resolve(dir, "routes.json"), JSON.stringify(all, null, 2));
 if (!all.length) { writeFileSync(resolve(dir, "crawl.json"), JSON.stringify(crawlReport, null, 2)); console.error(`claudes-babysitter: the crawl found NO page on ${base} (every seed failed, answered ≥ 400 or left the site) — nothing would be checked`); process.exit(1); }
+// 5.2.0: the stage (live / test) from the Nexus project status, unless babysitter.config.json → stage says it
+try {
+  const { fetchStage, saveStage } = await import("../lib/stage.js");
+  const key = String(process.env.NEXUS_API_KEY || String(process.env.NEXUS_API_KEYS || "").split(",")[0] || "").trim();
+  const slug = cfg.nexus?.project || cfg.name;
+  if (!cfg.stage && process.env.NEXUS_URL && key && slug) {
+    const st = await fetchStage({ url: process.env.NEXUS_URL, key, slug });
+    if (st) { saveStage(resolve(dir, "stage.json"), st); crawlReport.stage = `${st.stage} (Nexus ${slug}: ${st.status})`; log(`stage: ${st.stage} (Nexus project ${slug} is ${st.status}) → .babysitter/stage.json`); }
+  } else if (cfg.stage) crawlReport.stage = `${cfg.stage} (babysitter.config.json)`;
+} catch (e) { log(`stage: Nexus not asked — ${String(e.message || e).split("\n")[0]}`); }
 writeFileSync(resolve(dir, "crawl.json"), JSON.stringify(crawlReport, null, 2));
 const byRole = crawlReport.roles.filter((r) => r.ok).map((r) => `${r.pages} as ${r.name}`).join(", ");
 log(`${publicRoutes.length} public${byRole ? ` + ${byRole}` : ""} pages → .babysitter/routes.json`);

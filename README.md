@@ -68,6 +68,17 @@ Or install it as a dev dependency: `npm i -D github:souldevsoul/claudes-babysitt
 | `docs/` | The guidelines the rules enforce |
 | `test/`, `fixtures/` | `npm test`: RuleTester, Stylelint fixtures, end-to-end cases |
 
+## What changed in 5.2.0 (the miss loop; text shown in full; one look per role; live vs test)
+
+`babysitter misses` turns every tester round into a catch rate and a to-do list: each card a person filed is CAUGHT,
+MISSED or OUT OF SCOPE (`misses/<product>-<date>.md`). This release closes the in-scope misses of the 16–20 October
+round on Praxis and Parallel (catch rate 0/30 and 0/19): text cut off or spilling at 360 (2.14), plain labels broken by
+letters (2.5), in-place steps and pages that keep the reader at the bottom (3.8 / 4.4), menus that do not scroll (3.5),
+sign-out that takes two tries (A4), Decline that does nothing (C6) and dead links in the cookie window (C7), login
+autofill (FM11), errors said twice (FM12), success dressed as an error (FM13), and buttons / tags whose corners differ
+from page to page (1.20). The stage (live or test, from the Nexus project status) gates test entities (ST1–ST3).
+Details: [`CHANGELOG.md`](CHANGELOG.md).
+
 ## What changed in 5.1.0 (false alarms from the Praxis and Parallel full runs)
 
 This release fixes the false alarms that the Praxis runs and issue #3 reported. Each fix has a fixture that also

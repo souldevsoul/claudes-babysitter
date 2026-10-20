@@ -2,6 +2,67 @@
 
 Earlier releases (4.11.1 and before) are described in the README under "What changed in …".
 
+## 5.2.0 — the miss loop: catch rate 0/30 on Praxis, 0/19 on Parallel; 24 of the 49 misses are now checks (2026-10-20)
+
+**Catch rate** (`babysitter misses`, cards since 2026-10-16, suggested buckets — a person confirms them in
+`misses/labels/*.json`): **Praxis 0/30** (52 cards: 30 missed, 22 out of scope), **Parallel 0/19** (47 cards: 19
+missed, 28 out of scope). No card of the round had been reported by a run before it was filed. The rate covers the
+cards Nexus lists through an API key (the ones with a severity); souldevsoul/nexus#1 lists the rest. Reports:
+`misses/praxis-2026-10-20.md`, `misses/parallel-2026-10-20.md`. 24 of the 49 missed cards became a fixture and a check
+in this release (`test/misses-520.test.mjs`, 22 fixtures: every one fails on 5.1.0 except the look-alike control); the
+other 25 are listed in the reports with the reason and the round they belong to (policy contradictions, currency and
+cookie-banner coverage are brief §4).
+
+**New command: `babysitter misses`** — people's Nexus cards for each adopted project (`misses/projects.json`) since
+the last run (`misses/state.json`), Admin and "QA · …" deploy cards left out, each card CAUGHT (the last run's
+`findings.json` reported it) / MISSED / OUT OF SCOPE, written to `misses/<product>-<date>.md` with the catch rate
+CAUGHT / (CAUGHT + MISSED). A heuristic or an LLM may suggest the bucket; the file marks it "suggested — needs human
+confirm" until the labels file says `confirmed: true`. Needs `NEXUS_URL` and `NEXUS_API_KEY`; the key is never printed.
+
+**New: stage — live or test.** `babysitter prepare` reads the Nexus project status (LIVE = live, anything else =
+test) into `.babysitter/stage.json`; `"stage"` in `babysitter.config.json` overrides it. ST1 (live): no test or
+generated entity is shown. ST2 (test): a test entity carries a visible marker ("Test profile", `data-test-entity`).
+ST3 (test): the catalog lists an entity, one can be hired, every role has a test account (`test/stage.test.mjs`).
+
+Why the old checks passed, and what changed:
+- **2.14 text is shown in full (new, `playwright/checks/fit.js`).** 2.1 called anything cut by `body { overflow-x:
+  hidden }` or a full-width `overflow-x-hidden` page root "decorative bleed"; 2.10 measures controls, not a price or a
+  label; N6 looked for an ellipsis in buttons only. Now the glyphs are measured: cut by the screen edge or a clipping
+  box, hidden below a screen-tall fixed panel that does not scroll, spilling out of their button / badge / card, a
+  list option truncated. Page, every language, every state. (Praxis: hero CTA in az/kk, close-band CTA, task header
+  price, status timeline, "Azərbaycan…", /contact topic list; Parallel: the Task Details drawer.)
+- **2.5** also measures short plain labels: "Səhifə 1 / 2" and "ТАПСЫРМА" were `<span>`s, never candidates.
+- **3.8 / 4.4 an in-place step opens at its top.** The states run judged only a new h1–h4 against the window. Now the
+  changed region's top is measured in its own scroll box (a dialog that scrolls itself), re-found after React replaces
+  it, Back is pressed once, a Next that waits for an option gets one, and a form whose first button is Back is walked.
+  (Praxis brief wizard and task-board pager, Praxis onboarding, Parallel /onboarding Back / Continue.)
+- **3.5** the open mobile menu: an item nothing can scroll to is hard (scrollIntoView also scrolls an
+  `overflow: hidden` panel, which a finger cannot). (Parallel signed-in menu.)
+- **A4 sign out**: it was skipped on every run of a role-based project (it needed `LOGIN_EMAIL`); it now signs in with
+  the first role's credentials, presses the confirmation (a dialog or a /logout page), and checks the host. The
+  signed-in acceptance and forms suites use a role's storage when there is no default one. (Parallel.)
+- **C6** Decline really declines and is remembered; **C7** a link in the cookie settings opens its page and closes the
+  window. C1 only checked that a Reject button exists. (Parallel, Praxis.)
+- **FM11** autocomplete: a sign-up with a name and an e-mail before the password needs `autocomplete="username"`.
+  **FM12** one failed submit, one error (not a toast and an inline message). **FM13** success does not wear the
+  error's look. (Praxis login autofill, Parallel login errors.)
+- **1.20 one look per role across pages (new, `playwright/checks/looks.js`).** 1.17 compares each piece with the site's
+  median as square / rounded, and skipped a badge with a dot; 1.3/1.16 count filled buttons and cards only. Now
+  buttons, chips, badges, cards and inputs are compared page by page: square here, round elsewhere is hard; rounded vs
+  pill, a change of case and a radius more than 4px apart are soft. (Parallel How It Works, Pending tag, square frames.)
+
+Live, narrow runs of the new and changed checks (Praxis and Parallel production, 360 + 1440, signed in as the QA
+account): the real defects of the round were already fixed on both sites, and the checks stay quiet on them; they
+found what was still there — Parallel /register has no `autocomplete="username"` (the Praxis autofill bug, FM11) and a
+specialist name "Amani" cut to "Aman…" at 360 (2.14). 1.20 also reports, as soft (check by eye): the Praxis
+dashboard CTAs in normal case beside UPPER CASE CTAs everywhere else, the Praxis /pricing top-up field rounded beside
+pill fields, and the Parallel /contact topic chips in normal case beside UPPER CASE filter chips. A4 (sign out, now
+run for the first time on both), ST2 and ST3 pass on both sites: both run APP_STAGE=test and show "Test profile" on
+their test specialists. Not reached live: the Praxis brief wizard (behind a service choice) and both onboarding
+wizards (Continue needs data the check cannot invent); their fixtures cover them. The false alarms of the first live pass were fixed, each
+pinned by a fixture (a bordered scroll box, a line-clamped card button, a rows-per-page trigger, chips vs badges,
+"QA & Test Automation", the account's own e-mail in settings, a catalog of dossier buttons, a /logout confirmation page).
+
 ## 5.1.0 — false alarms from the full runs on Praxis and Parallel (issue #3) (2026-10-19)
 
 Each one has a fixture in `test/fp-510.test.mjs` that proves the false alarm is gone and that the real defect it looks

@@ -738,7 +738,12 @@ export async function signOutOnce(page, { home }) {
     if (!(await clickControl(page, SIGN_OUT_RE)))
         return [{ id: "A4", what: "no visible Sign out / Log out control (also looked inside header menus) [A4]", where: "header" }];
     await page.waitForTimeout(700);
-    const confirm = page.locator("[role=dialog], [role=alertdialog], dialog[open]").locator("button, a").filter({ hasText: /^\s*(sign ?out|log ?out|yes(,? sign ?out)?|confirm|выйти|да)\s*$/i }).filter({ visible: true }).first();
+    // the confirmation: a "Sign out?" dialog, or a sign-out page of its own (Parallel /logout: "Sign out? [Sign out]")
+    const YES = /^\s*(sign ?out|log ?out|yes(,? sign ?out)?|confirm|выйти|да)\s*$/i;
+    await page.waitForLoadState("load", { timeout: 10_000 }).catch(() => { });
+    let confirm = page.locator("[role=dialog], [role=alertdialog], dialog[open]").locator("button, a").filter({ hasText: YES }).filter({ visible: true }).first();
+    if (!(await confirm.isVisible().catch(() => false)) && /\/(log-?out|sign-?out)\b/i.test(new URL(page.url()).pathname))
+        confirm = page.locator("main button, main a, body > div button").filter({ hasText: YES }).filter({ visible: true }).first();
     let confirmed = false;
     if (await confirm.isVisible().catch(() => false)) { await confirm.click({ timeout: 3000 }).catch(() => { }); confirmed = true; }
     await page.waitForTimeout(2000);

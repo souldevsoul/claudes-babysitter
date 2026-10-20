@@ -1,17 +1,17 @@
 {
   "projects": {
     "praxis": {
-      "lastRun": "2026-10-20T14:09:01.554Z",
+      "lastRun": "2026-10-20T16:30:01.183Z",
       "since": "2026-10-16T00:00:00Z",
       "cards": 52,
       "catchRate": "0/30 = 0%",
       "report": "misses/praxis-2026-10-20.md"
     },
     "parallel": {
-      "lastRun": "2026-10-20T14:09:04.477Z",
+      "lastRun": "2026-10-20T16:30:03.062Z",
       "since": "2026-10-16T00:00:00Z",
-      "cards": 42,
-      "catchRate": "0/18 = 0%",
+      "cards": 47,
+      "catchRate": "0/19 = 0%",
       "report": "misses/parallel-2026-10-20.md"
     }
   }

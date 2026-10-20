@@ -9,8 +9,8 @@
 // collectRoleLooks reads, per page, the rendered look of each piece by role — button (filled / outlined), tag (badge,
 // chip, status pill), card, input — and roleLookOutliers compares them ACROSS pages: for every role the look most
 // pages use is the site's; a page whose pieces of that role look different is reported with the pages it differs from.
-//   hard — the corner family differs (square vs rounded vs pill), or a button variant changes case (UPPER vs normal);
-//   soft — the same family with a radius more than 4px apart (6px here, 16px there).
+//   hard — square corners on one page, round ones (rounded or pill) on the others;
+//   soft — rounded vs pill, a button / chip in UPPER CASE here and normal case there, or a radius more than 4px apart.
 // Pieces that are part of a frame (attached: some corners square, some round) are left out. Needs checks.install(page).
 
 export const collectRoleLooks = (page, route = "") => page.evaluate((route) => {
@@ -43,10 +43,16 @@ export const collectRoleLooks = (page, route = "") => page.evaluate((route) => {
   for (const el of Array.from(document.querySelectorAll("button, a, [role=button], input[type=submit], input[type=button]"))) {
     if (!W.__uiVisible(el) || skip(el) || !((el.textContent || "").trim() || el.value)) continue;
     if (el.closest("nav, [role=navigation], footer, [role=contentinfo], [role=tablist], [role=radiogroup], [role=toolbar]") || el.matches(CHIP)) continue;
+    // a dropdown trigger (rows per page "10") is a field-like control, not a button look
+    if (el.matches("[aria-haspopup]:not([aria-haspopup=false]), [role=combobox], [aria-expanded]")) continue;
     const cs = getComputedStyle(el), r = el.getBoundingClientRect();
     const filled = filledOf(el, cs), outlined = edges(cs) >= 4;
     if (!(filled || outlined) || r.height < 28 || r.height > 72 || parseFloat(cs.paddingLeft) < 8) continue;
     if (el.matches("a") && !W.__uiButtonLike(el)) continue;
+    // three or more look-alikes side by side (skill links, filter chips in a list): chips, not buttons
+    const sibs = (el.closest("li") || el).parentElement ? Array.from((el.closest("li") || el).parentElement.children).filter((k) => W.__uiVisible(k)) : [];
+    const rowOf = sibs.filter((k) => { const x = k.matches("a, button") ? k : k.querySelector("a, button"); return x && x.className === el.className; });
+    if (rowOf.length >= 3 && new Set(rowOf.map((k) => Math.round(k.getBoundingClientRect().top))).size < rowOf.length) { push(el, "chip", { upper: upper(el, cs) }); continue; }
     push(el, filled ? "button (filled)" : "button (outlined)", { upper: upper(el, cs) });
   }
   // tags: badges, status pills, chips — small painted boxes with a short label (a dot or an icon inside is fine)
@@ -61,7 +67,8 @@ export const collectRoleLooks = (page, route = "") => page.evaluate((route) => {
     if (!/inline|flex/.test(cs.display) && !el.matches(CHIP)) continue;
     // not a CTA (those are buttons above) and not a whole row
     if (W.__uiButtonLike(el) && r.height >= 28 && !el.matches(CHIP)) continue;
-    push(el, "tag", { upper: upper(el, cs) });
+    // a chip you press (a filter, a topic) and a badge you read (a status) are two roles with their own looks
+    push(el, el.matches("button, a, [role=button], " + CHIP) ? "chip" : "badge", { upper: upper(el, cs) });
   }
   // cards: framed boxes of content
   for (const el of Array.from(document.querySelectorAll("main *, body > div *"))) {
@@ -76,9 +83,11 @@ export const collectRoleLooks = (page, route = "") => page.evaluate((route) => {
   // text fields (an underline-only field has no corners to compare)
   for (const el of Array.from(document.querySelectorAll('input:not([type=hidden]):not([type=checkbox]):not([type=radio]):not([type=range]):not([type=color]):not([type=file]):not([type=submit]):not([type=button]), textarea, [role=combobox]'))) {
     if (!W.__uiVisible(el) || skip(el)) continue;
-    const cs = getComputedStyle(el);
+    const cs = getComputedStyle(el), r = el.getBoundingClientRect();
     if (edges(cs) < 3 && !filledOf(el, cs)) continue;
-    push(el, "input");
+    // a compact pill trigger (rows per page "10") is a chip, not a field
+    if (el.matches("button, [role=combobox]:not(input)") && parseFloat(cs.borderTopLeftRadius) >= r.height / 2 - 1 && r.height <= 36) continue;
+    push(el, "input", { multiline: el.tagName === "TEXTAREA" });
   }
   return out;
 }, route);
@@ -94,8 +103,11 @@ export function roleLookOutliers(items, { radiusTolerance = 4 } = {}) {
     const list = items.filter((x) => x.role === role);
     const pages = [...new Set(list.map((x) => x.route))];
     if (pages.length < 2) continue;
-    const button = /^button|^tag/.test(role);
-    const keyOf = (x) => `${x.family}${button ? (x.upper ? " · UPPER CASE" : " · normal case") : ""}`;
+    // case is part of a button's and a chip's look; badges (a status in capitals, a category in words) may differ
+    const button = /^button|^chip/.test(role);
+    // hard: square vs round corners. soft: rounded vs pill, and (buttons, chips) UPPER vs normal case
+    const keyOf = (x) => (x.family === "square" ? "square" : "round");
+    const fine = (x) => `${x.family}${button ? (x.upper ? " · UPPER CASE" : " · normal case") : ""}`;
     // the site's look: the one most pages use (a page votes for each look it shows), then the most pieces
     const byLook = new Map();
     for (const x of list) { const k = keyOf(x); const e = byLook.get(k) || { pages: new Set(), n: 0, ex: x }; e.pages.add(x.route); e.n++; byLook.set(k, e); }
@@ -111,8 +123,21 @@ export function roleLookOutliers(items, { radiusTolerance = 4 } = {}) {
         hard.push({ what: `${role} looks different on ${route}: ${n} piece(s) are ${k}, while ${others.length} other page(s) (${others.slice(0, 4).join(", ")}${others.length > 4 ? ", …" : ""}) use ${siteKey} — one look per role across the site: use the kit component's variant here [1.20, P04 P46]`, where: `${route} ${ex.where}`, selector: ex.selector, human: ex.human, role, route });
       }
     }
+    // the softer differences, the same way: rounded vs pill (not for cards and multi-line fields), case
+    {
+      const sub = list.filter((x) => keyOf(x) === siteKey && x.family !== "square" && !x.multiline && role !== "card");
+      const by = new Map();
+      for (const x of sub) { const k = fine(x); const e = by.get(k) || { pages: new Set(), n: 0 }; e.pages.add(x.route); e.n++; by.set(k, e); }
+      const rk = [...by.entries()].sort((a, b) => b[1].pages.size - a[1].pages.size || b[1].n - a[1].n);
+      if (rk.length > 1) for (const [k, e] of rk.slice(1)) for (const route of e.pages) {
+        const others = [...rk[0][1].pages].filter((p) => p !== route);
+        const ex = sub.find((x) => x.route === route && fine(x) === k);
+        if (others.length) soft.push({ what: `${role} on ${route} is ${k}, the site's is ${rk[0][0]} (${others.slice(0, 4).join(", ")}${others.length > 4 ? ", …" : ""}) [1.20]`, where: `${route} ${ex.where}`, selector: ex.selector, human: ex.human, role, route });
+      }
+    }
     // same family, different radius between pages (a 6px button here, 16px elsewhere): soft
-    const fam = list.filter((x) => keyOf(x) === siteKey && x.family === "rounded");
+    // (cards are left out here: a panel and a card are often two radius tokens on purpose; their family still counts)
+    const fam = role === "card" ? [] : list.filter((x) => x.family === "rounded" && !x.multiline);
     if (fam.length) {
       const radii = fam.map((x) => x.radius).sort((a, b) => a - b);
       const median = radii[Math.floor(radii.length / 2)];

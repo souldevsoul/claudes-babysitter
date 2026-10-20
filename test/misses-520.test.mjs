@@ -127,7 +127,7 @@ try {
     await load(page, doc(row("flex-shrink:0;max-width:50%"), { lang: "kk" }));
     assert.deepEqual(hits(await pageChecks(page), "lab"), []);
   }, PHONE);
-  await test("2.14 / 2.5 stay quiet on look-alikes: carousel track, marquee, line clamp, long title ellipsis, closed accordion, scrolling table, off-canvas drawer, sr-only, faint watermark, a long URL in a paragraph", async (page) => {
+  await test("2.14 / 2.5 stay quiet on look-alikes: carousel track, marquee, line clamp, a bordered scroll box (Praxis /onboarding agreement), a clamped card button (Parallel task cards), long title ellipsis, closed accordion, scrolling table, off-canvas drawer, sr-only, faint watermark, a long URL in a paragraph", async (page) => {
     await load(page, doc(`<main style="padding:16px">
       <div id="carousel" style="overflow:hidden;width:300px"><div style="display:flex;width:900px">${[1, 2, 3].map((i) => `<div style="flex:0 0 300px;padding:8px;border:1px solid #ccc">Slide ${i} with a caption</div>`).join("")}</div></div>
       <div style="overflow:hidden;width:320px"><div id="marquee" style="display:flex;gap:40px;white-space:nowrap;animation:mq 8s linear infinite">${"<span>Brand · Logo · Deck · Site · </span>".repeat(4)}</div></div>
@@ -140,6 +140,8 @@ try {
       <div style="position:relative;overflow:hidden;height:120px"><span id="wm" style="position:absolute;left:-40px;font-size:120px;color:rgba(0,0,0,.06);white-space:nowrap">PRAXIS STUDIO</span></div>
       <p style="width:200px;overflow-wrap:anywhere">Write to https://praxis-soultosoul.vercel.app/contact?topic=account-signing-in for help.</p>
       <label style="display:block;width:200px">Email address</label>
+      <div style="height:200px;overflow-y:auto;border:1px solid #ccc;border-radius:8px;padding:8px">${"<p>1.3 You work as an independent contractor and keep your own tools and hours.</p>".repeat(8)}</div>
+      <button style="display:block;width:300px;height:120px;border:1px solid #ccc;border-radius:12px;text-align:left;overflow:hidden"><p style="display:-webkit-box;-webkit-line-clamp:3;-webkit-box-orient:vertical;overflow:hidden;margin:0">${"I am looking to automate a workflow between our CRM and the support inbox. ".repeat(6)}</p></button>
     </main>`, { head: "@keyframes mq{from{transform:translateX(0)}to{transform:translateX(-50%)}}" }));
     await page.waitForTimeout(300);
     const list = await pageChecks(page);
@@ -366,12 +368,19 @@ try {
     "/how-it-works": PAGE(`<h1>How it works</h1>${filledBtn} ${outlineBtn(how)} ${outlineBtn(how).replace("See pricing", "Sign up")}`),
     "/dashboard/tasks/1": PAGE(`<h1>Logo for a bakery</h1>${card(`${status(task)} <p>Brief</p>`)}`),
   });
-  await test("51rbik / qeobrx / 1kxkew 1.20: How It Works buttons are 4px-rounded UPPER CASE outlines while every other page uses pill outlines; the task page's Pending tag (a dot + a label) is square while tags are pills elsewhere (Parallel)", async () => {
-    const bad = await siteWide(sitePages(`display:inline-flex;align-items:center;height:44px;padding:0 20px;border-radius:4px;text-decoration:none;text-transform:uppercase;letter-spacing:.08em;font-size:12px`, "border-radius:0"));
+  await test("51rbik / qeobrx / 1kxkew 1.20: How It Works buttons are square UPPER CASE outlines while every other page uses pill outlines; the task page's Pending tag (a dot + a label) is square while tags are pills elsewhere (Parallel)", async () => {
+    // (2d5e78a: the step links were "the square uppercase filter chip"; 1.17 alone could flag those, not the badge)
+    const bad = await siteWide(sitePages(`display:inline-flex;align-items:center;height:44px;padding:0 20px;border-radius:0;text-decoration:none;text-transform:uppercase;letter-spacing:.08em;font-size:12px`, "border-radius:0"));
     assert.ok(bad.some((f) => /how-it-works/.test(`${f.where} ${f.what}`)), `the How It Works buttons are reported\n${show(bad)}`);
     assert.ok(bad.some((f) => /dashboard\/tasks\/1/.test(`${f.where} ${f.what}`) && /status|Pending|tag/i.test(`${f.where} ${f.what} ${f.role || ""}`)), `the square Pending tag is reported\n${show(bad)}`);
     const good = await siteWide(sitePages(pill, "border-radius:999px"));
     assert.deepEqual(good, []);
+    // live false alarms (Parallel): a pill "rows per page" trigger is not a button look; filter chips you press and
+    // status badges you read may differ in case
+    const extra = sitePages(pill, "border-radius:999px");
+    extra["/specialists"] = extra["/specialists"].replace("</main>", `<button aria-haspopup="listbox" style="${pill};background:#222;color:#fff;text-transform:uppercase">10</button><button aria-pressed="false" style="display:inline-flex;height:24px;padding:0 10px;border-radius:999px;border:1px solid #333;font-size:12px">Ship an MVP</button></main>`);
+    extra["/dashboard/tasks/1"] = extra["/dashboard/tasks/1"].replace("Pending", "PENDING");
+    assert.deepEqual(await siteWide(extra), []);
   });
 } finally {
   await browser.close();

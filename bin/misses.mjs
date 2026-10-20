@@ -38,7 +38,7 @@ for (const p of projects) {
   try {
     const r = await runMisses({ slug: p.slug, product: p.name || p.slug, since: one("--since"), findingsFiles: findings, labelsFile, outDir, stateFile, version, write: !has("--dry-run"), authors: has("--authors"), excludeAuthors: p.excludeAuthors });
     const x = r.rate;
-    console.log(`${p.name || p.slug}: catch rate ${x.text} — CAUGHT ${x.caught} · MISSED ${x.missed} · OUT OF SCOPE ${x.oos} (${x.total} cards${x.unconfirmed ? `, ${x.unconfirmed} suggested — need a person to confirm` : ""})${findings.length ? "" : " — no findings.json given: nothing can be CAUGHT"}`);
+    console.log(`${p.name || p.slug}: catch rate ${x.text} — CAUGHT ${x.caught} · MISSED ${x.missed} · OUT OF SCOPE ${x.oos} (${x.total} cards${x.unconfirmed ? `, ${x.unconfirmed} suggested — need a person to confirm` : ""})${findings.length ? "" : " — no findings.json given: nothing can be CAUGHT"}${r.unseen ? ` — ${r.unseen} of ${r.total} project cards not visible through the API (souldevsoul/nexus#1)` : ""}`);
     console.log(has("--dry-run") ? r.text : `  → ${r.file}`);
   } catch (e) {
     failed++;

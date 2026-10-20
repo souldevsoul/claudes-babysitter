@@ -73,7 +73,7 @@ await test("fetchCards: Bearer key in the header only; an HTTP error never echoe
   const fetchImpl = async (url, opts) => { seen.push({ url, auth: opts.headers.Authorization }); return { ok: true, status: 200, text: async () => JSON.stringify(CARDS) }; };
   const list = await M.fetchCards({ url: "https://nexus.test", key: KEY, slug: "shop", fetchImpl });
   assert.equal(list.length, CARDS.length);
-  assert.equal(seen[0].url, "https://nexus.test/api/mcp/projects/shop/bugs?limit=2000");
+  assert.equal(seen[0].url, "https://nexus.test/api/mcp/projects/shop/bugs?limit=5000&all=1");
   assert.equal(seen[0].auth, `Bearer ${KEY}`);
   assert.ok(!seen[0].url.includes(KEY));
   await assert.rejects(M.fetchCards({ url: "https://nexus.test", key: KEY, slug: "nope", fetchImpl: async () => ({ ok: false, status: 404, text: async () => `{"error":"Project not found","key":"${KEY}"}` }) }), (e) => !String(e.message).includes(KEY) && /HTTP 404/.test(e.message));
@@ -90,13 +90,14 @@ await test("runMisses: since = the state's last run when not given; writes the r
     const stateFile = join(dir, "state.json");
     writeFileSync(stateFile, JSON.stringify({ projects: { shop: { lastRun: "2026-10-16T12:30:00Z" } } }));
     writeFileSync(join(dir, "findings.json"), JSON.stringify(FINDINGS));
-    const fetchImpl = async () => ({ ok: true, status: 200, text: async () => JSON.stringify(CARDS) });
+    const fetchImpl = async (u) => ({ ok: true, status: 200, text: async () => JSON.stringify(/\/bugs/.test(u) ? CARDS : { _count: { cards: CARDS.length + 5 } }) });
     const r = await M.runMisses({ slug: "shop", product: "Shop", findingsFiles: [join(dir, "findings.json")], outDir: dir, stateFile, version: "9.9.9", env: { NEXUS_URL: "https://n.test", NEXUS_API_KEY: KEY }, fetchImpl, now: new Date("2026-10-20T08:00:00Z") });
     assert.deepEqual(r.rows.map((x) => x.short), ["fff666", "ggg777"], "only cards after the last run");
     assert.equal(r.file, join(dir, "shop-2026-10-20.md"));
     const md = readFileSync(r.file, "utf8");
     assert.match(md, /Catch rate: 0\/1 = 0%/);
     assert.match(md, /suggested — needs human confirm/);
+    assert.match(md, /Not seen: 5 of the project's 12 cards/, "cards the API does not list are counted out loud");
     assert.ok(!md.includes(KEY), "the key is never written");
     assert.ok(!md.includes("Tester") && !md.includes("Owner"), "authors are left out by default (public repo)");
     const st = JSON.parse(readFileSync(stateFile, "utf8"));

@@ -23,6 +23,13 @@ Per-page checks run at 390 px and 1440 px. Site-wide checks run once, at 1440 px
 
 Write the check's ID into `acceptance.skip`, and the reason into `acceptance.skipReasons`. The reason is printed in the report, and a human approves it.
 
+## Stage: live or test (5.2.0)
+
+The stage comes from the Nexus project status (LIVE = live, anything else = test): `babysitter prepare` asks Nexus
+when `NEXUS_URL` and `NEXUS_API_KEY` are set (project slug: `nexus.project`, else `name`) and writes
+`.babysitter/stage.json` (stage, status, and whether testCredentials exist — never the credentials). Override it
+with `"stage": "live" | "test"` in `babysitter.config.json`. With no stage known, ST1–ST3 are skipped and say so.
+
 ## Owner decisions (`babysitter.config.json` → `acceptance`)
 
 | Key | Default | Why it is a decision |
@@ -74,6 +81,9 @@ Write the check's ID into `acceptance.skip`, and the reason into `acceptance.ski
 | C2 | The banner offers Analytics or Marketing only when such scripts actually load after "Accept all". | 12 products |
 | C4 | Closing the preferences closes everything; the banner does not stay underneath. | 2 products |
 | C5 | Only strictly necessary cookies are locked on. | 1 product |
+| ST1 | Stage live: no test or generated entity is shown (an entity named "… Test", "Demo client", a QA / example.com e-mail, a `[test]` tag, anything marked `data-test-entity`). (5.2.0) | Praxis |
+| ST2 | Stage test: a test entity carries a visible marker next to its name (`data-test-entity` with text, a "Test" / "Demo" / "Тест" badge, or `stageGates.testMarker`). (5.2.0) | owner rule |
+| ST3 | Stage test: the main flows can be walked — every catalog page (`catalog`, default /specialists, /experts, /catalog, /tasks …) lists an entity, one of them can be hired (an enabled Hire / Request / Book), every role has a test account and the Nexus project has testCredentials. (5.2.0) | owner rule |
 | C6 | Decline / Reject really declines: the banner closes, nothing beyond what is strictly necessary is stored (cookies, localStorage, sessionStorage; `acceptance.essentialStorage` names more), no analytics host is called, and the choice persists after a reload and on the next page. (5.2.0) | Parallel |
 | C7 | A link inside the cookie settings (or any open dialog) opens its page and the dialog closes; it never navigates under a still-open window. Run at one phone and one desktop width. (5.2.0) | Praxis |
 

@@ -6,7 +6,10 @@
 import { test, expect, type Page, type Browser } from "@playwright/test";
 import * as c from "./checks.js";
 import * as a from "./acceptance.js";
-import { loadConfig, loadRoutes, STORAGE, storageFor } from "./project.js";
+import * as stg from "./checks/stage.js";
+import { resolveStage } from "../lib/stage.js";
+import { loadConfig, loadRoutes, STORAGE, STATE_DIR, storageFor } from "./project.js";
+import { resolve } from "node:path";
 import { existsSync } from "node:fs";
 
 const cfg = loadConfig();
@@ -18,6 +21,9 @@ const AUTH = ROUTES.filter((r) => r.auth);
 // have storage-<role>.json only, and every "signed in" test here was skipped on them)
 const SIGNED_STORE = existsSync(STORAGE) ? STORAGE : ((cfg.roles || []) as any[]).map((r) => storageFor(r.name)).find((f) => existsSync(f)) || STORAGE;
 const SIGNED_IN = existsSync(SIGNED_STORE);
+// 5.2.0: live or test (babysitter.config.json → stage, else what prepare read from the Nexus project status)
+const STAGE = resolveStage(cfg, resolve(STATE_DIR, "stage.json"));
+const CATALOG = ((cfg.catalog as string[] | undefined) || PUBLIC.map((r) => r.path).filter((p) => /^\/(specialists|experts|catalog|marketplace|freelancers|talent)$/.test(p)));
 const STRICT = process.env.STRICT !== "0";
 const on = (id: string) => !(acc.skip || []).includes(id);
 const why = (id: string) => `${id} switched off in babysitter.config.json → acceptance.skip${acc.skipReasons?.[id] ? `: ${acc.skipReasons[id]}` : ""}`;
@@ -56,6 +62,13 @@ for (const route of ROUTES) {
     // N6 is a layout check (a label that fits at 390 can be cut at 360 or 768): it runs at every viewport
     test.beforeEach(({}, info) => { if (!/^N6 /.test(info.title)) twoWidths(); });
 
+    test("ST1/ST2 stage: no test entity on a live site; in testing every test entity is marked as one [stage]", async ({ page }) => {
+      test.skip(!STAGE, "stage unknown: set babysitter.config.json → stage (live | test), or run prepare with NEXUS_URL / NEXUS_API_KEY");
+      test.skip(route.auth, "what the public sees: a signed-in page shows the user's own (test) account to itself");
+      await open(page, r);
+      const marker = (cfg.stageGates as any)?.testMarker || null;
+      hard(STAGE!.stage === "live" ? await stg.liveTestEntities(page, { marker }) : await stg.unmarkedTestEntities(page, { marker }));
+    });
     test("B1 no build notes or self-justifying copy [BQA 5]", async ({ page }) => {
       test.skip(!on("B1"), why("B1"));
       // B1 = CT1: content.spec reports these phrases (every page, every language) — B1 runs only when it is not in the run
@@ -168,6 +181,28 @@ test.describe("acceptance site-wide", () => {
     await open(page, PUBLIC[0]?.path || "/");
     hard((await a.cookieConsent(page)).filter((o) => on(o.id)));
     await ctx.close();
+  });
+
+  test("ST3 stage test: the main flows can be walked — the catalog lists entities, one can be hired, every role has a test account [stage]", async ({ browser }) => {
+    test.skip(!STAGE || STAGE.stage !== "test", STAGE ? "stage is live: ST1 applies instead" : "stage unknown");
+    const out: O[] = [];
+    if (STAGE!.testCredentials === false) out.push({ what: "the Nexus project has no test credentials — put a test account per role in its testCredentials [ST3, stage test]", where: "Nexus project" });
+    for (const r of (cfg.roles || []) as any[]) if (!a.credentials({ roles: [r] })) out.push({ what: `role "${r.name}" has no test account here (env ${Object.values(r.env || {}).join(" / ")} not set) — its flows cannot be walked [ST3, stage test]`, where: `roles.${r.name}` });
+    if (!CATALOG.length) test.info().annotations.push({ type: "not tested", description: "no catalog page (babysitter.config.json → catalog: [\"/specialists\"])" });
+    for (const path of CATALOG) {
+      const ctx = await ctxFor(browser, false);
+      const page = await ctx.newPage();
+      await open(page, path);
+      const cs = await stg.catalogState(page, path);
+      let hire = cs.hireable;
+      const any = cs.items.length + cs.buttons;
+      if (!any) out.push({ what: `the catalog ${path} lists no entity${cs.empty ? " (it says it is empty)" : ""} — in testing it needs at least one approved (test) entity, so hire → messages → completion can be walked [ST3, stage test]`, where: path });
+      else if (!hire && cs.items.length) { await open(page, cs.items[0]); hire = (await stg.catalogState(page, cs.items[0])).hireable; }
+      else if (!hire) { await page.locator("[data-bs-entity]").first().click({ timeout: 3000 }).catch(() => {}); await page.waitForTimeout(1200); hire = (await stg.catalogState(page, path)).hireable; }
+      if (any && !hire) out.push({ what: `nothing on ${path}${cs.items[0] ? ` or ${cs.items[0]}` : " or the first entity it opens"} can be hired (no enabled Hire / Request / Book control) — approve at least one test entity that can be hired [ST3, stage test]`, where: cs.items[0] || path });
+      await ctx.close();
+    }
+    hard(out);
   });
 
   test("C6 Decline declines: the banner closes, nothing non-essential is stored, the choice persists (reload, next page) [BQA 7]", async ({ browser }) => {
