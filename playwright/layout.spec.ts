@@ -20,7 +20,7 @@ type F = { what: string; where: string };
 const fmt = (list: F[]) => list.map((o) => `  • ${o.what} — ${o.where}`).join("\n");
 
 async function goto(page: Page, route: string, idleCap = 8_000) {
-  const resp = await page.goto(route, { waitUntil: "load", timeout: 45_000 }).catch(() => page.goto(route, { waitUntil: "domcontentloaded", timeout: 30_000 }));
+  const resp = await c.gotoStable(page, route);
   await page.waitForLoadState("networkidle", { timeout: idleCap }).catch(() => {});
   return resp;
 }
@@ -31,6 +31,8 @@ async function open(page: Page, route: string) {
   await page.waitForTimeout(800);
   if (await c.applyColorScheme(page)) await page.waitForTimeout(300);
   await c.revealLazy(page);
+  // a modal open on arrival hides the page from every check behind it (parallel: ~75 failures from one notice): close it, report it once
+  await c.dismissArrivalModal(page);
   return resp ? resp.status() : 0;
 }
 const hard = (list: F[]) => expect(list, fmt(list)).toEqual([]);
@@ -125,7 +127,7 @@ for (const route of ROUTES) {
     test("money: amounts formatted the same way in every currency of the switcher [price-rounding currency-format number-format]", async ({ page }) => {
       test.setTimeout(180_000);
       await open(page, r);
-      const m = await L.moneyFormat(page, Number(lay.maxCurrencies ?? 8));
+      const m = await L.moneyFormat(page, Number(lay.maxCurrencies ?? 8), { rateDecimals: Number(lay.rateDecimals ?? 4) });
       test.info().annotations.push({ type: "currencies", description: `${m.switcher ? `switcher (${m.switcher}): ` : "no switcher: "}${m.tested.join(", ")}` });
       notes("money", m.notTested);
       soft(m.soft, "money formatting");

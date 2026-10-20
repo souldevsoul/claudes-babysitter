@@ -28,12 +28,15 @@ function soft(list: O[], label: string) {
   else test.info().annotations.push({ type: "warning", description: `${label}\n${fmt(list)}` });
 }
 
-async function open(page: Page, route: string) {
+async function open(page: Page, route: string, { keepModal = false } = {}) {
   await c.install(page);
-  await page.goto(route, { waitUntil: "networkidle" }).catch(() => page.goto(route, { waitUntil: "load" }));
+  await c.gotoStable(page, route, { waitUntil: "networkidle", fallback: "load" });
   await page.waitForTimeout(700);
   if (await c.applyColorScheme(page)) await page.waitForTimeout(300);
   await c.revealLazy(page);
+  // a modal open on arrival hides the page from every check behind it (parallel: ~75 failures from one notice): close it, report it once
+  // A7 judges the pop-up itself: it opens the page with the modal left as it is
+  if (!keepModal) await c.dismissArrivalModal(page);
 }
 async function ctxFor(browser: Browser, auth: boolean, role?: string) {
   const info = test.info();
@@ -289,7 +292,7 @@ test.describe("acceptance site-wide", () => {
       const pages = AUTH.slice(0, 3);
       for (let round = 0; round < 2; round++) {
         for (const r of pages) {
-          await open(page, r.path);
+          await open(page, r.path, { keepModal: true });
           const dialog = page.locator('[role=dialog], [role=alertdialog]').filter({ visible: true }).filter({ hasNotText: /cookie/i }).first();
           if (!(await dialog.isVisible().catch(() => false))) continue;
           if (round === 1) out.push({ what: "a tour / pop-up opens again on a page already visited [A7, BQA 10]", where: r.path });

@@ -42,10 +42,12 @@ async function open(page: Page, route: string, loc: any = null) {
   let path = route;
   if (loc?.detected) { await applyDetected(page.context(), loc, baseURL); path = localize(route, loc, DEF); }
   else path = await k.applyLocale(page, loc, route, baseURL);
-  await page.goto(path, { waitUntil: "load", timeout: 45_000 }).catch(() => page.goto(path, { waitUntil: "domcontentloaded", timeout: 30_000 }));
+  await c.gotoStable(page, path);
   await page.waitForLoadState("networkidle", { timeout: 8_000 }).catch(() => {});
   await page.waitForTimeout(700);
   await c.revealLazy(page);
+  // a modal open on arrival hides the page from every check behind it (parallel: ~75 failures from one notice): close it, report it once
+  await c.dismissArrivalModal(page);
 }
 /** a context signed in as the route's own role (storage-<role>.json), or signed out for a public route */
 async function ctxFor(browser: Browser, route: { auth?: boolean; role?: string } | null) {

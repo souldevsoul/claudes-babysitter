@@ -204,11 +204,15 @@ export const duplicateLinks = (page) => page.evaluate(() => {
         if (region.parentElement?.closest("header, footer"))
             continue;
         const byHref = new Map();
-        for (const a of Array.from(region.querySelectorAll("a[href]"))) {
-            if (!window.__uiVisible(a))
-                continue;
+        const links = Array.from(region.querySelectorAll("a[href]")).filter((a) => window.__uiVisible(a));
+        // the logo + "← Back to home" pair on an auth page is what FM8 asks for: the back link is the way out, not a
+        // second name for the home page (praxis /login). A text "Home" next to the logo still counts.
+        const logoHome = links.some((a) => norm(a) === "" && !window.__uiBackLink(a) && a.querySelector("img, svg, [class*=logo i]"));
+        for (const a of links) {
             const k = norm(a);
             if (k === null || k === "" && a.closest("[class*=logo i], [aria-label*=home i]"))
+                continue;
+            if (k === "" && logoHome && window.__uiBackLink(a))
                 continue;
             const label = (a.textContent || a.getAttribute("aria-label") || "").replace(/\s+/g, " ").trim();
             if (!label)
@@ -426,15 +430,25 @@ export async function policyLayout(page) {
             }
         }
         // the innermost box that starts with the TOC heading and holds the anchor links (not the page column around it)
-        const toc = Array.from(document.querySelectorAll("nav, aside, div")).filter((e) => window.__uiVisible(e) && /^(on this page|contents|table of contents|на этой странице|содержание)/i.test((e.innerText || "").trim()) && e.querySelectorAll("a[href^='#']").length >= 3)
+        const TOC = /^(on this page|contents|table of contents|in this (policy|document|page)|на этой странице|содержание|bu səhifədə|mündəricat|мазмұны)/i;
+        const toc = Array.from(document.querySelectorAll("nav, aside, div")).filter((e) => window.__uiVisible(e) && TOC.test((e.innerText || "").trim()) && e.querySelectorAll("a[href^='#']").length >= 3)
             .sort((x, y) => x.querySelectorAll("*").length - y.querySelectorAll("*").length)[0];
-        return { out, toc: toc ? window.__uiSelector(toc) : null, h2: main.querySelectorAll("h2").length };
+        // a collapsed contents bar: a disclosure ("Contents · Fees" button with aria-expanded / aria-controls, or a
+        // <details> summary) that opens the anchor list — the list exists only while it is open (parallel, praxis
+        // policies on phones)
+        document.querySelectorAll("[data-bs-toc-ctrl]").forEach((e) => e.removeAttribute("data-bs-toc-ctrl"));
+        const ctrl = Array.from(document.querySelectorAll("summary, button, [role=button]")).filter((e) => window.__uiVisible(e) && (!toc || !toc.contains(e)) && (
+            (TOC.test((e.innerText || e.textContent || "").trim()) && (e.matches("summary") || e.hasAttribute("aria-expanded") || e.hasAttribute("aria-controls")))
+            || (e.matches("summary") && e.parentElement.querySelectorAll("a[href^='#']").length >= 3)))[0];
+        if (ctrl)
+            ctrl.setAttribute("data-bs-toc-ctrl", "");
+        return { out, toc: toc ? window.__uiSelector(toc) : null, ctrl: ctrl ? "[data-bs-toc-ctrl]" : null, ctrlWhere: ctrl ? window.__uiDescribe(ctrl) : null, h2: main.querySelectorAll("h2").length };
     });
     const list = out.out;
-    if (out.toc) {
+    if (out.toc || out.ctrl) {
         await page.evaluate(() => window.scrollTo(0, Math.min(1500, document.documentElement.scrollHeight / 2)));
         await page.waitForTimeout(300);
-        const st = await page.evaluate((sel) => {
+        const probe = (sel) => page.evaluate((sel) => {
             const el = document.querySelector(sel);
             if (!el)
                 return null;
@@ -447,12 +461,16 @@ export async function policyLayout(page) {
             const r = (sticky || el).getBoundingClientRect();
             const scrolls = sticky ? /auto|scroll/.test(getComputedStyle(sticky).overflowY) || Array.from(sticky.querySelectorAll("*")).some((c) => /auto|scroll/.test(getComputedStyle(c).overflowY)) : false;
             return { sticky: !!sticky, inView: r.bottom > 0 && r.top < innerHeight, tooTall: r.height > innerHeight && !scrolls };
-        }, out.toc);
-        if (st && (!st.sticky || !st.inView))
-            list.push({ id: "P2", what: '"On this page" scrolls away — make it sticky [P2, BQA 8]', where: out.toc });
-        if (st && st.tooTall)
+        }, sel);
+        const st = out.toc ? await probe(out.toc) : null;
+        const sc = out.ctrl ? await probe(out.ctrl) : null;
+        const stays = (x) => x && x.sticky && x.inView;
+        // the open list or the collapsed bar stays on screen: either is the sticky "On this page"
+        if ((st || sc) && !stays(st) && !stays(sc))
+            list.push({ id: "P2", what: '"On this page" scrolls away — make it sticky [P2, BQA 8]', where: out.toc || out.ctrlWhere });
+        if (stays(st) && st.tooTall)
             list.push({ id: "P2", what: '"On this page" is taller than the screen and does not scroll [P2, BQA]', where: out.toc });
-        await page.evaluate(() => window.scrollTo(0, 0));
+        await page.evaluate(() => { window.scrollTo(0, 0); document.querySelectorAll("[data-bs-toc-ctrl]").forEach((e) => e.removeAttribute("data-bs-toc-ctrl")); });
     }
     else if (out.h2 >= 6)
         list.push({ id: "P2", what: `policy has ${out.h2} sections and no "On this page" navigation [P2, BQA 8]`, where: "main" });
@@ -470,7 +488,10 @@ export const policyCrossLinks = (page) => page.evaluate(() => {
         const m = own.match(names);
         if (m && !/^\s*$/.test(own) && out.length < 6) {
             const self = document.title.toLowerCase();
-            const hit = m.find((x) => !self.includes(x.toLowerCase()));
+            // "Wallet: your credit balance, top-ups …" in a privacy policy's list of data names a category of data, not
+            // the page (praxis /privacy); "top up from your Wallet" still names the page
+            const label = (x) => /^(dashboard|account settings|wallet)$/i.test(x) && new RegExp(`^\\s*(your\\s+)?${x}\\s*(data\\s*)?[:—–-]`, "i").test(own);
+            const hit = m.find((x) => !self.includes(x.toLowerCase()) && !label(x));
             if (hit)
                 out.push({ id: "P3", what: `"${hit}" is mentioned but not linked [P3, BQA 8]`, where: window.__uiDescribe(p), selector: window.__uiSelector(p) });
         }
@@ -512,7 +533,11 @@ export const passwordEye = (page) => page.evaluate(() => {
 /** A3 — sign-up has one consent checkbox that links Terms and Privacy. */
 export const signupConsent = (page) => page.evaluate(() => {
     const form = Array.from(document.querySelectorAll("form")).find((f) => window.__uiVisible(f) && f.querySelector("input[type=email], input[name*=email i]")) || document.body;
-    const boxes = Array.from(form.querySelectorAll('input[type=checkbox], [role=checkbox], button[role=checkbox]')).filter((b) => window.__uiVisible(b) || window.__uiVisible(b.parentElement || b));
+    // Radix's Checkbox renders a hidden native "bubble" <input aria-hidden> next to its button[role=checkbox] for form
+    // submission: one control, not two (parallel /register). A visually hidden native input behind a styled label is
+    // still a checkbox of its own.
+    const bubble = (b) => b.matches("input") && (b.getAttribute("aria-hidden") === "true" || !!b.closest("[aria-hidden=true]") || (b.tabIndex < 0 && !!b.parentElement?.querySelector("[role=checkbox]")));
+    const boxes = Array.from(form.querySelectorAll('input[type=checkbox], [role=checkbox], button[role=checkbox]')).filter((b) => !bubble(b) && (window.__uiVisible(b) || window.__uiVisible(b.parentElement || b)));
     const zone = (b) => (b.closest("label") || b.parentElement?.parentElement || b.parentElement);
     const consent = boxes.filter((b) => /terms|privacy|agree|accept|соглас/i.test((zone(b)?.textContent || "")));
     if (!consent.length)

@@ -33,7 +33,12 @@ const HELPERS = () => {
   const label = (a) => clean(a.innerText || a.textContent) || clean(a.getAttribute("aria-label")) || clean(a.getAttribute("title")) || clean(a.querySelector("img[alt]")?.getAttribute("alt"));
   const norm = (t) => clean(t).toLowerCase().normalize("NFKD").replace(/[̀-ͯ]/g, "").replace(/&/g, " and ").replace(/[^\p{L}\p{N}]+/gu, " ").trim();
   const header = () => {
-    const hs = Array.from(document.querySelectorAll("header, [role=banner]")).filter((h) => !h.closest("footer, [role=contentinfo], article, main section"));
+    // a page's own <header> (a title block inside main or a section: praxis /dashboard/wallet) is not the site header
+    // when the site has one outside (or a pinned one: fixed / sticky)
+    const pinned = (h) => /fixed|sticky/.test(getComputedStyle(h).position);
+    const all = Array.from(document.querySelectorAll("header, [role=banner]")).filter((h) => !h.closest("footer, [role=contentinfo], article, main section"));
+    const site = all.filter((h) => !h.parentElement?.closest("main, section, [role=main]") || pinned(h) || h.matches("[role=banner]"));
+    const hs = site.length ? site : all;
     if (hs.length) return hs;
     const nav = document.querySelector("nav, [role=navigation]");
     return nav && !nav.closest("footer, [role=contentinfo]") ? [nav] : [];
@@ -626,7 +631,7 @@ export async function emptySpace(page, ratio = 2.5) {
     const W = window, L = W.__ly;
     const soft = [], crops = [];
     const root = document.querySelector("main") || document.body;
-    const visibleKids = (e) => Array.from(e.children).filter((c) => W.__uiVisible(c) && !/^(SCRIPT|STYLE|HEADER|FOOTER|NAV)$/.test(c.tagName) && !c.matches("[role=banner], [role=contentinfo]") && !W.__uiOverlay(c) && c.getBoundingClientRect().height > 0);
+    const visibleKids = (e) => Array.from(e.children).filter((c) => (W.__uiVisible(c) || (c.closest('[aria-hidden="true"]') && W.__uiPainted(c))) && !/^(SCRIPT|STYLE|HEADER|FOOTER|NAV)$/.test(c.tagName) && !c.matches("[role=banner], [role=contentinfo]") && !W.__uiOverlay(c) && c.getBoundingClientRect().height > 0);
     let box = root, secs = visibleKids(root);
     for (let d = 0; secs.length < 2 && d < 5 && secs.length; d++) { box = secs[0]; secs = visibleKids(box); }
     if (secs.length < 2) return { soft, crops };
@@ -642,6 +647,9 @@ export async function emptySpace(page, ratio = 2.5) {
       }
       return media / area > 0.5;
     };
+    // painted counts, whatever the accessibility tree says: a decorative marquee band (aria-hidden outlined text between
+    // sections, parallel /) is on screen and is not empty space
+    const shown = (e) => W.__uiVisible(e) || (!!e.closest('[aria-hidden="true"]') && W.__uiPainted(e) && e.getBoundingClientRect().width > 1 && e.getBoundingClientRect().height > 1);
     // vertical intervals (page coordinates) holding content inside a section
     const bands = (s) => {
       if (pictured(s)) { const r = s.getBoundingClientRect(); return [[r.top + scrollY, r.bottom + scrollY]]; } // a picture fills it
@@ -649,10 +657,10 @@ export async function emptySpace(page, ratio = 2.5) {
       const add = (rc) => { if (rc.width >= 1 && rc.height >= 1) iv.push([rc.top + scrollY, rc.bottom + scrollY]); };
       const rng = document.createRange();
       const tw = document.createTreeWalker(s, NodeFilter.SHOW_TEXT);
-      for (let n = tw.nextNode(); n; n = tw.nextNode()) { if (!n.nodeValue.trim() || !n.parentElement || !W.__uiVisible(n.parentElement)) continue; rng.selectNodeContents(n); for (const rc of rng.getClientRects()) add(rc); }
+      for (let n = tw.nextNode(); n; n = tw.nextNode()) { if (!n.nodeValue.trim() || !n.parentElement || !shown(n.parentElement)) continue; rng.selectNodeContents(n); for (const rc of rng.getClientRects()) add(rc); }
       for (const e of s.querySelectorAll("*")) {
         if (e.closest("svg") && e.tagName !== "svg") continue;
-        if (!W.__uiVisible(e)) continue;
+        if (!shown(e)) continue;
         const cs = getComputedStyle(e);
         const media = /^(IMG|SVG|VIDEO|CANVAS|INPUT|SELECT|TEXTAREA|BUTTON|IFRAME|PICTURE)$/i.test(e.tagName);
         const paint = W.__uiRGBA(cs.backgroundColor)[3] > 0.1 || /url\(|gradient/.test(cs.backgroundImage) || ["Top", "Bottom"].some((x) => parseFloat(cs["border" + x + "Width"]) > 0 && W.__uiRGBA(cs["border" + x + "Color"])[3] > 0.1);
@@ -861,16 +869,18 @@ const LAST = /^(other|others|другое|прочее|digər|басқа)\b/i;
  * compared as numbers), numeric by the first number, sizes, months, weekdays or dates — up or down. A placeholder first
  * ("All", "Select…") and "Other" last are allowed. Returns null when sorted, else the kind of order it nearly has.
  */
-export function orderOf(labels) {
+export function orderOf(labels, lang = null) {
   let xs = labels.map((x) => String(x).replace(/\s+/g, " ").trim()).filter(Boolean);
   while (xs.length && PLACEHOLDER.test(xs[0])) xs = xs.slice(1);
   while (xs.length && LAST.test(xs[xs.length - 1])) xs = xs.slice(0, -1);
   if (xs.length < 3) return null;
   // a few favourites pinned on top ("EUR, USD", then the rest A–Z) is an order too
-  for (let k = 1; k <= 3 && xs.length - k >= 4; k++) if (orderOf(xs.slice(k)) === null) return null;
+  for (let k = 1; k <= 3 && xs.length - k >= 4; k++) if (orderOf(xs.slice(k), lang) === null) return null;
   const mono = (v) => v.every((x, i) => i === 0 || x >= v[i - 1]) || v.every((x, i) => i === 0 || x <= v[i - 1]);
   const keyed = (f) => { const v = xs.map(f); return v.every((x) => x !== null && x !== undefined && !Number.isNaN(x)) ? mono(v) : false; };
-  const coll = new Intl.Collator(undefined, { sensitivity: "base", numeric: true });
+  // in the page's language: Azerbaijani sorts "Ç" after "C" and "Ş" after "S", Kazakh its own Cyrillic letters
+  let coll;
+  try { coll = new Intl.Collator(lang || undefined, { sensitivity: "base", numeric: true }); } catch { coll = new Intl.Collator(undefined, { sensitivity: "base", numeric: true }); }
   const alpha = xs.every((x, i) => i === 0 || coll.compare(xs[i - 1], x) <= 0) || xs.every((x, i) => i === 0 || coll.compare(xs[i - 1], x) >= 0);
   if (alpha) return null;
   const num = (x) => { const m = x.replace(/(\d)[\s,](?=\d{3}\b)/g, "$1").match(/-?\d+(?:[.,]\d+)?/); return m ? parseFloat(m[0].replace(",", ".")) : null; };
@@ -896,10 +906,10 @@ export async function dropdowns(page, max = 8) {
     const W = window, L = W.__ly, SORTRE = new RegExp(src, "i");
     return Array.from(document.querySelectorAll("select")).filter((s) => s.options.length >= 3).map((s) => {
       const lab = [s.getAttribute("aria-label"), s.name, s.id, s.labels && s.labels[0] && s.labels[0].textContent].join(" ");
-      return { sort: SORTRE.test(lab), labels: Array.from(s.options).filter((o) => !o.disabled || o.index > 0).map((o) => o.text), ...L.at(s, "") };
+      return { sort: SORTRE.test(lab), lang: (s.closest("[lang]") || document.documentElement).getAttribute("lang") || "", labels: Array.from(s.options).filter((o) => !o.disabled || o.index > 0).map((o) => o.text), ...L.at(s, "") };
     });
   }, SORT_SELECT.source);
-  for (const n of natives) { if (n.sort) continue; const o = orderOf(n.labels); if (o) soft.push({ what: `dropdown options are ${o}: ${n.labels.slice(0, 6).join(", ")}${n.labels.length > 6 ? ", …" : ""} — sort them (alphabetically, or by their natural order) [1.2]`, where: n.where, selector: n.selector, human: n.human }); }
+  for (const n of natives) { if (n.sort) continue; const o = orderOf(n.labels, n.lang); if (o) soft.push({ what: `dropdown options are ${o}: ${n.labels.slice(0, 6).join(", ")}${n.labels.length > 6 ? ", …" : ""} — sort them (alphabetically, or by their natural order) [1.2]`, where: n.where, selector: n.selector, human: n.human }); }
   const triggers = await page.evaluate(() => {
     const W = window;
     for (const e of document.querySelectorAll("[data-bs-dd]")) e.removeAttribute("data-bs-dd");
@@ -929,7 +939,7 @@ export async function dropdowns(page, max = 8) {
       const look = (o) => { const cs = getComputedStyle(o); const inner = o.querySelector("span, div"); const ics = inner ? getComputedStyle(inner) : cs; return [cs.backgroundColor, cs.color, cs.fontWeight, ics.color, ics.fontWeight, cs.boxShadow, cs.borderLeftColor].join("|"); };
       const icons = (o) => Array.from(o.querySelectorAll("svg, img, [class*=check i], [data-state=checked]")).filter((x) => { const b = x.getBoundingClientRect(); const cs = getComputedStyle(x); return b.width > 2 && b.height > 2 && cs.visibility !== "hidden" && Number(cs.opacity) > 0.1; });
       const tick = (o) => { const txt = o.textContent || ""; return /[✓✔☑]/.test(txt); };
-      const out = { labels: opts.map((o) => L.clean(o.innerText || o.textContent)), sort: SORTRE.test(label), where: L.at(trig, ""), selected: null };
+      const out = { labels: opts.map((o) => L.clean(o.innerText || o.textContent)), lang: (box.closest("[lang]") || document.documentElement).getAttribute("lang") || "", sort: SORTRE.test(label), where: L.at(trig, ""), selected: null };
       if (sel.length) {
         const s = sel[0];
         const others = opts.filter((o) => o !== s);
@@ -947,7 +957,7 @@ export async function dropdowns(page, max = 8) {
     await page.keyboard.press("Escape").catch(() => {});
     await page.waitForTimeout(200);
     if (!r) { notTested.push(`${triggers[i]}: no listbox appeared`); continue; }
-    if (!r.sort) { const o = orderOf(r.labels); if (o) soft.push({ what: `dropdown options are ${o}: ${r.labels.slice(0, 6).join(", ")}${r.labels.length > 6 ? ", …" : ""} — sort them [1.2]`, where: r.where.where, selector: r.where.selector, human: r.where.human }); }
+    if (!r.sort) { const o = orderOf(r.labels, r.lang); if (o) soft.push({ what: `dropdown options are ${o}: ${r.labels.slice(0, 6).join(", ")}${r.labels.length > 6 ? ", …" : ""} — sort them [1.2]`, where: r.where.where, selector: r.where.selector, human: r.where.human }); }
     if (r.selected) {
       if (!r.selected.marked) hard.push({ what: `the selected option "${r.selected.text}" looks like the others when the list is open — mark it (a tick on one side, or the kit's selected colour) [1.2 / 1.8]`, where: r.selected.at.where, selector: r.selected.at.selector, human: r.selected.at.human });
       if (!r.selected.inView) hard.push({ what: `the selected option "${r.selected.text}" is scrolled out of sight when the list opens — scroll it into view on open [1.2]`, where: r.selected.at.where, selector: r.selected.at.selector, human: r.selected.at.human });
@@ -984,8 +994,16 @@ export async function hoverFeedback(page, max = 40) {
       // a selected chip / pressed toggle / active tab keeps its selected look under the pointer by design
       if (e.matches("[aria-pressed=true], [aria-selected=true], [aria-checked=true], [data-state=active], [data-state=on], [data-state=checked], [data-active=true]")) continue;
       // the one filled pill in a row of look-alike toggles ("en | az | kk", praxis) is the selected one, even unmarked
-      const sibs = e.parentElement ? Array.from(e.parentElement.children).filter((x) => x !== e && x.tagName === e.tagName && W.__uiVisible(x)) : [];
-      if (sibs.length >= 2 && sibs.length <= 6) { // three or more: a Cancel | Save pair is not a toggle row
+      let sibs = e.parentElement ? Array.from(e.parentElement.children).filter((x) => x !== e && x.tagName === e.tagName && W.__uiVisible(x)) : [];
+      let most = 6;
+      // the same in a list of filters, one per <li> ("All areas 30" over "Tax 12", "Law 9" … in a sidebar, praxis
+      // /specialists): the selected chip is the one look among look-alike items
+      const li = e.parentElement && e.parentElement.tagName === "LI" && e.parentElement.parentElement;
+      if (!sibs.length && li && /^(UL|OL)$/.test(li.tagName)) {
+        sibs = Array.from(li.children).filter((x) => x !== e.parentElement).map((x) => Array.from(x.children).find((k) => k.tagName === e.tagName)).filter((x) => x && W.__uiVisible(x));
+        most = 40;
+      }
+      if (sibs.length >= 2 && sibs.length <= most) { // three or more: a Cancel | Save pair is not a toggle row
         const bg = (x) => getComputedStyle(x).backgroundColor + getComputedStyle(x).color;
         if (sibs.every((x) => bg(x) !== bg(e)) && new Set(sibs.map(bg)).size === 1 && Math.abs(e.getBoundingClientRect().height - sibs[0].getBoundingClientRect().height) < 2) continue;
       }
@@ -1130,7 +1148,7 @@ const nice = (p) => !p.decimals || /^(0+|5|50|9|90|95|99|49)$/.test(p.decimals) 
  * written two ways (US$ and $, € before and after), two decimal separators, amounts ≥ 1000 without grouping or with
  * two grouping styles. `soft` adds dirty converted prices (base currency prices round, these not).
  */
-export function moneyIssues(tokens, { baseNice = null, label = "" } = {}) {
+export function moneyIssues(tokens, { baseNice = null, label = "", rateDecimals = 4 } = {}) {
   const hard = [], soft = [];
   // "7.489": three decimals or a thousands group? Decided by how the same currency writes its unambiguous decimals on
   // this page (truelogos in BRL: "R$ 10,50" next to a static "€20,000" — the euro amount is not 20 with 3 decimals)
@@ -1147,8 +1165,9 @@ export function moneyIssues(tokens, { baseNice = null, label = "" } = {}) {
     if (n > allowed) {
       // a per-unit rate below 1 ("$0.0085 /credit", sprout.boutique) may need sub-cent digits: soft, unless it is float
       // garbage (6+ decimals, 0.0089999…)
-      // an exchange rate ("$1 = €0.89165") is quoted with more digits on purpose: soft
-      if (x.t.rate && n < 6) soft.push({ what: `${pre}exchange rate "${p.raw}" is shown with ${n} decimals — round it for people (2–4 decimals) [money]`, ...at(x) });
+      // an exchange rate ("$1 = €0.89165") is quoted with more digits on purpose: up to `rateDecimals` (layout.rateDecimals,
+      // default 4: "€0.8909") is fine, more is soft
+      if (x.t.rate && n < 6) { if (n > rateDecimals) soft.push({ what: `${pre}exchange rate "${p.raw}" is shown with ${n} decimals — round it for people (2–${rateDecimals} decimals; layout.rateDecimals) [money]`, ...at(x) }); }
       else if (n >= 6 || allowed === 0 && !x.t.unit || !(x.t.unit && p.value < 1)) hard.push({ what: `${pre}"${p.raw}" has ${n} decimals — ${allowed === 0 ? `${p.code} is shown without decimals` : `round to ${allowed} (Intl.NumberFormat with the currency's minor unit)`}${n >= 4 ? "; this looks like a raw floating-point conversion" : ""} [money]`, ...at(x) });
       else units.push(x);
     }
@@ -1180,6 +1199,8 @@ const moneyTokens = (src) => {
   const tw = document.createTreeWalker(document.body, NodeFilter.SHOW_TEXT, { acceptNode: (n) => n.parentElement && n.parentElement.closest("script, style, noscript, template, select, option, [aria-hidden=true]") ? 2 : 1 });
   // amounts are often split over elements ("$" <span>12</span>): read each block's text, attribute to its element
   const blocks = new Set();
+  // the site's header (L.header: not a page's own <header> inside a section, praxis /dashboard/wallet)
+  const siteHeader = L.header();
   for (let n = tw.nextNode(); n; n = tw.nextNode()) if (n.nodeValue.trim() && W.__uiVisible(n.parentElement)) { let b = n.parentElement; while (b.parentElement && getComputedStyle(b).display.startsWith("inline") && b.parentElement !== document.body) b = b.parentElement; blocks.add(b); }
   for (const b of blocks) {
     if (Array.from(b.children).some((c) => blocks.has(c))) { // text of its own only, children are their own blocks
@@ -1193,7 +1214,7 @@ const moneyTokens = (src) => {
   function tok(b, m, txt) {
     const after = txt.slice(m.index + m[0].length, m.index + m[0].length + 14);
     const before = txt.slice(Math.max(0, m.index - 3), m.index);
-    return { raw: m[0], fontSize: parseFloat(getComputedStyle(b).fontSize), rate: /=\s*$/.test(before), unit: /^\s*(\/|per\b|за\b|each|\/\s*(hr|h|mo|month|yr|credit|token|gb|unit))/i.test(after) || /per (credit|token|unit)/i.test(txt), inHeader: !!b.closest("header, [role=banner]"), ...L.at(b, "") };
+    return { raw: m[0], fontSize: parseFloat(getComputedStyle(b).fontSize), rate: /=\s*$/.test(before), unit: /^\s*(\/|per\b|за\b|each|\/\s*(hr|h|mo|month|yr|credit|token|gb|unit))/i.test(after) || /per (credit|token|unit)/i.test(txt), inHeader: siteHeader.some((h) => h.contains(b)), creditsNear: /\bcredits?\b|кредит|kredit/i.test(txt), ...L.at(b, "") };
   }
   const credits = /\bcredits?\b|кредит|kredit/i.test(document.body.innerText);
   const headerCredits = L.header().some((h) => /\bcredits?\b|кредит|kredit/i.test(h.innerText));
@@ -1218,15 +1239,16 @@ const findSwitcher = (codes) => {
  * by one, then the original is put back). Hard/soft per moneyIssues; soft: a header balance in money while the
  * product sells credits. Without a switcher only the current currency is checked. At most `max` currencies.
  */
-export async function moneyFormat(page, max = 8) {
+export async function moneyFormat(page, max = 8, { rateDecimals = 4 } = {}) {
   await ensure(page);
   const hard = [], soft = [], notTested = [], tested = [];
   const read = async () => { await ensure(page); return page.evaluate(moneyTokens, MONEY_SRC); };
   const base = await read();
-  const b = moneyIssues(base.tokens, { label: "" });
+  const b = moneyIssues(base.tokens, { label: "", rateDecimals });
   hard.push(...b.hard); soft.push(...b.soft);
-  if (base.credits && !base.headerCredits && base.tokens.some((t) => t.inHeader)) {
-    const t = base.tokens.find((x) => x.inHeader);
+  // an amount on the same line as credits ("10 credits = $1") is the hint next to the credits, not a money balance
+  if (base.credits && !base.headerCredits && base.tokens.some((t) => t.inHeader && !t.creditsNear)) {
+    const t = base.tokens.find((x) => x.inHeader && !x.creditsNear);
     soft.push({ what: `the header shows money ("${t.raw}") but the product sells credits — show the balance in credits (money only as a hint next to it) [money]`, where: t.where, selector: t.selector, human: t.human });
   }
   const sw = await page.evaluate(findSwitcher, CODES);
@@ -1261,7 +1283,7 @@ export async function moneyFormat(page, max = 8) {
       try { await choose(code); } catch (e) { notTested.push(`${code}: could not switch (${String(e.message).split("\n")[0]})`); continue; }
       await page.evaluate(findSwitcher, CODES); // re-mark after a re-render
       const st = await read();
-      const r = moneyIssues(st.tokens, { label: `in ${code}`, baseNice: b.niceShare });
+      const r = moneyIssues(st.tokens, { label: `in ${code}`, baseNice: b.niceShare, rateDecimals });
       hard.push(...r.hard); soft.push(...r.soft);
       tested.push(code);
     }

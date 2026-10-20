@@ -41,7 +41,7 @@ function report(list: O[], label = "forms") {
 }
 async function open(page: Page, route: string) {
   await c.install(page);
-  await page.goto(route, { waitUntil: "load", timeout: 45_000 }).catch(() => page.goto(route, { waitUntil: "domcontentloaded" }));
+  await c.gotoStable(page, route);
   await page.waitForLoadState("networkidle", { timeout: 8_000 }).catch(() => {});
   await page.waitForTimeout(700);
   await fm.lib(page);

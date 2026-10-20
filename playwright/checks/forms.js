@@ -731,7 +731,12 @@ export const authShell = async (page) => (await lib(page), page.evaluate(() => {
   const path = location.pathname;
   const links = Array.from(document.querySelectorAll("a[href]")).filter(B.vis);
   const home = (a) => { try { const u = new URL(a.href); return u.origin === location.origin && (u.pathname === "/" || u.pathname === ""); } catch { return false; } };
-  const logo = links.find((a) => a.querySelector("img, svg, [class*=logo i]") && a.getBoundingClientRect().top < 200) || links.find((a) => /logo|brand/i.test(a.className + " " + (a.getAttribute("aria-label") || "")));
+  // the logo: a brand-named link, else the first link at the top with a picture in it — never "← Back to sign in" (an
+  // arrow icon + words, parallel /forgot-password), which is FM8's own back link
+  const back0 = (a) => window.__uiBackLink(a);
+  const branded = (a) => /logo|brand/i.test(a.className + " " + (a.getAttribute("aria-label") || "")) || !!a.querySelector("[class*=logo i], img[alt*=logo i], svg[aria-label*=logo i]");
+  const top = links.filter((a) => !back0(a) && a.getBoundingClientRect().top < 200);
+  const logo = top.find(branded) || top.find((a) => a.querySelector("img, svg")) || links.find((a) => !back0(a) && branded(a));
   const logoish = Array.from(document.querySelectorAll("img[alt*=logo i], [class*=logo i], header svg")).filter((e) => B.vis(e) && e.getBoundingClientRect().top < 200)[0];
   if (logo && !home(logo)) out.push({ id: "FM8", what: `the logo links to ${logo.getAttribute("href")} — on an auth page it links home ("/") [FM8, logo-link]`, where: B.where(logo), selector: B.selector(logo) });
   else if (!logo && logoish) out.push({ id: "FM8", what: "the logo is not a link — wrap it in a link to \"/\" [FM8, logo-link]", where: B.where(logoish), selector: B.selector(logoish) });

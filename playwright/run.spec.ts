@@ -38,11 +38,13 @@ function soft(list: O[], label: string) {
 }
 
 async function goto(page: Page, url: string) {
-  await page.goto(url, { waitUntil: "load", timeout: 45_000 }).catch(() => page.goto(url, { waitUntil: "domcontentloaded", timeout: 30_000 }));
+  await c.gotoStable(page, url);
   await page.waitForLoadState("networkidle", { timeout: 8_000 }).catch(() => {});
   await page.waitForTimeout(800);
   if (await c.applyColorScheme(page)) await page.waitForTimeout(300);
   await c.revealLazy(page);
+  // a modal open on arrival hides the page from every check behind it (parallel: ~75 failures from one notice): close it, report it once
+  await c.dismissArrivalModal(page);
 }
 /** A page of `route` in locale `loc` (the default when null), signed in as the route's role when it needs one. */
 async function openIn(browser: Browser, route: { path: string; auth: boolean; role?: string }, loc: any) {

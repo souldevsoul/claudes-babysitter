@@ -583,10 +583,22 @@ export async function stateChecks(page, { reload, opts = {}, maxOpeners = 15, ma
                 const next = Array.from(scope.querySelectorAll("a[href], button")).find((b) => window.__uiVisible(b) && !b.disabled && b.getAttribute("aria-disabled") !== "true" && (b.matches("[rel=next]") || /^(next( page)?|›|»|→|>|2|следующая|növbəti|келесі)$/i.test((b.textContent || b.getAttribute("aria-label") || "").trim()) || /next page|следующая/i.test(b.getAttribute("aria-label") || "")));
                 if (!next || (!zone && !next.matches("[rel=next]") && !/next page/i.test(next.getAttribute("aria-label") || "")))
                     return null;
-                // the list it pages: the nearest list/grid/table before the pagination
+                // the list it pages: the nearest list/grid/table before the pagination — never a box that holds the
+                // pagination itself (the page's layout grid, praxis /dashboard/tasks: "div.mx-auto.grid" with the sidebar)
                 let list = null;
-                for (let p = (zone || next).parentElement; p && !list; p = p.parentElement)
-                    list = Array.from(p.querySelectorAll("ul, ol, table, [role=list], [role=grid], [class*=grid]")).filter((l) => window.__uiVisible(l) && !(zone || next).contains(l) && !l.closest("nav, footer, header, aside, [role=navigation]") && l.children.length >= 2 && (l.compareDocumentPosition(zone || next) & Node.DOCUMENT_POSITION_FOLLOWING)).pop() || null;
+                const pz = zone || next;
+                // a list of cards drawn as plain <div>s counts too: a box just before the pagination whose children repeat one tag
+                const repeats = (l) => { const k = Array.from(l.children).filter((x) => window.__uiVisible(x)); return k.length >= 3 && k.every((x) => x.tagName === k[0].tagName); };
+                for (let p = pz.parentElement, below = pz; p && !list; below = p, p = p.parentElement) {
+                    const before = [];
+                    for (let x = below.previousElementSibling; x; x = x.previousElementSibling) if (repeats(x)) before.unshift(x);
+                    const cands = [...new Set([...Array.from(p.querySelectorAll("ul, ol, table, [role=list], [role=grid], [class*=grid]")), ...before])].sort((a, b) => (a.compareDocumentPosition(b) & Node.DOCUMENT_POSITION_FOLLOWING ? -1 : 1)).filter((l) => window.__uiVisible(l) && !pz.contains(l) && !l.contains(pz) && !l.closest("nav, footer, header, aside, [role=navigation]") && l.children.length >= 2 && (l.compareDocumentPosition(pz) & Node.DOCUMENT_POSITION_FOLLOWING));
+                    // the outermost list around the last one (a grid of cards whose cards hold <ul>s is the list, not the last card's <ul>)
+                    let last = cands.pop() || null;
+                    for (let o = last && cands.find((c) => c.contains(last)); o; o = cands.find((c) => c !== o && c.contains(o)))
+                        last = o;
+                    list = last;
+                }
                 if (!list)
                     return null;
                 next.setAttribute("data-bs-page-next", "");

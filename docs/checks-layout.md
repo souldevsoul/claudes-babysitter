@@ -29,7 +29,7 @@ didn't open) is listed under a "not tested" annotation. Nothing is dropped witho
 | 1.2 dropdowns | `dropdowns`, `orderOf` | the selected option looks like the others when open; it is scrolled out of view; the tick sits left in one dropdown and right in another (on a page, and site-wide) | options in no readable order (alphabetical, numeric, sizes, months, weekdays and dates are recognised in either direction; a placeholder first and "Other" last are allowed; "Sort by" lists are skipped) |
 | 1.6 hover feedback (desktop widths) | `hoverFeedback` | a button or button-styled link whose computed look (self, `::before`/`::after`, first 14 descendants) doesn't change on hover | a text button (an accordion question) or a clickable card that doesn't change on hover |
 | 2.10 one mobile menu | `oneMobileMenu` | two header toggles (burger and avatar) that both reveal the site navigation (3 or more shared destinations, or half of the smaller set) | — |
-| money | `moneyFormat`, `moneyIssues`, `parseMoney` | in the current currency **and in every currency of the switcher**: 3+ decimals (4+ or a non-unit price), decimals on a zero-decimal currency (JPY…), one currency written two ways (`US$` and `$`, `€` before and after, with and without a space), two decimal separators, 4+ digit amounts without grouping, two grouping styles | a 3-decimal per-unit price; converted pack prices not rounded while the base currency's were (over 80% round in the base, over half dirty after the switch); a header balance in money on a product that sells credits |
+| money | `moneyFormat`, `moneyIssues`, `parseMoney` | in the current currency **and in every currency of the switcher**: 3+ decimals (4+ or a non-unit price), decimals on a zero-decimal currency (JPY…), one currency written two ways (`US$` and `$`, `€` before and after, with and without a space), two decimal separators, 4+ digit amounts without grouping, two grouping styles | a 3-decimal per-unit price; converted pack prices not rounded while the base currency's were (over 80% round in the base, over half dirty after the switch); an exchange rate ("$1 = €0.89165") with more than `layout.rateDecimals` (4) decimals; a header balance in money on a product that sells credits (the site header only, not a page's own title block; an amount on the same line as the credits is the hint) |
 
 ## Configuration (`babysitter.config.json`)
 
@@ -44,6 +44,7 @@ didn't open) is listed under a "not tested" annotation. Nothing is dropped witho
     "maxListItems": 20,
     "maxHover": 40,
     "maxCurrencies": 8,
+    "rateDecimals": 4,
     "registerFavicon": true
   }
 }

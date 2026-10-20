@@ -181,6 +181,8 @@ window.__uiHuman = (el) => {
   }
   return { kind, name, place };
 };
+// a "Back to …" link (← Back to home, Back to sign in, На главную): an arrow icon + words, never the logo
+window.__uiBackLink = (a) => /^\\s*(←|‹|<|⟵|↩)?\\s*(back( to\\b| home\\b|$)|go back|return to|to the home ?page|на главную|назад|вернуться|geri|ana səhifəyə|artqa|артқа|басты бетке)/i.test((a.textContent || "").replace(/\\s+/g, " ").trim() || a.getAttribute("aria-label") || "");
 window.__uiVisible = (el) => {
   const r = el.getBoundingClientRect();
   if (r.width < 1 || r.height < 1) return false;
@@ -603,6 +605,18 @@ export const overlappingText = (page) => page.evaluate(() => {
         const cx = r.left + r.width / 2, cy = r.top + r.height / 2;
         if (cy < 0 || cy > innerHeight || cx < 0 || cx > innerWidth)
             continue;
+        // text scrolled out of a scroll box (a 350 px agreement panel, praxis /onboarding) is clipped, not covered:
+        // what is "on top" at its centre is whatever lies outside the box
+        let clipped = false;
+        for (let p = el.parentElement; p && p !== document.body && !clipped; p = p.parentElement) {
+            const ps = getComputedStyle(p);
+            if (!/(auto|scroll|hidden|clip)/.test(ps.overflowY + " " + ps.overflowX))
+                continue;
+            const pr = p.getBoundingClientRect();
+            clipped = cy < pr.top || cy > pr.bottom || cx < pr.left || cx > pr.right;
+        }
+        if (clipped)
+            continue;
         const top = document.elementFromPoint(cx, cy);
         if (!top || el.contains(top) || top.contains(el))
             continue;
@@ -629,8 +643,27 @@ export const cookieCovers = (page) => page.evaluate(() => {
     if (!banner)
         return [];
     const targets = Array.from(document.querySelectorAll('header a, header button, nav a, [aria-label*=menu i]')).filter((el) => window.__uiVisible(el) && !banner.contains(el));
-    return targets
-        .filter((el) => { const r = el.getBoundingClientRect(); const t = document.elementFromPoint(r.left + r.width / 2, r.top + r.height / 2); return !!t && banner.contains(t); })
+    const under = (el) => { const r = el.getBoundingClientRect(); const t = document.elementFromPoint(r.left + r.width / 2, r.top + r.height / 2); return !!t && banner.contains(t); };
+    const covered = targets.filter(under);
+    // a link in the page flow (a short auth page's footer at 1280×720) that the reader can scroll out from under the
+    // banner is reachable: the page's bottom padding did its job. A fixed header, or a footer that stays under the
+    // banner at the very bottom of the page (no padding for the banner), is still covered.
+    const fixedUp = (el) => { for (let p = el; p && p !== document.body; p = p.parentElement) if (/fixed|sticky/.test(getComputedStyle(p).position)) return true; return false; };
+    const flow = covered.filter((el) => !fixedUp(el));
+    const stuck = new Set(covered.filter(fixedUp));
+    if (flow.length) {
+        const se = document.scrollingElement || document.documentElement, y0 = se.scrollTop;
+        for (const el of flow) {
+            // free = its centre is on screen and not under the banner (off screen is not "free")
+            const clear = () => { const r = el.getBoundingClientRect(), cy = r.top + r.height / 2; return cy >= 0 && cy <= innerHeight && !under(el); };
+            el.scrollIntoView({ block: "center", behavior: "instant" });
+            let free = clear();
+            if (!free) { se.scrollTo({ top: se.scrollHeight, behavior: "instant" }); free = clear(); }
+            if (!free) stuck.add(el);
+        }
+        se.scrollTo({ top: y0, behavior: "instant" });
+    }
+    return covered.filter((el) => stuck.has(el))
         .map((el) => ({ what: "covered by cookie banner", where: window.__uiDescribe(el), selector: window.__uiSelector(el), human: window.__uiHuman(el) }));
 });
 /** 6.9 — underline is a link affordance only. */
@@ -685,6 +718,9 @@ export const logoLink = (page) => page.evaluate(() => {
     const out = [];
     for (const a of Array.from(document.querySelectorAll("header a[href], footer a[href]"))) {
         if (!a.querySelector("img, svg") || !window.__uiVisible(a))
+            continue;
+        // "← Back to home" (an arrow icon + words, drawn as a pill) is the auth page's way back, not the logo (praxis /login)
+        if (window.__uiBackLink(a))
             continue;
         const u = new URL(a.href, location.href);
         if (u.pathname !== "/" || u.origin !== location.origin)
@@ -1732,7 +1768,16 @@ export const collectSignatures = (page, route) => page.evaluate((route) => {
             continue;
         const cs = getComputedStyle(el);
         const r = el.getBoundingClientRect();
-        sigs.push({ kind: "input", radius: Math.round(parseFloat(cs.borderTopLeftRadius)), height: el.tagName === "TEXTAREA" ? 0 : Math.round(r.height), font: font(cs), size: Math.round(parseFloat(cs.fontSize)), weight: Number(cs.fontWeight), route, where: W.__uiDescribe(el), selector: W.__uiSelector(el), human: W.__uiHuman(el) });
+        // a field drawn as an underline only (bottom border, no fill, no other edge): its corner radius has nothing to
+        // round, so it is no radius "variant" (parallel /contact). Its height still counts.
+        const edge = (side) => parseFloat(cs[`border${side}Width`]) > 0 && W.__uiRGBA(cs[`border${side}Color`])[3] > 0.15;
+        const fill = W.__uiRGBA(cs.backgroundColor);
+        const underline = edge("Bottom") && !edge("Top") && !edge("Left") && !edge("Right") && !(fill[3] > 0.08 && fill.join() !== parentBg(el)) && (!cs.boxShadow || cs.boxShadow === "none");
+        // a compact select trigger drawn as a pill (rows-per-page next to filter chips): a chip, which are not fields
+        const chip = el.matches("button, [role=combobox]:not(input)") && parseFloat(cs.borderTopLeftRadius) >= r.height / 2 - 1 && r.height <= 36;
+        if (chip)
+            continue;
+        sigs.push({ kind: "input", radius: underline ? null : Math.round(parseFloat(cs.borderTopLeftRadius)), height: el.tagName === "TEXTAREA" ? 0 : Math.round(r.height), font: font(cs), size: Math.round(parseFloat(cs.fontSize)), weight: Number(cs.fontWeight), route, where: W.__uiDescribe(el), selector: W.__uiSelector(el), human: W.__uiHuman(el) });
     }
     for (const el of Array.from(document.querySelectorAll("main *, body > div *"))) {
         if (!W.__uiVisible(el))
@@ -1847,6 +1892,85 @@ export const inlineStyles = (page, allowProps = [], skip = [], strict = false) =
     return out;
 }, { allowProps: strict ? allowProps : [...SNIPER_MOTION_PROPS, ...allowProps], skip: strict ? skip : [...SNIPER_SKIP, ...skip], strict });
 
+/** Navigation errors that are the network's or the browser's, not the page's (a flake: the same test passes on rerun). */
+export const NAV_FLAKE = /chrome-error:\/\/|interrupted by another navigation|net::ERR_(NETWORK_CHANGED|CONNECTION_(RESET|CLOSED|REFUSED|TIMED_OUT)|INTERNET_DISCONNECTED|NAME_NOT_RESOLVED|HTTP2_PROTOCOL_ERROR|EMPTY_RESPONSE|SSL_PROTOCOL_ERROR|TIMED_OUT|ADDRESS_UNREACHABLE)|NS_ERROR_NET|navigation flake/i;
+/**
+ * page.goto that survives a navigation flake: tries `waitUntil`, then `fallback`, then once more after a pause when the
+ * error is the network's (chrome-error://chromewebdata, "interrupted by another navigation", net::ERR_CONNECTION_*,
+ * parallel /refund: D3 and 3.8 failed, passed on rerun). A page that still cannot be opened throws an error that
+ * starts with "navigation flake:" — the run summary counts it as a flake, not a finding. Other errors (a timeout on
+ * a slow page) are thrown as they are.
+ */
+export async function gotoStable(page, url, { waitUntil = "load", timeout = 45_000, fallback = "domcontentloaded", fallbackTimeout = 30_000 } = {}) {
+    let last = null;
+    for (let attempt = 0; attempt < 3; attempt++) {
+        try {
+            const resp = await page.goto(url, attempt === 0 ? { waitUntil, timeout } : { waitUntil: fallback, timeout: fallbackTimeout });
+            if (!page.url().startsWith("chrome-error://"))
+                return resp;
+            last = new Error(`the browser showed its own error page (${page.url()})`);
+        }
+        catch (e) {
+            last = e;
+            // a slow page (no flake) gets the one fallback it always had, then fails as before
+            if (attempt >= 1 && !NAV_FLAKE.test(String(e && e.message)))
+                throw e;
+        }
+        if (attempt >= 1 || NAV_FLAKE.test(String(last && last.message)))
+            await page.waitForTimeout(1500 * (attempt + 1));
+    }
+    throw new Error(`navigation flake: ${url} could not be opened in 3 tries (${String(last && last.message).split("\n")[0].slice(0, 200)}) — the network or the browser, not a page defect; the run summary counts it as a flake [nav-flake]`);
+}
+/**
+ * A modal dialog open right after load ([role=dialog][aria-modal=true], [role=alertdialog], a modal <dialog>), not
+ * a cookie / consent banner: closed with Escape, else with its close button ("Close", "×", "Got it", "Not now").
+ * Remembered on the page (page.__bsArrival = { name, where, closed }) for arrivalModalFindings.
+ */
+export async function dismissArrivalModal(page) {
+    const find = () => page.evaluate(() => {
+        document.querySelectorAll("[data-bs-arrival]").forEach((e) => e.removeAttribute("data-bs-arrival"));
+        const COOKIE = /cookie|consent|gdpr|privacy choices|çerez|куки|cookies/i;
+        const d = Array.from(document.querySelectorAll('[role=dialog][aria-modal=true], [role=alertdialog], dialog[open]')).find((e) => {
+            if (!window.__uiPainted(e) || (e.matches("dialog") && !e.matches(":modal")))
+                return false;
+            const r = e.getBoundingClientRect();
+            if (r.width < 120 || r.height < 60)
+                return false;
+            return !COOKIE.test([e.id, typeof e.className === "string" ? e.className : "", e.getAttribute("aria-label"), (e.innerText || "").slice(0, 400)].join(" "));
+        });
+        if (!d)
+            return null;
+        d.setAttribute("data-bs-arrival", "");
+        const title = d.getAttribute("aria-label") || (document.getElementById(d.getAttribute("aria-labelledby") || "") || d.querySelector("h1, h2, h3, [class*=title i]") || d).textContent || "";
+        return { name: title.replace(/\s+/g, " ").trim().slice(0, 80), where: window.__uiDescribe(d) };
+    }).catch(() => null);
+    const open = () => page.evaluate(() => { const d = document.querySelector("[data-bs-arrival]"); return !!d && d.isConnected && window.__uiPainted(d); }).catch(() => false);
+    const hit = await find();
+    if (!hit) {
+        page.__bsArrival = null;
+        return null;
+    }
+    await page.keyboard.press("Escape").catch(() => { });
+    await page.waitForTimeout(500);
+    if (await open()) {
+        const btn = page.locator("[data-bs-arrival]").locator('[aria-label*="close" i], [aria-label*="dismiss" i], button:text-matches("^\\s*(close|dismiss|got it|ok|okay|not now|later|skip|continue|×|✕|закрыть|понятно|bağla|жабу)\\s*$", "i")').first();
+        await btn.click({ timeout: 2000 }).catch(() => { });
+        await page.waitForTimeout(500);
+    }
+    const closed = !(await open());
+    page.__bsArrival = { ...hit, closed };
+    await page.evaluate(() => document.querySelectorAll("[data-bs-arrival]").forEach((e) => e.removeAttribute("data-bs-arrival"))).catch(() => { });
+    return page.__bsArrival;
+}
+/** One finding for a modal that was open on arrival (soft when it closed and the page was checked behind it, hard when not). */
+export function arrivalModalFindings(arrival) {
+    if (!arrival)
+        return { hard: [], soft: [] };
+    const f = { what: arrival.closed
+            ? `a modal dialog is open on arrival ("${arrival.name}") — it was closed with Esc / its close button and the page checked behind it; make sure it is meant to greet every visit [arrival-modal]`
+            : `a modal dialog is open on arrival ("${arrival.name}") and neither Esc nor a close button closes it — every page check behind it failed for this one reason; give it a close button and Esc [arrival-modal]`, where: arrival.where };
+    return arrival.closed ? { hard: [], soft: [f] } : { hard: [f], soft: [] };
+}
 /**
  * Scroll the whole page once, so reveal-on-scroll content (framer-motion whileInView, IntersectionObserver,
  * lazy sections) renders the way a reader sees it — measured before, it is opacity 0 and reads as 1:1.
@@ -1883,6 +2007,24 @@ export const collectShapes = (page, route = "") => page.evaluate((route) => {
         const shadow = cs.boxShadow && cs.boxShadow !== "none";
         return filled || bordered || shadow;
     };
+    // a square piece that is a part of a rounded frame, not a piece of its own: a row spanning the frame (a list's
+    // group header "Waiting (9)", praxis /dashboard/tasks) or a cell of a ruled grid whose cells touch (parallel
+    // /pricing). The frame's corners are the shape; a 120 px square button inside a rounded card still counts.
+    const segment = (el, r) => {
+        for (let p = el.parentElement, d = 0; p && p !== document.body && d < 4; p = p.parentElement, d++) {
+            const ps = getComputedStyle(p);
+            if (!(parseFloat(ps.borderTopLeftRadius) >= 3 && (boxOf(p, ps) || ps.overflow !== "visible")))
+                continue;
+            const pr = p.getBoundingClientRect();
+            const inner = pr.width - parseFloat(ps.borderLeftWidth) - parseFloat(ps.borderRightWidth) - parseFloat(ps.paddingLeft) - parseFloat(ps.paddingRight);
+            if (r.width >= inner * 0.9 - 1)
+                return true;
+            const sibs = el.parentElement ? Array.from(el.parentElement.children).filter((x) => x !== el && x.tagName === el.tagName && W.__uiVisible(x)) : [];
+            const touch = sibs.filter((x) => { const b = x.getBoundingClientRect(); const gx = Math.max(b.left - r.right, r.left - b.right), gy = Math.max(b.top - r.bottom, r.top - b.bottom); return gx <= 1.5 && gy <= 1.5; });
+            return touch.length >= 1 && sibs.length >= 1;
+        }
+        return false;
+    };
     const seen = new Set();
     const add = (el, kind) => {
         if (seen.has(el) || !W.__uiVisible(el))
@@ -1897,7 +2039,7 @@ export const collectShapes = (page, route = "") => page.evaluate((route) => {
         const half = Math.min(r.width, r.height) / 2;
         const corners = ["borderTopLeftRadius", "borderTopRightRadius", "borderBottomRightRadius", "borderBottomLeftRadius"].map((k) => Math.min(parseFloat(cs[k]) || 0, half));
         const max = Math.max(...corners), min = Math.min(...corners);
-        out.push({ kind, radius: Math.round(max), attached: max >= 2 && min < 1, pill: max >= half - 1 && half > 0, route, where: W.__uiDescribe(el), selector: W.__uiSelector(el), human: W.__uiHuman(el) });
+        out.push({ kind, radius: Math.round(max), attached: max >= 2 && min < 1 || (max < 1 && segment(el, r)), pill: max >= half - 1 && half > 0, route, where: W.__uiDescribe(el), selector: W.__uiSelector(el), human: W.__uiHuman(el) });
     };
     for (const el of Array.from(document.querySelectorAll('button, [role=button], input[type=submit], input[type=button]'))) {
         const r = el.getBoundingClientRect();

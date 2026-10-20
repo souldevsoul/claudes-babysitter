@@ -38,7 +38,7 @@
   "acceptance": { "auth": { "signIn": "/login", "signUp": "/register", "settings": "/settings" }, "skip": [], "skipReasons": {} },
   "content": { "dateFormat": "DD.MM.YYYY", "dashes": "forbid", "brandTerms": ["Acme"], "legalIdentity": ["New Company 1", "New Address 1", "000000000"], "glossary": {}, "skip": [], "skipReasons": {} },
   "forms": { "zeroBalanceRole": "", "protectedRoute": "/dashboard", "skip": [], "skipReasons": {} },
-  "layout": { "headingVariants": 2, "stickyHeader": true, "maxListItems": 20, "registerFavicon": true },
+  "layout": { "headingVariants": 2, "stickyHeader": true, "maxListItems": 20, "registerFavicon": true, "rateDecimals": 4 },
   "domSniper": { "allowProps": [], "skip": [], "strict": false },
   "ignore": ["src/legacy/"],
   "audit": { "exclude": ["design-lab"] }

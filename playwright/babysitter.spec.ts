@@ -18,7 +18,7 @@ const fmt = (list: c.Offender[]) => list.map((o) => `  • ${o.what} — ${o.whe
  * a chat widget never reaches networkidle, and an unbounded networkidle wait held a page until the test timed out.
  */
 async function goto(page: Page, route: string, idleCap = 8_000) {
-  await page.goto(route, { waitUntil: "load", timeout: 45_000 }).catch(() => page.goto(route, { waitUntil: "domcontentloaded", timeout: 30_000 }));
+  await c.gotoStable(page, route);
   await page.waitForLoadState("networkidle", { timeout: idleCap }).catch(() => {});
 }
 
@@ -28,6 +28,8 @@ async function open(page: Page, route: string) {
   await page.waitForTimeout(800); // late fonts / hydration
   if (await c.applyColorScheme(page)) await page.waitForTimeout(300); // class-based dark theme
   await c.revealLazy(page); // reveal-on-scroll sections render as a reader sees them
+  // a modal open on arrival hides the page from every check behind it (parallel: ~75 failures from one notice): close it, report it once
+  await c.dismissArrivalModal(page);
 }
 
 const hard = (list: c.Offender[]) => expect(list, fmt(list)).toEqual([]);
@@ -70,6 +72,12 @@ for (const route of ROUTES) {
       expect(a.ok, `nav link(s) for ${r} lack aria-current="page": ${a.where}`).toBe(true);
     });
     test("3.5 every width has navigation: hidden nav links come with a menu button [P10]", async ({ page }) => { await open(page, r); hard(await c.navReachable(page)); });
+    test("modal open on arrival: reported once, the other checks run behind it [arrival-modal]", async ({ page }) => {
+      await open(page, r);
+      const m = c.arrivalModalFindings((page as any).__bsArrival);
+      soft(m.soft, "a modal dialog is open on arrival");
+      hard(m.hard);
+    });
     test("3.8 page loads scrolled to top [P52]", async ({ page }) => { await open(page, r); expect(await c.scrollY(page)).toBe(0); });
     test("4.6 cookie banner does not cover navigation [P57]", async ({ page }) => { await open(page, r); hard(await c.cookieCovers(page)); });
     test("4.6 cookie settings replace the banner, panel fits, its switches are drawn right [P19 P18]", async ({ page }) => { await open(page, r); hard(await c.cookieFlow(page)); });
@@ -220,7 +228,7 @@ test.describe("site-wide consistency", () => {
       check(`button font family (variant ${v})`, c.variety(sigs, "button", "font", (s) => s.variant === v), lim.buttonFonts);
     check("button height", c.variety(sigs, "button", "height"), lim.buttonHeights);
     check("input height", c.variety(sigs, "input", "height", (s) => s.height > 0), lim.inputHeights);
-    check("input corner radius", c.variety(sigs, "input", "radius"), lim.inputRadii);
+    check("input corner radius", c.variety(sigs, "input", "radius", (s) => s.radius !== null), lim.inputRadii); // underline-only fields have no corners
     check("card corner radius", c.variety(sigs, "card", "radius"), lim.cardRadii);
     check("card style (radius + fill + border + shadow + padding)", c.variety(sigs, "card", "skin"), lim.cardStyles);
     // 3.5 — the open mobile menu speaks the site's language: its buttons vs the CTA set above, its corners vs the cards
