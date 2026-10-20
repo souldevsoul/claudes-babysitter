@@ -587,8 +587,9 @@ export async function stateChecks(page, { reload, opts = {}, maxOpeners = 15, ma
                 // pagination itself (the page's layout grid, praxis /dashboard/tasks: "div.mx-auto.grid" with the sidebar)
                 let list = null;
                 const pz = zone || next;
-                // a list of cards drawn as plain <div>s counts too: a box just before the pagination whose children repeat one tag
-                const repeats = (l) => { const k = Array.from(l.children).filter((x) => window.__uiVisible(x)); return k.length >= 3 && k.every((x) => x.tagName === k[0].tagName); };
+                // a list drawn as plain <div>s counts too: the box just before the pagination that holds several items
+                // (praxis /dashboard/tasks: a rounded card of task groups, then "Docket pages")
+                const repeats = (l) => Array.from(l.children).filter((x) => window.__uiVisible(x)).length >= 2;
                 for (let p = pz.parentElement, below = pz; p && !list; below = p, p = p.parentElement) {
                     const before = [];
                     for (let x = below.previousElementSibling; x; x = x.previousElementSibling) if (repeats(x)) before.unshift(x);

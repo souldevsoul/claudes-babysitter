@@ -68,6 +68,14 @@ Or install it as a dev dependency: `npm i -D github:souldevsoul/claudes-babysitt
 | `docs/` | The guidelines the rules enforce |
 | `test/`, `fixtures/` | `npm test`: RuleTester, Stylelint fixtures, end-to-end cases |
 
+## What changed in 5.1.0 (false alarms from the Praxis and Parallel full runs)
+
+This release fixes the false alarms that the Praxis runs and issue #3 reported. Each fix has a fixture that also
+proves the real defect still fails. A modal that is open on arrival is closed before the page checks run and is
+reported once. Navigation flakes (`chrome-error://`, an interrupted navigation) are retried, and the run summary lists
+them as flakes, not as findings. New config key: `layout.rateDecimals` (default 4), the number of decimals an exchange
+rate may show. Details: [`CHANGELOG.md`](CHANGELOG.md).
+
 ## What changed in 5.0.1 (the shared legal identity placeholder is not test data)
 
 CT2 and CT11 pass the studio's legal identity placeholder ("New Company 1" / "New Address 1" / "000000000", canon

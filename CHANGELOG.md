@@ -2,6 +2,61 @@
 
 Earlier releases (4.11.1 and before) are described in the README under "What changed in …".
 
+## 5.1.0 — false alarms from the full runs on Praxis and Parallel (issue #3) (2026-10-19)
+
+Each one has a fixture in `test/fp-510.test.mjs` that proves the false alarm is gone and that the real defect it looks
+like still fires.
+
+**New config key:** `layout.rateDecimals` (default 4). An exchange rate ("10 credits = $1 = €0.8909") may show up to
+this many decimals. The message always said 2–4, but anything over 2 failed.
+
+- **1.11 / FM8 / N4:** a "← Back to home" or "Back to sign in" link (an arrow icon and words) is no longer taken for
+  the logo. 1.11 no longer reads it as a logo link that is too wide (Praxis /login). FM8 finds the logo by its brand
+  name or picture, not by being the first link (Parallel /forgot-password). N4 accepts the logo plus "Back to home"
+  pair that FM8 asks for. A text "Home" link next to the logo is still a duplicate.
+- **4.6:** a link in the page flow that sits under the cookie banner on arrival passes when the reader can scroll it
+  clear (short auth pages at 1280×720 with bottom padding). A link inside a fixed header, or a footer that stays
+  under the banner at the very bottom of the page, still fails.
+- **money:** "the header shows money" looks only at the site header, not at a page's own `<header>` title block
+  (Praxis /dashboard/wallet). It also skips an amount on the same line as the word credits, because that amount is
+  the hint the message asks for.
+- **P2:** a collapsed contents bar counts as the "On this page" navigation: a button "Contents · …" with
+  `aria-expanded` / `aria-controls`, or a `<details>` summary over the anchors. When the open list scrolls away, the
+  check accepts the sticky bar instead (Parallel and Praxis policies on phones). No contents at all, or a list or
+  bar that is not sticky, still fails.
+- **P3:** "Wallet: your credit balance…" in a privacy policy's list of data categories is a label, not a reference to
+  the page. "Top up from your Wallet" still has to be a link.
+- **CT6:** "October 2026" on its own in a table group row or a heading names a month (a statement grouped by month).
+  A day format cannot write it, so it is no longer reported. In a sentence, on a body line by itself, or with a day,
+  it is still reported.
+- **1.6:** the selected chip in a list of filter chips (one `<li>` each, Praxis /specialists sidebar) keeps its look
+  under the pointer, the same way a selected chip in a row already did.
+- **1.17:** a square row that spans a rounded card (a list's "Waiting (9)" group header) and the touching cells of a
+  ruled grid inside a rounded frame (Parallel /pricing) are parts of that frame. A small square button inside a
+  rounded card still fails.
+- **2.11:** text that has scrolled out of a scroll box (the agreement panel on Praxis /onboarding) is clipped, not
+  covered.
+- **4.4:** pagination measures the list it pages (`<ul>`, a table, or a run of card `<div>`s just before it), never a
+  box that also holds the pagination, such as the page's layout grid with the sidebar (Praxis /dashboard/tasks).
+- **1.2:** dropdown order uses the page's language (`Intl.Collator(<html lang>)`). On an Azerbaijani page "C, Ç" and
+  "S, Ş" are in order.
+- **2.7:** painted content counts even when it is `aria-hidden`, such as a decorative marquee band between sections
+  (Parallel /).
+- **A3:** Radix's hidden "bubble" `<input aria-hidden>` next to `button[role=checkbox]` belongs to the same checkbox
+  (Parallel /register). Two real consent checkboxes still fail.
+- **1.3 / 1.16:** a field drawn as an underline only has no corner radius to count, so it adds no "input corner
+  radius" variant. A compact select trigger drawn as a pill (rows per page) counts as a chip, not as a field.
+- **Modal on arrival:** a modal dialog that is open right after load is closed with Esc or its close button before
+  the page checks run. It is reported once per page as "modal open on arrival": soft when it closes, hard when it
+  cannot be closed. One pending-application notice no longer causes about 75 failures (3.3 h1, 3.5 nav, F0 footer).
+  Cookie and consent dialogs are left to 4.6.
+- **Navigation flakes:** every suite opens its pages with `gotoStable`. It retries when the browser lands on
+  `chrome-error://`, when a navigation is "interrupted by another navigation", and on `net::ERR_CONNECTION_*`. A page
+  that still cannot be opened fails with "navigation flake: …". The run summary lists these separately as "Navigation
+  flakes", keeps them out of `findings.json`, and prints the re-run command.
+- Already fixed in 5.0.3 and checked again: 2.4 skips a table header kept for screen readers (`max-sm:sr-only`), and
+  CT12 leaves a plain word like "credits" alone.
+
 ## 5.0.3 — three more false alarms from the fix round on Compass, Kindred, Threshold (2026-10-19)
 
 - F3 accepts the studio's shared legal identity placeholder ("New Company 1" / "New Address 1" / "000000000") as the

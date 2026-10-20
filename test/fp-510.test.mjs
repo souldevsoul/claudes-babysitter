@@ -291,5 +291,5 @@ try {
   await browser.close();
   server.close();
 }
-if (failed) { console.log(`fp-504: ${failed} failed`); process.exit(1); }
-console.log("fp-504: ok");
+if (failed) { console.log(`fp-510: ${failed} failed`); process.exit(1); }
+console.log("fp-510: ok");
