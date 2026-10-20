@@ -11,6 +11,7 @@ import * as c from "./checks.js";
 import * as a from "./acceptance.js";
 import * as run from "./checks/run.js";
 import * as L from "./checks/layout.js";
+import * as fit from "./checks/fit.js";
 import { loadConfig, loadRoutes, storageFor, loadLocales, applyLocale, localize, viewports } from "./project.js";
 
 const cfg = loadConfig();
@@ -64,7 +65,7 @@ for (const route of ROUTES) {
   test.describe(`run ${route.auth ? `[signed-in${route.role ? `: ${route.role}` : ""}] ` : ""}${route.path}`, () => {
     /* languages: every check whose result depends on the words, at every viewport */
     for (const loc of OTHERS) {
-      test(`i18n [${loc.code}] 2.1/2.10/6.4/B4/N6/2.5: the page in ${loc.code} fits and reads (untranslated text: CT11, content.spec) [P15 P16]`, async ({ browser }) => {
+      test(`i18n [${loc.code}] 2.1/2.10/2.14/6.4/B4/N6/2.5: the page in ${loc.code} fits and reads (untranslated text: CT11, content.spec) [P15 P16]`, async ({ browser }) => {
         test.setTimeout(150_000);
         const { ctx, page } = await openIn(browser, route, loc);
         const list: O[] = [];
@@ -74,6 +75,7 @@ for (const route of ROUTES) {
         add("6.4", (await c.illegibleText(page, allowLight)).hard);
         add("B4", await a.moneyText(page, opts));
         add("N6", await a.clippedControls(page));
+        add("2.14", (await fit.textCutOff(page)).hard); // 5.2.0: a longer language cuts text that fits in English
         // 2.5 words broken mid-word / numbers split / orphans: a longer language breaks what fits in English (Praxis KK
         // "ТАПСЫРМА" broken by letters at 360) — layout.spec checks the default language, this checks the others
         let breaks: { hard: O[]; soft: O[] } = { hard: [], soft: [] };
@@ -90,7 +92,7 @@ for (const route of ROUTES) {
 
     /* states: dialogs, menus, empty submits, wizards, pagination — in every language */
     for (const loc of [DEFAULT, ...OTHERS]) {
-      test(`states${tag(loc)} 2.10/2.1/6.4/B4/N6/A1/4.4 inside dialogs, menus, after an empty submit, wizard steps, pagination [P16 P52]`, async ({ browser }) => {
+      test(`states${tag(loc)} 2.10/2.1/2.14/6.4/B4/N6/A1/4.4/3.8 inside dialogs, menus, after an empty submit, wizard steps, pagination [P16 P52]`, async ({ browser }) => {
         atEdges();
         test.skip(st.enabled === false, "babysitter.config.json → states.enabled: false");
         const pageBudget = Number(st.pageBudget ?? 240_000);

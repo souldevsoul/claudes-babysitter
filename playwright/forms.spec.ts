@@ -17,7 +17,10 @@ const F = { skip: [] as string[], skipReasons: {} as Record<string, string>, zer
 const ROUTES = loadRoutes(cfg);
 const PUBLIC = ROUTES.filter((r) => !r.auth);
 const AUTH = ROUTES.filter((r) => r.auth);
-const SIGNED_IN = existsSync(STORAGE);
+// the signed-in storage: the default user's, else the first role's (5.2.0: role-based projects — Praxis, Parallel —
+// have storage-<role>.json only, and every "signed in" test here was skipped on them)
+const SIGNED_STORE = existsSync(STORAGE) ? STORAGE : ((cfg.roles || []) as any[]).map((r) => storageFor(r.name)).find((f) => existsSync(f)) || STORAGE;
+const SIGNED_IN = existsSync(SIGNED_STORE);
 // a user with no credits: a role from babysitter.config.json → roles (signed in by prepare), or a storage file
 const ZERO = F.zeroBalanceRole ? storageFor(F.zeroBalanceRole) : F.zeroBalanceStorage ? resolve(ROOT, F.zeroBalanceStorage) : null;
 const STRICT = process.env.STRICT !== "0";
@@ -140,6 +143,20 @@ test.describe("forms site-wide", () => {
     report(out, "FM8");
   });
 
+  test("FM11 the browser saves the e-mail as the login: autocomplete username / email / new- and current-password on sign-in and sign-up [autofill]", async ({ browser }) => {
+    test.skip(!on("FM11"), why("FM11"));
+    test.skip(!AUTH_PAGES.length, "no sign-in / sign-up page found");
+    const out: O[] = [];
+    for (const p of AUTH_PAGES) {
+      const ctx = await ctxFor(browser);
+      const page = await ctx.newPage();
+      await open(page, p);
+      out.push(...(await fm.authAutocomplete(page)).map((o: O) => ({ ...o, where: `${p}: ${o.where}` })));
+      await ctx.close();
+    }
+    report(out, "FM11");
+  });
+
   test("FM9 no other page flashes before an auth redirect (signed out → protected page, signed in → sign-in) [loading-state ×25]", async ({ browser }) => {
     test.skip(!on("FM9"), why("FM9"));
     const out: O[] = [];
@@ -154,7 +171,7 @@ test.describe("forms site-wide", () => {
       await ctx.close();
     }
     if (SIGNED_IN && SIGN_IN) {
-      const ctx = await ctxFor(browser, STORAGE);
+      const ctx = await ctxFor(browser, SIGNED_STORE);
       const page = await ctx.newPage();
       const res = await fm.redirectFlash(page, SIGN_IN);
       out.push(...res.findings);
@@ -166,7 +183,7 @@ test.describe("forms site-wide", () => {
 
   test.describe("signed in", () => {
     test.skip(!SIGNED_IN, "no signed-in storage — run `babysitter prepare` with LOGIN_EMAIL / LOGIN_PASSWORD");
-    test.use({ storageState: STORAGE });
+    test.use({ storageState: SIGNED_STORE });
     const settings = () => [...new Set([acc.auth.settings, ...AUTH.map((r) => r.path).filter((p) => /setting|security|account|profile|password/i.test(p))].filter(Boolean) as string[])];
 
     test("FM7 change password rejects the current password as the new one, and asks twice [pw-change ×29]", async ({ page }) => {

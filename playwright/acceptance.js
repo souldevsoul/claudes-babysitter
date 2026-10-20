@@ -405,6 +405,117 @@ export async function cookieConsent(page) {
     return out;
 }
 
+// what a consent choice may leave behind without being "tracking": the choice itself, the session, security, the
+// language / currency / theme the visitor picked, a form draft the policy names (acceptance.essentialStorage adds more)
+export const ESSENTIAL_STORAGE = /(consent|cookie|choice|gdpr|ccpa|cmp|privacy|locale|lang|language|i18n|currency|theme|color-?scheme|session|csrf|xsrf|auth|next-auth|__host-|__secure-|token|sidebar|draft|unfinished|_state$)/i;
+const REJECT_BTN = /^\s*(reject( all)?|decline( all)?|deny|refuse|only (necessary|essential)|necessary only|essential only|отклонить( все)?|только необходимые|rədd et|imtina|бас тарту)\s*$/i;
+async function storageNow(page) {
+    const cookies = (await page.context().cookies().catch(() => [])).map((c) => ({ kind: "cookie", name: c.name, domain: c.domain }));
+    const web = await page.evaluate(() => {
+        const out = [];
+        try { for (let i = 0; i < localStorage.length; i++) out.push({ kind: "localStorage", name: localStorage.key(i) }); } catch { }
+        try { for (let i = 0; i < sessionStorage.length; i++) out.push({ kind: "sessionStorage", name: sessionStorage.key(i) }); } catch { }
+        return out;
+    }).catch(() => []);
+    return [...cookies, ...web];
+}
+/**
+ * C6 — "Decline" really declines (5.2.0; Parallel: "the Decline button does nothing"). On a first visit, in a fresh
+ * context: pressing Reject / Decline closes the banner; afterwards nothing that is not strictly necessary is stored
+ * (cookies, localStorage, sessionStorage — names matched against ESSENTIAL_STORAGE + acceptance.essentialStorage;
+ * a cookie of an analytics host always counts), no analytics host is requested, and the choice persists: after a
+ * reload and on the next page the banner does not ask again. C1 only checked that the button exists.
+ * @returns {Promise<object[]>} findings (id C6)
+ */
+export async function cookieDecline(page, { acc = DEFAULTS, next = null } = {}) {
+    const out = [];
+    const essential = [ESSENTIAL_STORAGE, ...(acc.essentialStorage || []).map((x) => new RegExp(x, "i"))];
+    const hosts = acc.analyticsHosts || [];
+    const tracked = [];
+    page.on("request", (req) => { try { const h = new URL(req.url()).hostname; if (hosts.some((x) => h === x || h.endsWith("." + x))) tracked.push(h); } catch { } });
+    const decline = page.locator("button, [role=button], a").filter({ hasText: REJECT_BTN }).filter({ visible: true }).first();
+    if (!(await decline.isVisible().catch(() => false)))
+        return out; // no Decline on the banner: C1 says so
+    const label = ((await decline.textContent().catch(() => "")) || "").trim();
+    const box = await decline.evaluate((b) => { const r = b.closest('[class*=cookie i], [id*=cookie i], [class*=consent i], [id*=consent i], [role=dialog], [role=alertdialog], [role=region], [aria-label*=cookie i]') || b.parentElement; r.setAttribute("data-bs-decline-banner", ""); return window.__uiDescribe(r); }).catch(() => "cookie banner");
+    await decline.click({ timeout: 3000 }).catch(() => { });
+    await page.waitForTimeout(800);
+    const stays = await page.evaluate((re) => { const b = document.querySelector("[data-bs-decline-banner]"); if (!b || !window.__uiVisible(b)) return false; return Array.from(b.querySelectorAll("button, [role=button], a")).some((x) => window.__uiVisible(x) && new RegExp(re, "i").test((x.textContent || "").trim())); }, REJECT_BTN.source).catch(() => false);
+    if (stays)
+        out.push({ id: "C6", what: `"${label}" does nothing: the cookie banner stays on screen after it is pressed — Decline must record the choice and close the banner, the same way Accept does [C6, BQA 7]`, where: box });
+    const nonEssential = (list) => list.filter((x) => (x.kind === "cookie" && hosts.some((h) => String(x.domain || "").replace(/^\./, "").endsWith(h))) || !essential.some((re) => re.test(x.name)));
+    const after = nonEssential(await storageNow(page));
+    if (after.length)
+        out.push({ id: "C6", what: `after "${label}" the site still stores ${after.slice(0, 6).map((x) => `${x.kind} "${x.name}"`).join(", ")}${after.length > 6 ? ` and ${after.length - 6} more` : ""} — nothing beyond what is strictly necessary may be stored once the visitor declines (or name it in acceptance.essentialStorage with the reason) [C6, BQA 7]`, where: box });
+    // the choice persists: a reload (and the next page) does not ask again
+    await page.reload({ waitUntil: "load" }).catch(() => { });
+    await page.waitForTimeout(900);
+    const asks = async () => page.locator("button, [role=button], a").filter({ hasText: REJECT_BTN }).filter({ visible: true }).count().catch(() => 0);
+    if (!stays && (await asks()))
+        out.push({ id: "C6", what: `"${label}" is not remembered: after a reload the cookie banner asks again — store the choice (a necessary cookie or localStorage entry) and read it on load [C6, BQA 7]`, where: box });
+    if (next) {
+        await page.goto(next, { waitUntil: "load" }).catch(() => { });
+        await page.waitForTimeout(700);
+        if (!stays && !out.some((f) => /not remembered/.test(f.what)) && (await asks()))
+            out.push({ id: "C6", what: `"${label}" is not remembered on the next page (${new URL(page.url()).pathname}): the banner asks again [C6, BQA 7]`, where: box });
+        const later = nonEssential(await storageNow(page)).filter((x) => !after.some((y) => y.kind === x.kind && y.name === x.name));
+        if (later.length)
+            out.push({ id: "C6", what: `after "${label}", the next page stores ${later.slice(0, 6).map((x) => `${x.kind} "${x.name}"`).join(", ")} — not strictly necessary [C6, BQA 7]`, where: "page" });
+    }
+    if (tracked.length)
+        out.push({ id: "C6", what: `after "${label}" the page still calls ${[...new Set(tracked)].join(", ")} — no analytics or advertising request once the visitor declines [C6, BQA 7]`, where: "network" });
+    return out;
+}
+
+/**
+ * C7 — a link inside the cookie settings (or any open dialog) opens its page and the dialog goes away (5.2.0; Praxis
+ * on phones: the settings window lives in the root layout, so "Cookie Policy" navigated under a still-open dialog
+ * that covers the screen — the link looked dead). Each same-origin link of the open panel is clicked once.
+ * `open` opens the panel (returns false when there is none).
+ */
+export async function dialogLinks(page, open) {
+    const out = [];
+    const home = page.url();
+    const links = await (async () => {
+        if (!(await open())) return [];
+        return page.evaluate(() => Array.from(document.querySelectorAll("[role=dialog] a[href], [role=alertdialog] a[href], dialog[open] a[href], [data-bs-cookie] a[href]")).filter((a) => window.__uiVisible(a) && a.target !== "_blank").map((a) => { try { const u = new URL(a.href); return u.origin === location.origin ? { href: u.pathname + u.search + u.hash, text: (a.textContent || "").trim().replace(/\s+/g, " ").slice(0, 40) } : null; } catch { return null; } }).filter(Boolean).slice(0, 3)).catch(() => []);
+    })();
+    for (const l of links) {
+        if (page.url() !== home) { await page.goto(home, { waitUntil: "load" }).catch(() => { }); await page.waitForTimeout(400); }
+        if (!(await open())) break;
+        const loc = page.locator("[role=dialog] a[href], [role=alertdialog] a[href], dialog[open] a[href], [data-bs-cookie] a[href]").filter({ hasText: l.text }).filter({ visible: true }).first();
+        await loc.click({ timeout: 2500 }).catch(() => { });
+        await page.waitForTimeout(1200);
+        const moved = new URL(page.url()).pathname !== new URL(home).pathname;
+        const cover = await page.evaluate(() => {
+            const d = Array.from(document.querySelectorAll("[role=dialog], [role=alertdialog], dialog[open], [data-bs-cookie]")).filter((x) => window.__uiVisible(x));
+            const vw = innerWidth * innerHeight;
+            const big = d.map((x) => { const r = x.getBoundingClientRect(); const w = Math.max(0, Math.min(r.right, innerWidth) - Math.max(r.left, 0)), h = Math.max(0, Math.min(r.bottom, innerHeight) - Math.max(r.top, 0)); return { where: window.__uiDescribe(x), share: (w * h) / vw }; }).sort((a, b) => b.share - a.share)[0];
+            return big || null;
+        }).catch(() => null);
+        if (moved && cover && cover.share >= 0.35)
+            out.push({ id: "C7", what: `"${l.text}" in the open dialog opens ${l.href} underneath — the dialog stays open over ${Math.round(cover.share * 100)}% of the screen, so the link looks dead. Close the dialog when the link is followed (onClick → setOpen(false)) [C7, BQA 7]`, where: cover.where });
+        else if (!moved && cover)
+            out.push({ id: "C7", what: `"${l.text}" in the open dialog does nothing — it neither opens ${l.href} nor closes the dialog [C7, BQA 7]`, where: cover.where });
+    }
+    if (page.url() !== home) await page.goto(home, { waitUntil: "load" }).catch(() => { });
+    return out;
+}
+/** Opens the cookie settings the way a visitor does: the banner's Manage / Settings, else the footer's "Cookie settings". */
+export async function openCookieSettings(page) {
+    const already = await page.locator("[role=dialog], [role=alertdialog], dialog[open]").filter({ hasText: /cookie/i }).filter({ visible: true }).count().catch(() => 0);
+    if (already) return true;
+    for (const sel of ["[class*=cookie i] :is(button, a), [id*=cookie i] :is(button, a), [class*=consent i] :is(button, a), [aria-label*=cookie i] :is(button, a)", "footer :is(button, a)"]) {
+        const b = page.locator(sel).filter({ hasText: /^\s*(manage( cookies)?|cookie (settings|preferences|choices)|settings|preferences|customi[sz]e|настро\w*( cookie)?|cookie parametrl\w*|cookie баптау\w*)\s*$/i }).filter({ visible: true }).first();
+        if (await b.isVisible().catch(() => false)) {
+            await b.click({ timeout: 2500 }).catch(() => { });
+            await page.waitForTimeout(600);
+            if (await page.locator("[role=dialog], [role=alertdialog], dialog[open]").filter({ visible: true }).count().catch(() => 0)) return true;
+        }
+    }
+    return false;
+}
+
 /** C2 — the banner / policy may name Analytics or Marketing only when the site really loads such scripts. */
 export const cookieCategories = (page) => page.evaluate(() => {
     const t = Array.from(document.querySelectorAll('[class*=cookie i], [id*=cookie i], [class*=consent i], [id*=consent i], [role=dialog]')).filter((e) => window.__uiVisible(e)).map((e) => e.innerText).join(" ");
@@ -566,13 +677,29 @@ export const SIGN_IN_CTA_RE = /^(sign ?in|log ?in|create (an )?account|sign ?up|
 export const pageText = (page) => page.evaluate(() => document.body.innerText || "");
 
 /** Log in through the configured form (same env as prepare.mjs). Returns false without credentials. */
-export async function login(page, cfg, base) {
-    if (!cfg.login || !process.env.LOGIN_EMAIL || !process.env.LOGIN_PASSWORD)
+/**
+ * The e-mail and password to sign in with: LOGIN_EMAIL / LOGIN_PASSWORD, else the first role of babysitter.config.json
+ * → roles whose env names resolve (5.2.0: Praxis and Parallel sign in per role — roles[].env { LOGIN_EMAIL:
+ * "BUYER_EMAIL" } — so A4 "sign out works with one click" was skipped on both, every run). null when there are none.
+ */
+export function credentials(cfg = {}, env = process.env) {
+    if (env.LOGIN_EMAIL && env.LOGIN_PASSWORD) return { email: env.LOGIN_EMAIL, password: env.LOGIN_PASSWORD, role: null };
+    for (const r of cfg.roles || []) {
+        const ref = (k) => r.env?.[k] ?? r[k];
+        const val = (k) => { const x = ref(k); return x && /^[A-Z][A-Z0-9_]*$/.test(x) ? env[x] : undefined; };
+        const email = val("LOGIN_EMAIL"), password = val("LOGIN_PASSWORD");
+        if (email && password) return { email, password, role: r.name };
+    }
+    return null;
+}
+
+export async function login(page, cfg, base, creds = credentials(cfg)) {
+    if (!cfg.login || !creds)
         return false;
     const url = new URL(cfg.login.url, base).href;
     await page.goto(url, { waitUntil: "networkidle" }).catch(() => page.goto(url));
-    await page.fill(cfg.login.emailSelector || 'input[type=email], input[name=email], input[name=username]', process.env.LOGIN_EMAIL);
-    await page.fill(cfg.login.passwordSelector || "input[type=password]", process.env.LOGIN_PASSWORD);
+    await page.fill(cfg.login.emailSelector || 'input[type=email], input[name=email], input[name=username]', creds.email);
+    await page.fill(cfg.login.passwordSelector || "input[type=password]", creds.password);
     await page.click(cfg.login.submitSelector || 'button[type=submit], form button:not([type=button])');
     await page.waitForURL((u) => u.href !== url && !/login|sign-?in/i.test(u.pathname), { timeout: 20000 }).catch(() => { });
     return !/login|sign-?in/i.test(new URL(page.url()).pathname);
@@ -596,6 +723,35 @@ export async function clickControl(page, re) {
         await page.keyboard.press("Escape");
     }
     return false;
+}
+
+/**
+ * A4 — Sign out works the first time (5.2.0; Parallel: "you stay signed in, only a second try signs you out" — the
+ * sign-out sent the browser to the site's other address, where the old session was alive). From a signed-in page:
+ * press Sign out (opening the account menu when needed), confirm once when the site asks ("Sign out?" dialog), then:
+ * the browser stays on the same host, and `home` (the signed-in page) no longer opens signed in. A confirm dialog is
+ * part of one sign-out; 5.1.0 never pressed it (and needed LOGIN_EMAIL, which role-based projects do not set).
+ */
+export async function signOutOnce(page, { home }) {
+    const out = [];
+    const origin = new URL(page.url()).origin;
+    if (!(await clickControl(page, SIGN_OUT_RE)))
+        return [{ id: "A4", what: "no visible Sign out / Log out control (also looked inside header menus) [A4]", where: "header" }];
+    await page.waitForTimeout(700);
+    const confirm = page.locator("[role=dialog], [role=alertdialog], dialog[open]").locator("button, a").filter({ hasText: /^\s*(sign ?out|log ?out|yes(,? sign ?out)?|confirm|выйти|да)\s*$/i }).filter({ visible: true }).first();
+    let confirmed = false;
+    if (await confirm.isVisible().catch(() => false)) { await confirm.click({ timeout: 3000 }).catch(() => { }); confirmed = true; }
+    await page.waitForTimeout(2000);
+    await page.waitForLoadState("load", { timeout: 15_000 }).catch(() => { });
+    const landed = new URL(page.url());
+    if (landed.origin !== origin)
+        out.push({ id: "A4", what: `Sign out sends the browser to another host (${landed.origin}) — stay on ${origin}: a session on the other address may still be alive (a redirect built from NEXTAUTH_URL / an absolute callbackUrl) [A4, BQA 11]`, where: landed.href });
+    await page.goto(new URL(home, origin).href, { waitUntil: "load" }).catch(() => { });
+    await page.waitForTimeout(900);
+    const signedIn = new URL(page.url()).pathname === home && !(await page.locator("input[type=email], input[type=password]").first().isVisible().catch(() => false));
+    if (signedIn)
+        out.push({ id: "A4", what: `after one Sign out${confirmed ? " and its confirmation" : ""}, ${home} still opens signed in — it takes a second try. Sign out must end the session the first time (await signOut(), then navigate; one host) [A4, BQA 11]`, where: home });
+    return out;
 }
 
 /* ─────────────── content ─────────────── */

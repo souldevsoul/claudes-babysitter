@@ -72,3 +72,22 @@ the favicon without recording it.
 - A section carried by a picture is not empty.
 - A float like `7.4899999` is parsed as one amount (the grouping pattern may not be followed by a digit).
   A 3-digit tail is read as a decimal only when the page itself uses that separator for decimals.
+
+## 5.2.0 — from the miss loop (`babysitter misses`)
+
+- **2.14 text is shown in full** (`playwright/checks/fit.js`, babysitter.spec, every language in run.spec, every
+  state in the states run): the glyphs of every text run are measured. Hard when text straddles the screen edge or
+  the edge of a box that clips it (overflow hidden / clip; a scroller is not a clip), when it is hidden below the
+  bottom of a screen-tall fixed panel that does not scroll, when it spills out of its painted button / badge / card,
+  and when a list option, menu item, tab, label or short text is truncated with "…". Left out: closed accordions,
+  carousel and marquee tracks, line clamps, ellipsis on long titles, horizontal scrollers. Faint decorative text goes
+  to "check by eye".
+- **2.5** also measures short plain labels (≤ 40 characters: a pagination caption, a row label); there only a word
+  of letters broken by letters counts, so a long e-mail or URL may still break.
+- **1.20 one look per role across pages** (`playwright/checks/looks.js`, babysitter.spec site-wide, 390 + 1440):
+  buttons (filled / outlined), tags (badges, chips, status pills — a dot inside is fine), cards and inputs. The look
+  most pages use is the site's; a page whose pieces of a role are square while the rest are rounded or pills, or
+  whose buttons change case, is hard. The same corner family with a radius more than `consistency.radiusTolerance`
+  (4) px apart is soft.
+- **3.5** the open mobile menu: an item that is still off the screen after it was scrolled into view, or that only
+  a script could scroll to (an overflow: hidden panel), cannot be reached — hard.

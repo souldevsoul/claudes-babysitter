@@ -25,6 +25,9 @@
 //                      Playwright run at 360/390/768/1280/1440 (--quick: 390 + 1440). --only is a partial run and says so.
 //                      Ends with a summary of what did not run and the command that re-checks only the failures.
 //   fix-plan [--format md|agent|json]  → the last run's findings grouped into a fix list with the files to change
+//   misses [--project slug]… [--since ISO] [--findings findings.json]… [--dry-run]
+//                    → the miss loop: people's Nexus cards since the last run → CAUGHT / MISSED / OUT OF SCOPE,
+//                      misses/<slug>-<date>.md and the catch rate CAUGHT / (CAUGHT + MISSED) (NEXUS_URL, NEXUS_API_KEY)
 //   after-merge      → the git post-merge / post-rewrite re-check: static check of what the merge changed, then the
 //                      runtime checks on the routes it reached (when a dev server / preview answers)
 import { spawnSync } from "node:child_process";
@@ -181,7 +184,8 @@ switch (cmd) {
   }
   case "fix-plan": node("bin/fix-plan.mjs", rest); break;
   case "after-merge": node("bin/after-merge.mjs", rest); break;
+  case "misses": node("bin/misses.mjs", rest); break;
   default:
-    console.log("usage: babysitter <init|check|audit|content|prepare|test-ui|e2e|fix-plan|after-merge> [...]\n  e2e [--skip-prepare] [--quick] [--only ui|acceptance|content|product] [--last-failed]\n  init [repo] [--new|--existing] [--link|--vendor] [--ci] [--url URL] [--dev-url URL] [--dry-run] [--no-install] [--yes] [--force]");
+    console.log("usage: babysitter <init|check|audit|content|prepare|test-ui|e2e|fix-plan|after-merge|misses> [...]\n  e2e [--skip-prepare] [--quick] [--only ui|acceptance|content|product] [--last-failed]\n  init [repo] [--new|--existing] [--link|--vendor] [--ci] [--url URL] [--dev-url URL] [--dry-run] [--no-install] [--yes] [--force]");
     process.exit(cmd ? 2 : 0);
 }

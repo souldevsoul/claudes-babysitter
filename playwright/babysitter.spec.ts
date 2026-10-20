@@ -4,6 +4,8 @@
 //   STRICT=0 turns the heuristic checks into warnings.
 import { test, expect, type Page } from "@playwright/test";
 import * as c from "./checks.js";
+import * as fit from "./checks/fit.js";
+import * as looks from "./checks/looks.js";
 import { loadConfig, loadRoutes, storageFor } from "./project.js";
 
 const cfg = loadConfig();
@@ -46,6 +48,12 @@ for (const route of ROUTES) {
 
     test("2.1 no horizontal scroll, nothing outside the viewport [P15 P16]", async ({ page }) => { await open(page, r); hard(await c.horizontalOverflow(page)); });
     test("2.10 controls stay inside their card, and no container cuts them off [P16]", async ({ page }) => { await open(page, r); hard(await c.escapesBox(page)); });
+    test("2.14 text is shown in full: not cut by the screen edge or a box that clips, not spilling out of its button / badge / card, no truncated option [P16]", async ({ page }) => {
+      await open(page, r);
+      const { hard: list, eye } = await fit.textCutOff(page);
+      if (eye.length) test.info().annotations.push({ type: "check by eye", description: fmt(eye) });
+      hard(list);
+    });
     test("1.1 no native select/date/file/checkbox/radio [P01 P03 P50]", async ({ page }) => { await open(page, r); hard(await c.nativeControls(page)); });
     test("6.4 text ≥12px, legible weight, contrast ≥4.5:1 (3:1 large) [P11 P34]", async ({ page }) => {
       await open(page, r);
@@ -245,5 +253,22 @@ test.describe("site-wide consistency", () => {
       }
     }
     expect(problems, problems.join("\n\n")).toEqual([]);
+  });
+  test("1.20 one look per role across pages: buttons (filled / outlined), tags, cards and inputs share their corners and case [P04 P46 P47]", async ({ browser }, info) => {
+    test.skip(!/mobile-390|desktop-1440/.test(info.project.name), "run at one mobile and one desktop width");
+    test.setTimeout(60_000 + ROUTES.length * 15_000);
+    const items: any[] = [];
+    const notTested: string[] = [];
+    for (const route of ROUTES) {
+      const ctx = await browser.newContext({ ...info.project.use, storageState: route.auth ? storageFor(route.role) : undefined, baseURL: info.project.use.baseURL });
+      const page = await ctx.newPage();
+      try { await open(page, route.path); items.push(...(await looks.collectRoleLooks(page, route.path))); }
+      catch (e) { notTested.push(`${route.path}: ${String((e as Error).message).split("\n")[0]}`); }
+      await ctx.close();
+    }
+    if (notTested.length) test.info().annotations.push({ type: "not tested", description: notTested.join("\n") });
+    const r = looks.roleLookOutliers(items, { radiusTolerance: Number(cfg.consistency?.radiusTolerance ?? 4) });
+    soft(r.soft, "corner radius differs between pages (same corner family)");
+    hard(r.hard);
   });
 });

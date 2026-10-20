@@ -122,3 +122,11 @@ pagination, 3.8 navigation and anchors, untranslated — each TP and FP; asserts
 `test/run-prepare.test.mjs` (locale detection by switcher + hreflang, dynamic route by row click, roles, the e2e
 summary, `--last-failed`, fix-plan), `test/run-wiring.test.mjs` (init hooks + CI + agent block, Stop hook blocking,
 after-merge, summary).
+
+## 5.2.0 — an in-place step opens at its top
+
+Every Next / Continue, one Back after the walk, and a pagination click are judged by where the changed region's
+top lands: the step pane, the form or the list, inside the box that scrolls it (the window, or a dialog / drawer
+that scrolls itself). The reader is put at the button first. The region is found again after React replaces it.
+The walk also starts when a form's first button is Back, picks an option when Next waits for a choice, counts a
+step titled by a `<p>`, and walks Next buttons outside every form even when the page has other forms.

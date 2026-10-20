@@ -33,7 +33,10 @@ main a{color:var(--primary)}
 <script>
 const c=document.getElementById('cookie'),p=document.getElementById('prefs');
 const hide=()=>{c.style.display='none';p.style.display='none';};
-document.getElementById('acc').onclick=hide;document.getElementById('rej').onclick=hide;document.getElementById('save').onclick=hide;document.getElementById('x').onclick=hide;
+// the choice is remembered (C6): a reload or the next page does not ask again
+const choose=(v)=>()=>{try{localStorage.setItem('consent',v);}catch{}hide();};
+try{if(localStorage.getItem('consent'))hide();}catch{}
+document.getElementById('acc').onclick=choose('all');document.getElementById('rej').onclick=choose('necessary');document.getElementById('save').onclick=choose('custom');document.getElementById('x').onclick=hide;
 document.getElementById('man').onclick=()=>{c.style.display='none';p.style.display='block';};
 document.getElementById('manage-cookies').onclick=(e)=>{e.preventDefault();c.style.display='none';p.style.display='block';};
 document.addEventListener('keydown',(e)=>{if(e.key==='Escape')hide();});

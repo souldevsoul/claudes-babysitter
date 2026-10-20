@@ -14,7 +14,10 @@ const acc = a.acceptanceConfig(cfg);
 const ROUTES = loadRoutes(cfg);
 const PUBLIC = ROUTES.filter((r) => !r.auth);
 const AUTH = ROUTES.filter((r) => r.auth);
-const SIGNED_IN = existsSync(STORAGE);
+// the signed-in storage: the default user's, else the first role's (5.2.0: role-based projects — Praxis, Parallel —
+// have storage-<role>.json only, and every "signed in" test here was skipped on them)
+const SIGNED_STORE = existsSync(STORAGE) ? STORAGE : ((cfg.roles || []) as any[]).map((r) => storageFor(r.name)).find((f) => existsSync(f)) || STORAGE;
+const SIGNED_IN = existsSync(SIGNED_STORE);
 const STRICT = process.env.STRICT !== "0";
 const on = (id: string) => !(acc.skip || []).includes(id);
 const why = (id: string) => `${id} switched off in babysitter.config.json → acceptance.skip${acc.skipReasons?.[id] ? `: ${acc.skipReasons[id]}` : ""}`;
@@ -167,6 +170,16 @@ test.describe("acceptance site-wide", () => {
     await ctx.close();
   });
 
+  test("C6 Decline declines: the banner closes, nothing non-essential is stored, the choice persists (reload, next page) [BQA 7]", async ({ browser }) => {
+    test.skip(!on("C6"), why("C6"));
+    const ctx = await ctxFor(browser, false);
+    const page = await ctx.newPage();
+    await open(page, PUBLIC[0]?.path || "/");
+    const next = PUBLIC.find((r) => r.path !== (PUBLIC[0]?.path || "/"))?.path;
+    hard(await a.cookieDecline(page, { acc, next: next ? new URL(next, page.url()).href : null }));
+    await ctx.close();
+  });
+
   test("C2 Analytics / Marketing cookies are offered only when such scripts load [BQA 7]", async ({ browser }) => {
     test.skip(!on("C2"), why("C2"));
     test.setTimeout(60_000 + PUBLIC.length * 10_000);
@@ -269,7 +282,7 @@ test.describe("acceptance site-wide", () => {
 
   test.describe("signed in", () => {
     test.skip(!SIGNED_IN, "no signed-in storage — run `babysitter prepare` with LOGIN_EMAIL / LOGIN_PASSWORD");
-    test.use({ storageState: STORAGE });
+    test.use({ storageState: SIGNED_STORE });
 
     test("A5 sign-in / sign-up are not offered to a signed-in user [BQA 6/10, BQA]", async ({ page }) => {
       test.skip(!on("A5"), why("A5"));
@@ -334,17 +347,29 @@ test.describe("acceptance site-wide", () => {
   // last, and in its own fresh session: signing out must not end the shared session the other tests use
   test("A4 sign out works with one click and stays signed out [BQA 11]", async ({ browser }) => {
     test.skip(!on("A4"), why("A4"));
-    test.skip(!process.env.LOGIN_EMAIL || !cfg.login, "needs LOGIN_EMAIL / LOGIN_PASSWORD and config.login");
+    // 5.2.0: role credentials count (roles[].env), not LOGIN_EMAIL only — A4 never ran on role-based projects
+    const creds = a.credentials(cfg);
+    test.skip(!creds || !cfg.login, "needs LOGIN_EMAIL / LOGIN_PASSWORD (or a role in babysitter.config.json → roles with its env set) and config.login");
     const ctx = await ctxFor(browser, false);
     const page = await ctx.newPage();
     await c.install(page);
-    expect(await a.login(page, cfg, test.info().project.use.baseURL), "could not sign in with LOGIN_EMAIL / LOGIN_PASSWORD").toBe(true);
+    expect(await a.login(page, cfg, test.info().project.use.baseURL, creds), `could not sign in${creds?.role ? ` as role "${creds.role}"` : ""}`).toBe(true);
     const home = new URL(page.url()).pathname;
-    expect(await a.clickControl(page, a.SIGN_OUT_RE), "no visible Sign out / Log out control (also looked inside header menus) [A4]").toBe(true);
-    await page.waitForTimeout(1500);
-    await page.goto(home, { waitUntil: "networkidle" }).catch(() => {});
-    const still = new URL(page.url()).pathname === home && !(await page.locator("input[type=email], input[type=password]").first().isVisible().catch(() => false));
-    expect(still, `after one click on Sign out, ${home} still opens signed in [A4, BQA]`).toBe(false);
+    hard(await a.signOutOnce(page, { home }));
     await ctx.close();
+  });
+});
+
+/* ───────── C7 at a phone and a desktop width: the settings window covers a phone's screen ───────── */
+test.describe("acceptance cookie settings", () => {
+  test.beforeEach(() => twoWidths());
+  test("C7 a link in the cookie settings opens its page and closes the window (phone and desktop) [BQA 7]", async ({ browser }, info) => {
+    test.skip(!on("C7"), why("C7"));
+    const ctx = await browser.newContext({ ...info.project.use, baseURL: info.project.use.baseURL });
+    const page = await ctx.newPage();
+    await open(page, PUBLIC[0]?.path || "/");
+    const list = await a.dialogLinks(page, () => a.openCookieSettings(page));
+    await ctx.close();
+    hard(list);
   });
 });

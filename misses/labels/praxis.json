@@ -1,0 +1,456 @@
+{
+ "cmvavbzzr000ljm06ncqyu8pb": {
+  "bucket": "MISSED",
+  "summary": "AZ/KK at 360: hero button label (3 lines) spills out of its fixed 44px button",
+  "check": "2.14 text shown in full (new)",
+  "fixture": "test/misses-520.test.mjs",
+  "oldPassed": "the AZ/KK pages were never opened by a run between the change and the card; 2.10 measures controls against cards, not the label's glyphs against its own button; N6 looks for horizontal ellipsis only",
+  "why": "",
+  "by": "claude (LLM)",
+  "confirmed": false
+ },
+ "cmvavfrji000qjm06a3lzdd4c": {
+  "bucket": "MISSED",
+  "summary": "AZ/KK at 360: pagination caption 'Səhifə 1 / 2' breaks letter by letter",
+  "check": "2.5 extended to short plain labels",
+  "fixture": "test/misses-520.test.mjs",
+  "oldPassed": "the AZ/KK pages were never opened by a run between the change and the card; 2.5 only measured headings/buttons/labels/th/badges/nav links; the caption is a plain <span>",
+  "why": "",
+  "by": "claude (LLM)",
+  "confirmed": false
+ },
+ "cmvavjmgg000vjm0637l11sjw": {
+  "bucket": "MISSED",
+  "summary": "AZ/KK at 360: orange CTA runs off the screen edge (/become-partner)",
+  "check": "2.14 text shown in full (new)",
+  "fixture": "test/misses-520.test.mjs",
+  "oldPassed": "the AZ/KK pages were never opened by a run between the change and the card; 2.1 treats anything clipped by body/a full-width overflow-hidden band as decorative bleed; 2.10's ancestor walk stops at body and skips full-width bands",
+  "why": "",
+  "by": "claude (LLM)",
+  "confirmed": false
+ },
+ "cmvavkhjk0010jm065sy6dul2": {
+  "bucket": "MISSED",
+  "summary": "360: /contact topic listbox wider than the screen, rows cut",
+  "check": "2.14 popup off screen + text cut, now inside states",
+  "fixture": "test/misses-520.test.mjs",
+  "oldPassed": "the AZ/KK pages were never opened by a run between the change and the card; 1.2 sweep opens only the first 8 popup triggers per page; the states run never measured an open popup's edges and 2.1 skips a body-clipped layer",
+  "why": "",
+  "by": "claude (LLM)",
+  "confirmed": false
+ },
+ "cmvawb120001ajm06tx9slhlk": {
+  "bucket": "MISSED",
+  "summary": "Cookie banner text does not list every stored key",
+  "check": "§4 cookie banner coverage (later round)",
+  "fixture": "deferred",
+  "oldPassed": "no check compares banner text with stored keys",
+  "why": "factory rule, brief §4",
+  "by": "claude (LLM)",
+  "confirmed": false
+ },
+ "cmvawcrhu001djm06ndzza6ml": {
+  "bucket": "OUT OF SCOPE",
+  "summary": "Footer legal links order (Cookie settings next to Cookie Policy)",
+  "why": "owner/tester ordering decision; F1 enforces adjacency only when acceptance.footerManageCookies is on — note for §4",
+  "by": "claude (LLM)",
+  "confirmed": false
+ },
+ "cmvawebi0001ijm06312ixn7g": {
+  "bucket": "MISSED",
+  "summary": "AZ: 'Kuki' vs 'Cookie' spelt two ways",
+  "check": "glossary consistency (content)",
+  "fixture": "deferred",
+  "oldPassed": "CT naming compares legal names, not one term across a language",
+  "why": "glossary checks are a known gap; not in this round",
+  "by": "claude (LLM)",
+  "confirmed": false
+ },
+ "cmvawk6go0001l206m9wryhj7": {
+  "bucket": "MISSED",
+  "summary": "Mobile: Cookie Policy link in Cookie settings looks dead (navigates under the open dialog)",
+  "check": "C7 dialog links (new)",
+  "fixture": "test/misses-520.test.mjs",
+  "oldPassed": "cookieFlow/C1 open the panel but never follow its links",
+  "why": "",
+  "by": "claude (LLM)",
+  "confirmed": false
+ },
+ "cmvawomgb0006l206y1vzl7dx": {
+  "bucket": "MISSED",
+  "summary": "Login email field autofills the user's name",
+  "check": "FM11 autocomplete (new)",
+  "fixture": "test/misses-520.test.mjs",
+  "oldPassed": "no check read autocomplete/username on auth forms",
+  "why": "",
+  "by": "claude (LLM)",
+  "confirmed": false
+ },
+ "cmvawpoo40001l6063fddp8rw": {
+  "bucket": "MISSED",
+  "summary": "Task board pagination 1/2/3 stays at the bottom",
+  "check": "4.4 pagination region top (fixed)",
+  "fixture": "test/misses-520.test.mjs",
+  "oldPassed": "no run between change and card; 5.0.x measured the wrong box (layout grid); 5.1.0 gave up when React replaced the list",
+  "why": "",
+  "by": "claude (LLM)",
+  "confirmed": false
+ },
+ "cmvawse630006l606watjm4fx": {
+  "bucket": "MISSED",
+  "summary": "AZ 360: price block wraps to 3 lines, misaligned with the name",
+  "check": "2.12 repeated-row columns (soft) in i18n",
+  "fixture": "deferred",
+  "oldPassed": "2.12 is soft and not run per language",
+  "why": "in scope, not done this round",
+  "by": "claude (LLM)",
+  "confirmed": false
+ },
+ "cmvawsmcm0009l606m5f4psv7": {
+  "bucket": "MISSED",
+  "summary": "360: price in the task header clipped at the right",
+  "check": "2.14 text shown in full (new)",
+  "fixture": "test/misses-520.test.mjs",
+  "oldPassed": "the page root is overflow-x:hidden, which 2.1 reads as an intended clip; the price is text, so 2.10 never looked",
+  "why": "",
+  "by": "claude (LLM)",
+  "confirmed": false
+ },
+ "cmvawsue1000gl606k9qgevme": {
+  "bucket": "MISSED",
+  "summary": "360: vertical dividers left on a stacked strip",
+  "check": "stacked-dividers check (to do)",
+  "fixture": "deferred",
+  "oldPassed": "no check for divide-x on a stacked layout",
+  "why": "in scope, not done this round",
+  "by": "claude (LLM)",
+  "confirmed": false
+ },
+ "cmvax3wwn000ll6065blnvj98": {
+  "bucket": "MISSED",
+  "summary": "360: language option 'Azərbaycanca' truncated in the menu list",
+  "check": "2.14 ellipsis in options (new)",
+  "fixture": "test/misses-520.test.mjs",
+  "oldPassed": "N6 checks ellipsis in buttons/links/comboboxes/tabs only, not [role=option]",
+  "why": "",
+  "by": "claude (LLM)",
+  "confirmed": false
+ },
+ "cmvaxjg1v000ql606ammkaojk": {
+  "bucket": "MISSED",
+  "summary": "360: 4th status-timeline label spills out of its card",
+  "check": "2.14 text shown in full (new)",
+  "fixture": "test/misses-520.test.mjs",
+  "oldPassed": "the AZ/KK pages were never opened by a run between the change and the card; text is not a control (2.10); 2.1 skipped it under the page root's overflow-x:hidden",
+  "why": "",
+  "by": "claude (LLM)",
+  "confirmed": false
+ },
+ "cmvaxl8o8000vl606nvnxkw5x": {
+  "bucket": "MISSED",
+  "summary": "Brief wizard: Next/Back do not scroll to the step top",
+  "check": "4.4/3.8 step region top (fixed)",
+  "fixture": "test/misses-520.test.mjs",
+  "oldPassed": "states judged only a NEW h1–h4 against the window; the step title is a <p>, the dialog scrolls itself, Next waits for an option button, Back never pressed",
+  "why": "",
+  "by": "claude (LLM)",
+  "confirmed": false
+ },
+ "cmvaxlr950010l606yminryza": {
+  "bucket": "MISSED",
+  "summary": "KK 360: 'ТАПСЫРМА' broken mid-word",
+  "check": "2.5 extended to short plain labels",
+  "fixture": "test/misses-520.test.mjs",
+  "oldPassed": "the AZ/KK pages were never opened by a run between the change and the card; 2.5 never measured a plain <span> row label",
+  "why": "",
+  "by": "claude (LLM)",
+  "confirmed": false
+ },
+ "cmvay9ero0015l6069o32q0gs": {
+  "bucket": "MISSED",
+  "summary": "360: cookie settings window mixes centre/left alignment",
+  "check": "alignment inside opened panels",
+  "fixture": "deferred",
+  "oldPassed": "2.7 alignment runs on the page at rest, not inside the opened cookie panel",
+  "why": "in scope, not done this round",
+  "by": "claude (LLM)",
+  "confirmed": false
+ },
+ "cmvb1q7xn0001i306jilzldsx": {
+  "bucket": "MISSED",
+  "summary": "Pricing vs Terms/Payments/Refund disagree on what to do after acceptance",
+  "check": "§4 policy-contradiction suite",
+  "fixture": "deferred",
+  "oldPassed": "no cross-page claim comparison yet",
+  "why": "brief §4",
+  "by": "claude (LLM)",
+  "confirmed": false
+ },
+ "cmvb1qut90004i3067569pnui": {
+  "bucket": "OUT OF SCOPE",
+  "summary": "Privacy policy names vendors",
+  "why": "legal/owner decision",
+  "by": "claude (LLM)",
+  "confirmed": false
+ },
+ "cmvb1rzuu000bi306iqq26219": {
+  "bucket": "MISSED",
+  "summary": "Specialist Agreement vs Payments Policy: who picks tasks",
+  "check": "§4 policy-contradiction suite",
+  "fixture": "deferred",
+  "oldPassed": "no cross-page claim comparison yet",
+  "why": "brief §4",
+  "by": "claude (LLM)",
+  "confirmed": false
+ },
+ "cmvb1ydtf000gi306hbw94u52": {
+  "bucket": "OUT OF SCOPE",
+  "summary": "Home 'How it works' heading contradicts its paragraph",
+  "why": "copy judgement",
+  "by": "claude (LLM)",
+  "confirmed": false
+ },
+ "cmvb20fwg000li306lu69ukru": {
+  "bucket": "MISSED",
+  "summary": "/become-partner 'mark it complete' vs Agreement/Terms",
+  "check": "§4 policy-contradiction suite",
+  "fixture": "deferred",
+  "oldPassed": "no cross-page claim comparison yet",
+  "why": "brief §4",
+  "by": "claude (LLM)",
+  "confirmed": false
+ },
+ "cmvb22fpl000qi306kd992bgb": {
+  "bucket": "MISSED",
+  "summary": "About says card marks are on Payments Policy; they are not",
+  "check": "§4 payment marks / claims",
+  "fixture": "deferred",
+  "oldPassed": "no check",
+  "why": "brief §4",
+  "by": "claude (LLM)",
+  "confirmed": false
+ },
+ "cmvb2hir0000vi3067r0a32tm": {
+  "bucket": "MISSED",
+  "summary": "EUR calculator label '10 per €0.89' does not reproduce the result",
+  "check": "§4 currency rules",
+  "fixture": "deferred",
+  "oldPassed": "money check validates format, not arithmetic",
+  "why": "brief §4",
+  "by": "claude (LLM)",
+  "confirmed": false
+ },
+ "cmvb2hryd000yi3062j894xch": {
+  "bucket": "MISSED",
+  "summary": "EUR: calculator range repeated twice",
+  "check": "§4 currency switch",
+  "fixture": "deferred",
+  "oldPassed": "no check of the bracketed other-currency text",
+  "why": "brief §4",
+  "by": "claude (LLM)",
+  "confirmed": false
+ },
+ "cmvb2jiw20013i3066g3v7u9n": {
+  "bucket": "MISSED",
+  "summary": "Shown EUR rate does not reproduce prices/balance",
+  "check": "§4 currency rules",
+  "fixture": "deferred",
+  "oldPassed": "money check validates format, not arithmetic",
+  "why": "brief §4",
+  "by": "claude (LLM)",
+  "confirmed": false
+ },
+ "cmvb2n9ct001ai30625tpp8au": {
+  "bucket": "MISSED",
+  "summary": "'PRAXIS Specialist Agreement' vs footer 'Specialist Agreement'",
+  "check": "3.7 legal-naming",
+  "fixture": "deferred",
+  "oldPassed": "3.7 accepts a name that contains the other",
+  "why": "in scope, not done this round",
+  "by": "claude (LLM)",
+  "confirmed": false
+ },
+ "cmvf7hufs000pkz06ksdejlep": {
+  "bucket": "MISSED",
+  "summary": "Rate 25 refused although the message says 'between 25 and 500'",
+  "check": "FM1 boundary values",
+  "fixture": "deferred",
+  "oldPassed": "FM1 tries -1/999999999/abc/1.5, never the stated bounds",
+  "why": "in scope, not done this round",
+  "by": "claude (LLM)",
+  "confirmed": false
+ },
+ "cmvf8nk4w000ijn06bdk8wxr2": {
+  "bucket": "MISSED",
+  "summary": "Onboarding profile → quiz does not scroll to the top",
+  "check": "4.4/3.8 step region top (fixed)",
+  "fixture": "test/misses-520.test.mjs",
+  "oldPassed": "same as the brief wizard: the step change was judged by a new heading only",
+  "why": "",
+  "by": "claude (LLM)",
+  "confirmed": false
+ },
+ "cmvf8p8tp001njv06o0m5w232": {
+  "bucket": "OUT OF SCOPE",
+  "summary": "Test account sent to 'apply as a specialist' then to a dashboard",
+  "why": "product/role flow decision",
+  "by": "claude (LLM)",
+  "confirmed": false
+ },
+ "cmvf8rty6001cku06qdprmi5d": {
+  "bucket": "MISSED",
+  "summary": "Empty message thread area is scrollable",
+  "check": "empty scroll box check",
+  "fixture": "deferred",
+  "oldPassed": "no check",
+  "why": "in scope, not done this round",
+  "by": "claude (LLM)",
+  "confirmed": false
+ },
+ "cmvf918p1000vjn06bjxp7pmu": {
+  "bucket": "MISSED",
+  "summary": "Footer Contact link disappears when signed in",
+  "check": "footer parity across roles",
+  "fixture": "deferred",
+  "oldPassed": "F0/3.7 never compare signed-in vs signed-out footers",
+  "why": "in scope, not done this round",
+  "by": "claude (LLM)",
+  "confirmed": false
+ },
+ "cmvfgjv2x004tl3069fzqjxhh": {
+  "bucket": "OUT OF SCOPE",
+  "summary": "Add accept/decline to the cookie banner",
+  "why": "owner decision (conflicts with Parallel's 'drop Decline'); C1 already requires a Reject",
+  "by": "claude (LLM)",
+  "confirmed": false
+ },
+ "cmvfgqtti0066l306q6x7y9d8": {
+  "bucket": "OUT OF SCOPE",
+  "summary": "Hide AZ/KK, English only",
+  "why": "owner decision",
+  "by": "claude (LLM)",
+  "confirmed": false
+ },
+ "cmvfgthsa006ll306a9cplu3m": {
+  "bucket": "OUT OF SCOPE",
+  "summary": "Rename specialists",
+  "why": "content decision",
+  "by": "claude (LLM)",
+  "confirmed": false
+ },
+ "cmvfgvxay0079l306q76d1dv5": {
+  "bucket": "OUT OF SCOPE",
+  "summary": "Pricing 'You pay…' lines look strange",
+  "why": "taste",
+  "by": "claude (LLM)",
+  "confirmed": false
+ },
+ "cmvfgwtyk007el3068h3kru8q": {
+  "bucket": "OUT OF SCOPE",
+  "summary": "Remove 'We accept' from the footer",
+  "why": "owner decision — contradicts F5; note for §4",
+  "by": "claude (LLM)",
+  "confirmed": false
+ },
+ "cmvfgyy4y0001jv06p195bqwt": {
+  "bucket": "OUT OF SCOPE",
+  "summary": "Add 'I agree to Specialist Terms' tick box on sign-up",
+  "why": "product decision",
+  "by": "claude (LLM)",
+  "confirmed": false
+ },
+ "cmvfhn5j50004jv06y1742umv": {
+  "bucket": "OUT OF SCOPE",
+  "summary": "Remove the Shipping policy",
+  "why": "owner decision (§4 removed pages)",
+  "by": "claude (LLM)",
+  "confirmed": false
+ },
+ "cmvfhp9570009jv069ctep5lv": {
+  "bucket": "OUT OF SCOPE",
+  "summary": "Tab should skip the password eye",
+  "why": "conflicts with keyboard accessibility; product decision",
+  "by": "claude (LLM)",
+  "confirmed": false
+ },
+ "cmvfhrv4x000ejv06kd4afv3f": {
+  "bucket": "OUT OF SCOPE",
+  "summary": "Name asked twice when applying",
+  "why": "product decision",
+  "by": "claude (LLM)",
+  "confirmed": false
+ },
+ "cmvfhwasl000jjv06op7j7wz5": {
+  "bucket": "OUT OF SCOPE",
+  "summary": "Add a Custom category",
+  "why": "product decision",
+  "by": "claude (LLM)",
+  "confirmed": false
+ },
+ "cmvfhxd5p000ojv06ri2dgavc": {
+  "bucket": "OUT OF SCOPE",
+  "summary": "Remove a link in Terms",
+  "why": "copy decision",
+  "by": "claude (LLM)",
+  "confirmed": false
+ },
+ "cmvfhy4nd000tjv060bp9ouvh": {
+  "bucket": "OUT OF SCOPE",
+  "summary": "Remove a Terms section",
+  "why": "legal decision",
+  "by": "claude (LLM)",
+  "confirmed": false
+ },
+ "cmvfhzpyg000yjv06zh18h62x": {
+  "bucket": "OUT OF SCOPE",
+  "summary": "Remove /aml",
+  "why": "owner decision",
+  "by": "claude (LLM)",
+  "confirmed": false
+ },
+ "cmvfi1d6o0013jv06yzizrv19": {
+  "bucket": "MISSED",
+  "summary": "Cookie panel: 'Essential cookies' text overlaps",
+  "check": "2.11 overlap inside the opened cookie panel",
+  "fixture": "deferred",
+  "oldPassed": "2.11 is soft and runs on the page at rest only",
+  "why": "in scope, not done this round",
+  "by": "claude (LLM)",
+  "confirmed": false
+ },
+ "cmvfi35nt001ajv06paj7g1zx": {
+  "bucket": "OUT OF SCOPE",
+  "summary": "Account menu looks like other projects",
+  "why": "taste",
+  "by": "claude (LLM)",
+  "confirmed": false
+ },
+ "cmvfi4iy7001djv06t3gek3nn": {
+  "bucket": "OUT OF SCOPE",
+  "summary": "Rename Dashboard/Wallet/Tasks",
+  "why": "naming decision",
+  "by": "claude (LLM)",
+  "confirmed": false
+ },
+ "cmvfi84gt001kjv068768c9ya": {
+  "bucket": "OUT OF SCOPE",
+  "summary": "More specialists",
+  "why": "content decision",
+  "by": "claude (LLM)",
+  "confirmed": false
+ },
+ "cmvglmlmm0059l7063p33kd46": {
+  "bucket": "OUT OF SCOPE",
+  "summary": "Custom task opens /contact?topic=Other",
+  "why": "product flow by design",
+  "by": "claude (LLM)",
+  "confirmed": false
+ },
+ "cmvglpuan005yl706er9vzehx": {
+  "bucket": "OUT OF SCOPE",
+  "summary": "Allow decimal credit amounts",
+  "why": "product decision",
+  "by": "claude (LLM)",
+  "confirmed": false
+ }
+}

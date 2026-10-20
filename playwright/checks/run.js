@@ -9,6 +9,7 @@
 // Plain JavaScript (see checks.js). Page-level checks need checks.install(page) first.
 import * as c from "../checks.js";
 import * as a from "../acceptance.js";
+import * as fit from "./fit.js";
 import { untranslatedReason, untranslatedWhat } from "../../lib/content-rules.js";
 
 /* ───────────────────────── shared ───────────────────────── */
@@ -19,6 +20,8 @@ export const FINAL_RE = /\b(pay|pay now|checkout|check out|purchase|place (the )
 export const WALLET_RE = /\b(add (credits|funds|money|balance)|top ?-?up|buy credits|get credits|deposit|recharge|refill|пополн\w*|balansı artır\w*|kredit (al|əlavə)\w*|толтыр\w*|кредит (сатып|қос)\w*)\b/i;
 // a step forward in a multi-step form
 export const NEXT_RE = /^(next|next step|continue|proceed|forward|далее|дальше|продолжить|вперёд|növbəti|davam( et)?|irəli|келесі|жалғастыру|әрі қарай|weiter|suivant|siguiente|avanti|dalej)\b/i;
+// a step back in a multi-step form (never final, never sends anything)
+export const BACK_RE = /^(←\s*)?(back|previous|prev|go back|назад|вернуться|geri|əvvəlki|артқа|алдыңғы|zurück|retour|atrás|indietro|wstecz)\b/i;
 const MUTATING = (route) => (/^(GET|HEAD|OPTIONS)$/.test(route.request().method()) ? route.fallback() : route.abort());
 
 const within = (p, ms, fallback) => { let t; return Promise.race([Promise.resolve(p).catch(() => fallback), new Promise((res) => { t = setTimeout(() => res(fallback), Math.max(0, ms)); })]).finally(() => clearTimeout(t)); };
@@ -50,6 +53,10 @@ export async function measure(page, { allowLightWeights = false, noTax = true, t
     add("B4", await a.moneyText(page, { noTax, thousandsFrom }).catch(() => []));
     add("N6", await a.clippedControls(page).catch(() => []));
     add("A1", await a.passwordEye(page).catch(() => []));
+    // 5.2.0: text cut off / spilling / truncated (2.14) and an open popup past the screen — in every state, so the
+    // open mobile menu, a drawer, a listbox and a dialog are measured as a reader sees them
+    add("2.14", (await fit.textCutOff(page).catch(() => ({ hard: [] }))).hard);
+    add("2.14", await fit.popupOffScreen(page).catch(() => []));
     return list;
 }
 const keyOf = (f) => `${f.check}|${f.selector || f.where}|${String(f.what).replace(/\d+(\.\d+)?/g, "#")}`;
@@ -290,6 +297,76 @@ export async function anchorTargets(page, { max = 6 } = {}) {
     return out;
 }
 
+
+/* ───────────────────────── 3.8 / 4.4: an in-place step opens at its top (5.2.0) ───────────────────────── */
+/**
+ * Before a click that swaps content in place (Next / Back / Continue, a page number), stamp the region that will
+ * change — the step pane, the form, the list — and remember where its top sits inside its scroll box (the window, or
+ * a dialog / drawer that scrolls itself). After the click, the region is found again (the same element, or the same
+ * place in the page when React replaced it) and its top must be in view: not above the visible part of its scroll box
+ * and not under the sticky header. The reader is put where a reader is: at the button (scrolled to it), so a step
+ * longer than the screen starts above them.
+ * 5.1.0 judged only a NEW h1–h4 / legend, measured against the window, and gave up on a list React re-rendered:
+ * a step titled by a <p> (Praxis brief), a step inside a dialog that scrolls itself, and a re-rendered page of
+ * results were never measured (Praxis /request-service, /dashboard/tasks; Parallel /onboarding Back / Continue).
+ */
+export const markRegion = (page, btnSel, regionSel = null) => page.evaluate(({ btnSel, regionSel }) => {
+    const W = window;
+    document.querySelectorAll("[data-bs-region]").forEach((e) => e.removeAttribute("data-bs-region"));
+    const btn = document.querySelector(btnSel);
+    if (!btn) return null;
+    let region = regionSel ? document.querySelector(regionSel) : null;
+    if (!region) {
+        const br = btn.getBoundingClientRect();
+        for (let a = btn.parentElement; a && a !== document.body; a = a.parentElement) {
+            const r = a.getBoundingClientRect();
+            // the box that holds the step: its top is well above the button, and it holds text of its own above it
+            if (r.height >= 160 && br.top - r.top >= 80 && (a.matches("form, fieldset, section, [role=dialog] > *, [role=tabpanel], main > *") || r.height >= 260)) { region = a; break; }
+        }
+    }
+    if (!region) return null;
+    region.setAttribute("data-bs-region", "");
+    const scroller = (el) => { for (let p = el.parentElement; p && p !== document.body && p !== document.documentElement; p = p.parentElement) { const cs = getComputedStyle(p); if (/(auto|scroll)/.test(cs.overflowY) && p.scrollHeight > p.clientHeight + 1) return p; } return null; };
+    const sc = scroller(region);
+    const top = region.getBoundingClientRect().top + (sc ? sc.scrollTop - sc.getBoundingClientRect().top : scrollY);
+    return { selector: W.__uiSelector(region), where: W.__uiDescribe(region), top, inBox: !!sc, boxSel: sc ? W.__uiSelector(sc) : null };
+}, { btnSel, regionSel }).catch(() => null);
+/** Puts the reader at the button: the button scrolled into view at the bottom of its scroll box. */
+export const readerAt = (page, btnSel) => page.evaluate((btnSel) => { const b = document.querySelector(btnSel); if (b) b.scrollIntoView({ block: "end", behavior: "instant" }); }, btnSel).catch(() => { });
+/**
+ * After the click: where the region's top is. Returns a problem text, or null when the top is in view (or the
+ * region could not be found again and nothing can be said).
+ */
+export async function regionTopAfter(page, mark, what) {
+    if (!mark) return null;
+    const header = await stickyTop(page);
+    return page.evaluate(({ mark, header, what }) => {
+        const W = window;
+        let region = document.querySelector("[data-bs-region]");
+        if (!region || !region.isConnected) region = mark.selector ? document.querySelector(mark.selector) : null;
+        const box = mark.boxSel ? document.querySelector(mark.boxSel) : null;
+        let top, visTop, name;
+        if (region && W.__uiVisible(region)) {
+            const r = region.getBoundingClientRect();
+            const sc = (() => { for (let p = region.parentElement; p && p !== document.body && p !== document.documentElement; p = p.parentElement) { const cs = getComputedStyle(p); if (/(auto|scroll)/.test(cs.overflowY) && p.scrollHeight > p.clientHeight + 1) return p; } return null; })();
+            top = r.top;
+            visTop = sc ? Math.max(sc.getBoundingClientRect().top + parseFloat(getComputedStyle(sc).borderTopWidth), sc.closest("[role=dialog], [role=alertdialog], dialog") ? 0 : header) : header;
+            name = sc ? `its scroll box ${W.__uiDescribe(sc).split(" \"")[0]}` : "the page";
+        } else if (box) {
+            // React replaced the region inside a box that scrolls itself: its top is where it was in that box
+            top = box.getBoundingClientRect().top + mark.top - box.scrollTop;
+            visTop = box.getBoundingClientRect().top;
+            name = `its scroll box ${W.__uiDescribe(box).split(" \"")[0]}`;
+        } else {
+            top = mark.top - scrollY;
+            visTop = header;
+            name = "the page";
+        }
+        if (top >= visTop - 2) return null;
+        return `${what} opens scrolled down: the top of what changed is ${Math.round(visTop - top)}px above the visible part of ${name}${header && name === "the page" ? ` (under the ${header}px sticky header)` : ""} — the reader sees the middle or the end of it. Scroll it to its top on change (window.scrollTo(0, 0), the dialog's box.scrollTo({ top: 0 }), or element.scrollIntoView({ block: "start" }) with scroll-margin-top: ${header + 8}px)`;
+    }, { mark, header, what }).catch(() => null);
+}
+
 /* ───────────────────────── states ───────────────────────── */
 
 /**
@@ -319,7 +396,10 @@ const stateSig = (page, scope) => page.evaluate((scope) => {
     const root = (scope && document.querySelector(scope)) || document.body;
     const hs = Array.from(root.querySelectorAll("h1, h2, h3, h4, legend, [aria-current=step], [data-state=active], label")).filter((e) => window.__uiVisible(e)).map((e) => (e.textContent || "").trim()).join("|");
     const fields = Array.from(root.querySelectorAll("input, textarea, select, [role=combobox]")).filter((e) => window.__uiVisible(e)).map((e) => e.name || e.id || e.getAttribute("aria-label") || e.tagName).join(",");
-    return `${location.pathname}#${hs.slice(0, 2000)}#${fields}`;
+    // the scope's own text too: a step titled by a <p> with option buttons has no new heading or field (Praxis brief)
+    // (an error message that appears is not a new step: alerts, live regions and error-coloured text are left out)
+    const txt = Array.from(root.querySelectorAll("p, h5, h6, [aria-current=step], [data-step]")).filter((e) => window.__uiVisible(e) && !e.closest("[role=alert], [aria-live], [class*=error i], [class*=destructive i], [class*=invalid i], [data-error]")).map((e) => (e.textContent || "").trim()).join("|").replace(/\s+/g, " ").slice(0, 600);
+    return `${location.pathname}#${hs.slice(0, 2000)}#${fields}#${txt}`;
 }, scope).catch(() => "");
 
 /** The first heading (or alert) that is new since `before` (a stateSig-free snapshot of texts) — stamped data-bs-top. */
@@ -344,18 +424,37 @@ const headTexts = (page, scope) => page.evaluate((scope) => Array.from(((scope &
 async function walkWizard(page, { scope = null, base, opts, maxSteps = 6, label = "" }) {
     const findings = [];
     let steps = 0, stopped = "";
+    const seenTop = new Set();
+    // 5.2.0: every press that swaps the step in place (Next, Continue, and Back once at the end) is judged by where
+    // the step's top lands (markRegion / regionTopAfter); the 5.1.0 heading check (stampNewTop) stays alongside it
+    const judge = async (btnSel, what) => {
+        await readerAt(page, btnSel);
+        await page.waitForTimeout(120);
+        return markRegion(page, btnSel);
+    };
+    const pushTop = async (mark, what) => {
+        const p = await regionTopAfter(page, mark, what);
+        if (p && !seenTop.has(what)) { seenTop.add(what); findings.push({ check: "3.8", what: `${p} [3.8/4.4, P52]`, where: mark.where, selector: mark.selector }); return true; }
+        return false;
+    };
     for (; steps < maxSteps;) {
-        const step = await page.evaluate(({ scope, next, final }) => {
+        const findStep = () => page.evaluate(({ scope, next, back, final }) => {
             const root = (scope && document.querySelector(scope)) || document.body;
-            const N = new RegExp(next, "i"), F = new RegExp(final, "i");
+            const N = new RegExp(next, "i"), B = new RegExp(back, "i"), F = new RegExp(final, "i");
             document.querySelectorAll("[data-bs-next]").forEach((e) => e.removeAttribute("data-bs-next"));
             const buttons = Array.from(root.querySelectorAll("button, [role=button], input[type=submit], input[type=button]")).filter((b) => window.__uiVisible(b) && !b.closest("[aria-hidden=true], [inert], header, footer, nav"));
             const text = (b) => ((b.textContent || b.value || b.getAttribute("aria-label") || "").trim().replace(/\s+/g, " "));
             const card = Array.from(root.querySelectorAll("input, iframe")).some((el) => window.__uiVisible(el) && (/cc-|card|cvc|cvv|iban/i.test([el.getAttribute("autocomplete"), el.name, el.id, el.getAttribute("placeholder")].join(" ")) || /stripe|paypal|checkout|adyen|braintree|cloudpayments|payment/i.test(el.getAttribute("src") || "")));
             if (card)
                 return { stop: "the step asks for card or bank details (never filled)" };
-            const nextBtn = buttons.find((b) => N.test(text(b)) && !b.disabled);
+            const nextBtn = buttons.find((b) => N.test(text(b)) && !b.disabled && b.getAttribute("aria-disabled") !== "true");
             if (!nextBtn) {
+                // a Next that waits for a choice (option buttons, no radios: the Praxis brief): pick the first option
+                const waiting = buttons.find((b) => N.test(text(b)));
+                if (waiting) {
+                    const opt = buttons.find((b) => b !== waiting && !N.test(text(b)) && !B.test(text(b)) && !F.test(text(b)) && b.getAttribute("aria-pressed") !== "true" && b.getAttribute("aria-selected") !== "true" && (b.matches("[aria-pressed], [role=radio], [role=option], [aria-checked]") || (b.parentElement && Array.from(b.parentElement.children).filter((x) => x.tagName === b.tagName).length >= 2)));
+                    if (opt) { opt.setAttribute("data-bs-next", ""); return { pick: text(opt).slice(0, 30) }; }
+                }
                 const fin = buttons.find((b) => F.test(text(b)));
                 return { stop: fin ? `the next press would be final ("${text(fin).slice(0, 30)}") — never pressed` : "no Next / Continue button" };
             }
@@ -363,7 +462,16 @@ async function walkWizard(page, { scope = null, base, opts, maxSteps = 6, label 
                 return { stop: `the next press would be final ("${text(nextBtn).slice(0, 30)}") — never pressed` };
             nextBtn.setAttribute("data-bs-next", "");
             return { label: text(nextBtn).slice(0, 30) };
-        }, { scope, next: NEXT_RE.source, final: FINAL_RE.source }).catch(() => ({ stop: "the page went away" }));
+        }, { scope, next: NEXT_RE.source, back: BACK_RE.source, final: FINAL_RE.source }).catch(() => ({ stop: "the page went away" }));
+        let step = await findStep();
+        if (step.pick) {
+            // the option is a choice on this step, not a step: click it, then look for the Next it unlocked
+            await page.locator("[data-bs-next]").first().click({ timeout: 2500 }).catch(() => { });
+            await page.waitForTimeout(400);
+            await c.settle(page, 800);
+            step = await findStep();
+            if (step.pick) { stopped = `Next stays disabled after choosing "${step.pick}" (a choice the check cannot make)`; break; }
+        }
         if (step.stop) {
             stopped = step.stop;
             break;
@@ -372,6 +480,7 @@ async function walkWizard(page, { scope = null, base, opts, maxSteps = 6, label 
         const sigBefore = await stateSig(page, scope);
         const heads = await headTexts(page, scope);
         const url = page.url();
+        const mark = await judge("[data-bs-next]");
         await page.locator("[data-bs-next]").first().click({ timeout: 2500 }).catch(() => { });
         await page.waitForTimeout(700);
         await c.settle(page, 1500);
@@ -390,14 +499,41 @@ async function walkWizard(page, { scope = null, base, opts, maxSteps = 6, label 
         const now = newIn(base, await measure(page, opts));
         for (const f of now)
             findings.push({ ...f, what: `${label}wizard step ${steps + 1} (after "${step.label}"): ${f.what}` });
+        let headingSaid = false;
         if (await stampNewTop(page, heads, scope)) {
             const p = await topVisible(page, "[data-bs-top]", `${label}after "${step.label}" the next step`);
-            if (p)
+            if (p) {
+                headingSaid = true;
                 findings.push({ check: "4.4", what: `${p} [4.4, P52]`, where: await page.evaluate(() => { const e = document.querySelector("[data-bs-top]"); return e ? window.__uiDescribe(e) : "page"; }).catch(() => "page") });
+            }
         }
+        // 5.2.0: the step's own box, wherever it scrolls — when the heading check had nothing to say (no new h1–h4,
+        // a dialog that scrolls itself, React replaced the pane)
+        if (!headingSaid && page.url().split("#")[0] === url.split("#")[0])
+            await pushTop(mark, `${label}after "${step.label}" the next step`);
     }
     if (steps >= maxSteps)
         stopped = `stopped after ${maxSteps} steps (states.maxSteps)`;
+    // Back, once: it swaps the step in place too, and is never final
+    if (steps >= 1) {
+        const back = await page.evaluate(({ scope, back }) => {
+            const root = (scope && document.querySelector(scope)) || document.body;
+            const B = new RegExp(back, "i");
+            document.querySelectorAll("[data-bs-back]").forEach((e) => e.removeAttribute("data-bs-back"));
+            const b = Array.from(root.querySelectorAll("button, [role=button]")).find((x) => window.__uiVisible(x) && !x.disabled && !x.closest("header, footer, nav, [aria-hidden=true]") && B.test((x.textContent || x.getAttribute("aria-label") || "").trim().replace(/\s+/g, " ")));
+            if (!b) return null;
+            b.setAttribute("data-bs-back", "");
+            return (b.textContent || b.getAttribute("aria-label") || "").trim().replace(/\s+/g, " ").slice(0, 30);
+        }, { scope, back: BACK_RE.source }).catch(() => null);
+        if (back) {
+            const url = page.url();
+            const mark = await judge("[data-bs-back]");
+            await page.locator("[data-bs-back]").first().click({ timeout: 2500 }).catch(() => { });
+            await page.waitForTimeout(700);
+            await c.settle(page, 1500);
+            if (page.url().split("#")[0] === url.split("#")[0]) await pushTop(mark, `${label}after "${back}" the previous step`);
+        }
+    }
     return { steps, stopped, findings };
 }
 
@@ -489,8 +625,8 @@ export async function stateChecks(page, { reload, opts = {}, maxOpeners = 15, ma
             notTested.push(`${cands.skipped.destructive.length} destructive or paying control(s) not pressed (e.g. ${cands.skipped.destructive.slice(0, 2).join("; ")})`);
         /* 2 + 3. forms: empty submit, then the wizard walk */
         await back();
-        const forms = await page.evaluate((final) => {
-            const F = new RegExp(final, "i");
+        const forms = await page.evaluate(({ final, next }) => {
+            const F = new RegExp(final, "i"), N = new RegExp(next, "i");
             const out = [];
             for (const f of Array.from(document.querySelectorAll("form"))) {
                 if (!window.__uiVisible(f) || f.closest("[role=dialog], [aria-hidden=true]"))
@@ -502,10 +638,12 @@ export async function stateChecks(page, { reload, opts = {}, maxOpeners = 15, ma
                 const card = fields.some((el) => /cc-|card|cvc|cvv|iban/i.test([el.getAttribute("autocomplete"), el.name, el.id].join(" "))) || !!f.querySelector("iframe[src*=stripe], iframe[src*=checkout], iframe[src*=pay]");
                 const i = out.length;
                 f.setAttribute("data-bs-form", String(i));
-                out.push({ i, card, submit: submit ? ((submit.textContent || submit.value || "").trim().replace(/\s+/g, " ").slice(0, 30)) : null, search: fields.length === 1 && /search|query|q\b/i.test([fields[0].getAttribute("type"), fields[0].name, fields[0].getAttribute("placeholder")].join(" ")), final: submit ? F.test((submit.textContent || submit.value || "").trim()) : false });
+                // a Next / Continue anywhere in the form (5.2.0): its first submit may be "Back" (Parallel /onboarding)
+                const hasNext = Array.from(f.querySelectorAll("button, [role=button], input[type=submit]")).some((b) => window.__uiVisible(b) && N.test((b.textContent || b.value || "").trim().replace(/\s+/g, " ")));
+                out.push({ i, card, hasNext, submit: submit ? ((submit.textContent || submit.value || "").trim().replace(/\s+/g, " ").slice(0, 30)) : null, search: fields.length === 1 && /search|query|q\b/i.test([fields[0].getAttribute("type"), fields[0].name, fields[0].getAttribute("placeholder")].join(" ")), final: submit ? F.test((submit.textContent || submit.value || "").trim()) : false });
             }
             return out;
-        }, FINAL_RE.source).catch(() => []);
+        }, { final: FINAL_RE.source, next: NEXT_RE.source }).catch(() => []);
         for (const f of forms.slice(0, maxForms)) {
             if (timeLeft() < 15_000) {
                 notTested.push("empty-form submits: time budget");
@@ -554,7 +692,7 @@ export async function stateChecks(page, { reload, opts = {}, maxOpeners = 15, ma
                     findings.push({ check: "4.4", what: `${p} [4.4]`, where: await page.evaluate(() => { const e = document.querySelector("[data-bs-top]"); return e ? window.__uiDescribe(e) : "form"; }).catch(() => "form") });
             }
             // a multi-step form: walk it with sample data (Next / Continue), never the final press
-            if (!f.final && NEXT_RE.test(f.submit)) {
+            if ((!f.final && NEXT_RE.test(f.submit)) || f.hasNext) {
                 await back();
                 await page.evaluate(() => { document.querySelectorAll("form").forEach((x, j) => x.setAttribute("data-bs-form", String(j))); }).catch(() => { });
                 const w = await walkWizard(page, { scope: `form[data-bs-form="${f.i}"]`, base, opts, maxSteps, label: "" });
@@ -565,9 +703,11 @@ export async function stateChecks(page, { reload, opts = {}, maxOpeners = 15, ma
         if (forms.length > maxForms)
             notTested.push(`${forms.length - maxForms} form(s) over the cap of ${maxForms} (states.maxForms)`);
         /* 3b. a wizard that is not a <form> (step buttons in a section) */
-        if (!forms.length && timeLeft() > 20_000) {
+        // 5.2.0: also when the page has forms elsewhere (a footer newsletter, a search box): the step buttons outside
+        // every <form> are walked on their own
+        if (timeLeft() > 20_000) {
             await back();
-            const has = await page.evaluate((next) => Array.from(document.querySelectorAll("main button, main [role=button]")).some((b) => window.__uiVisible(b) && new RegExp(next, "i").test((b.textContent || "").trim())), NEXT_RE.source).catch(() => false);
+            const has = await page.evaluate((next) => Array.from(document.querySelectorAll("main button, main [role=button]")).some((b) => window.__uiVisible(b) && !b.closest("form") && new RegExp(next, "i").test((b.textContent || "").trim())), NEXT_RE.source).catch(() => false);
             if (has) {
                 const w = await walkWizard(page, { scope: "main", base, opts, maxSteps, label: "" });
                 findings.push(...w.findings);
@@ -609,6 +749,8 @@ export async function stateChecks(page, { reload, opts = {}, maxOpeners = 15, ma
             if (pag) {
                 const btn = page.locator("[data-bs-page-next]").first();
                 await btn.scrollIntoViewIfNeeded({ timeout: 2000 }).catch(() => { });
+                // 5.2.0: the list's place in the page, kept even when React replaces the list on the new page
+                const mark = await markRegion(page, "[data-bs-page-next]", "[data-bs-list]");
                 const url = page.url();
                 await btn.click({ timeout: 2500 }).catch(() => { });
                 await page.waitForTimeout(900);
@@ -620,12 +762,16 @@ export async function stateChecks(page, { reload, opts = {}, maxOpeners = 15, ma
                     const still = await page.evaluate(() => !!document.querySelector("[data-bs-list]")).catch(() => false);
                     states.push(`pagination "${pag.label}"`);
                     const p = still ? await topVisible(page, "[data-bs-list]", `after the pagination "${pag.label}" the new page of results`) : null;
-                    if (!still)
+                    if (!still && !mark)
                         notTested.push(`pagination "${pag.label}": the list was re-rendered, its top could not be measured`);
                     // only the classic defect counts: the reader is left below the new results' top (or it is under the header);
                     // a list that starts below the screen is ahead of the reader, not lost (Praxis /specialists "Next")
                     if (p && !/starts below the screen/.test(p))
                         findings.push({ check: "4.4", what: `${p} [4.4, P52]`, where: await page.evaluate(() => { const e = document.querySelector("[data-bs-list]"); return e ? window.__uiDescribe(e) : "list"; }).catch(() => "list") });
+                    else if (!p) {
+                        const q = await regionTopAfter(page, mark, `after the pagination "${pag.label}" the new page of results`);
+                        if (q) findings.push({ check: "4.4", what: `${q} [4.4, P52]`, where: mark?.where || "list", selector: mark?.selector });
+                    }
                     for (const x of newIn(base, await measure(page, opts)))
                         findings.push({ ...x, what: `after the pagination "${pag.label}": ${x.what}` });
                 }

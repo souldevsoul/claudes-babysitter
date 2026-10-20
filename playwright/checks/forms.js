@@ -211,7 +211,32 @@ export function pageLib() {
       nativeInvalid: !!form && form.tagName === "FORM" && !form.checkValidity(),
     };
   }
-  window.__bsf = { clean, vis, where, selector, labelOf, keyOf, numericKind, roleOf, fieldsOf, submitOf, kindOf, describe, looseNumeric, mark, fresh, errorsFor, outcome, ERR, OK, BUSY, PAY, DESTRUCT };
+  /**
+   * The messages that appeared since mark(), each with where it is (a toast: a fixed / sticky layer outside the form,
+   * or inline) and how it looks (text colour, the fill and border of the box it sits in) — FM12 / FM13 (5.2.0).
+   */
+  function messages(formIndex, re) {
+    const form = document.querySelector(`[data-bsf="${formIndex}"]`);
+    const out = [];
+    for (const line of fresh()) {
+      if (!re.test(line) || (re === OK && ERR.test(line))) continue;
+      const els = Array.from(document.querySelectorAll("body *")).filter((e) => vis(e) && clean(e.innerText) === line);
+      const el = els[els.length - 1];
+      if (!el) continue;
+      let box = el;
+      for (let p = el, d = 0; p && d < 4 && p !== document.body; p = p.parentElement, d++) {
+        const cs = getComputedStyle(p);
+        if (window.__uiRGBA(cs.backgroundColor)[3] > 0.05 || parseFloat(cs.borderTopWidth) > 0 || parseFloat(cs.borderLeftWidth) > 0) { box = p; break; }
+      }
+      let toast = !!el.closest("[data-sonner-toast], [data-sonner-toaster], [class*=toast i], [role=status][aria-live]") && !(form && form.contains(el));
+      for (let p = el; p && p !== document.body && !toast; p = p.parentElement) if (/^(fixed|sticky)$/.test(getComputedStyle(p).position) && !(form && p.contains(form))) toast = !(form && form.contains(el));
+      const bs = getComputedStyle(box), ts = getComputedStyle(el);
+      const rgb = (c) => window.__uiRGBA(c).slice(0, 3).map(Math.round).join(",");
+      out.push({ text: line.slice(0, 120), toast, where: where(el), look: { color: rgb(ts.color), fill: window.__uiRGBA(bs.backgroundColor)[3] > 0.05 ? rgb(bs.backgroundColor) : "none", border: parseFloat(bs.borderTopWidth) > 0 || parseFloat(bs.borderLeftWidth) > 0 ? rgb(parseFloat(bs.borderLeftWidth) > parseFloat(bs.borderTopWidth) ? bs.borderLeftColor : bs.borderTopColor) : "none", icon: !!box.querySelector("svg, img") } });
+    }
+    return out;
+  }
+  window.__bsf = { clean, vis, where, selector, labelOf, keyOf, numericKind, roleOf, fieldsOf, submitOf, kindOf, describe, looseNumeric, mark, fresh, errorsFor, outcome, messages, ERR, OK, BUSY, PAY, DESTRUCT };
   return true;
 }
 
@@ -473,6 +498,7 @@ export async function submitOutcomes(page, { failStatus = 500 } = {}) {
   const forms = (await describeForms(page)).filter((f) => !skipForm(f) && !f.payment && !f.destructive);
   if (!forms.length) return out;
   const sb = await sandbox(page, failStatus);
+  const failLook = {};
   try {
     for (const f0 of forms) {
       // ── failure
@@ -489,6 +515,12 @@ export async function submitOutcomes(page, { failStatus = 500 } = {}) {
       await page.waitForTimeout(2000);
       if (!nav) {
         const o = await page.evaluate((i) => window.__bsf.outcome(i), f.index).catch(() => null);
+        // FM12 (5.2.0) — one failure, said once: a toast in the corner AND a message in the form is the same news twice
+        // (Parallel sign-in: "an error in the bottom-right corner and the same message above the fields")
+        const errs = await page.evaluate((i) => window.__bsf.messages(i, window.__bsf.ERR), f.index).catch(() => []);
+        if (errs.some((m) => m.toast) && errs.some((m) => !m.toast))
+          out.push({ id: "FM12", what: `${formName(f)}: one failed submit shows its error twice — "${errs.find((m) => m.toast).text}" in a toast and "${errs.find((m) => !m.toast).text}" in the form. Say it once, next to the form (drop the toast for form errors) [FM12, duplicate-error]`, where: f.where, selector: f.selector });
+        failLook[f0.index] = errs.find((m) => !m.toast) || errs[0] || null;
         const now = await page.evaluate((ids) => Object.fromEntries(ids.map((id) => { const el = document.querySelector(`[data-bsf="${id}"]`); return [id, el ? el.value : null]; })), Object.keys(entered)).catch(() => ({}));
         const lost = f.fields.filter((x) => entered[x.id] !== undefined && x.role !== "password" && now[x.id] !== entered[x.id]);
         if (lost.length) out.push({ id: "FM3", what: `${formName(f)}: after a failed submit ${lost.map((x) => `"${x.label || x.role}"`).join(", ")} ${lost.length > 1 ? "are" : "is"} emptied — keep what the user typed when the request fails${action ? " (Server Action: return the error as data instead of throwing, keep the form mounted)" : ""} [FM3, form-reset-on-error]`, where: f.where, selector: f.selector });
@@ -516,10 +548,57 @@ export async function submitOutcomes(page, { failStatus = 500 } = {}) {
         if (o && (o.urlChanged || o.formGone || o.lines.length || o.invalid)) seen = o;
       }
       if (!seen) out.push({ id: "FM4", what: `${formName(f)}: after a successful submit nothing visible happens for 2 s — show a toast / inline "Sent" message (aria-live) or move to the next page [FM4, submit-feedback]`, where: f.where, selector: f.selector });
+      // FM13 (5.2.0) — success must not look like the error the same form shows on failure (same colour, fill, border)
+      if (seen && failLook[f0.index]) {
+        const oks = await page.evaluate((i) => window.__bsf.messages(i, window.__bsf.OK), f.index).catch(() => []);
+        const ok = oks.find((m) => !m.toast) || oks[0];
+        const bad = failLook[f0.index];
+        // only a styled error look counts (a box, or error-red text): two plain status lines in the body colour are a
+        // neutral line, not "success dressed as an error"
+        const red = (rgb) => { const [r, g, b] = String(rgb).split(",").map(Number); return r > 140 && r > g * 1.6 && r > b * 1.6; };
+        const styled = bad.look.fill !== "none" || bad.look.border !== "none" || red(bad.look.color);
+        if (ok && styled && ok.look.color === bad.look.color && ok.look.fill === bad.look.fill && ok.look.border === bad.look.border)
+          out.push({ id: "FM13", what: `${formName(f)}: the success message "${ok.text}" looks exactly like its error message "${bad.text}" (text rgb(${ok.look.color}), fill ${ok.look.fill === "none" ? "none" : `rgb(${ok.look.fill})`}, border ${ok.look.border === "none" ? "none" : `rgb(${ok.look.border})`}) — give success its own tone (the theme's success colour and icon) [FM13, submit-feedback]`, where: ok.where, selector: f.selector });
+      }
     }
   } finally { await sb.stop(); }
   return [...out, ...na];
 }
+
+/* ───────────────────────── FM11 the login a browser saves ───────────────────────── */
+
+/**
+ * FM11 (5.2.0) — the browser saves and fills the e-mail as the login, not the name (Praxis: after signing up as
+ * "Test", /login filled the Email field with "Test"). In a form with a password: when two or more text fields come
+ * before it (a sign-up: name + e-mail) one of them must say autocomplete="username" — otherwise the password manager
+ * guesses, and the name field is a likely guess. The e-mail field is type=email; the password says new-password on
+ * a sign-up (two password fields, or a name field) and current-password on a sign-in (soft); a name field never says
+ * username. Static attributes only: nothing is typed or sent.
+ */
+export const authAutocomplete = async (page) => (await lib(page), page.evaluate(() => {
+  const L = window.__bsf;
+  const out = [];
+  for (const form of Array.from(document.querySelectorAll("form"))) {
+    const pw = Array.from(form.querySelectorAll("input[type=password]")).filter(L.vis);
+    if (!pw.length) continue;
+    const before = Array.from(form.querySelectorAll("input")).filter((i) => L.vis(i) && /^(text|email|tel|)$/i.test(i.getAttribute("type") || "") && (i.compareDocumentPosition(pw[0]) & Node.DOCUMENT_POSITION_FOLLOWING));
+    const ac = (i) => (i.getAttribute("autocomplete") || "").toLowerCase().split(/\s+/);
+    const name = form.getAttribute("aria-label") || L.clean((form.querySelector("h1, h2, h3, legend, button[type=submit], button:not([type])") || {}).textContent || "") || "sign-in form";
+    const email = before.find((i) => /^email$/i.test(i.getAttribute("type") || "") || /e-?mail/i.test(`${i.name} ${i.id} ${i.getAttribute("autocomplete")} ${L.labelOf(i)}`));
+    const signup = pw.length > 1 || before.length > 1 || /sign ?up|register|create|join|регистр|qeydiyyat|тіркел/i.test(name);
+    const user = before.find((i) => ac(i).includes("username"));
+    if (before.length > 1 && !user)
+      out.push({ id: "FM11", what: `"${name.slice(0, 40)}": ${before.length} text fields before the password (${before.map((i) => `"${(L.labelOf(i) || i.name || i.type).slice(0, 20)}"`).join(", ")}) and none says autocomplete="username" — the password manager guesses the login and can save the name instead of the e-mail. Put autocomplete="username" on the e-mail field [FM11, autofill]`, where: L.where(form), selector: L.selector(form) });
+    for (const i of before) if (ac(i).includes("username") && i !== email && /name/i.test(`${i.name} ${i.id} ${L.labelOf(i)}`) && !/user ?name|login|логин/i.test(L.labelOf(i)))
+      out.push({ id: "FM11", what: `"${L.labelOf(i) || i.name}" is a name field marked autocomplete="username" — the browser will save the name as the login; use autocomplete="name" here and "username" on the e-mail [FM11, autofill]`, where: L.where(i), selector: L.selector(i) });
+    if (email && !/^email$/i.test(email.getAttribute("type") || ""))
+      out.push({ id: "FM11", soft: true, what: `the e-mail field "${L.labelOf(email) || email.name}" is type="${email.getAttribute("type") || "text"}" — type="email" gives the phone's e-mail keyboard and the browser's e-mail autofill [FM11, autofill]`, where: L.where(email), selector: L.selector(email) });
+    const want = signup ? "new-password" : "current-password";
+    for (const p of pw) if (!ac(p).includes(want) && !(signup && ac(p).includes("current-password") && pw.length > 2))
+      out.push({ id: "FM11", soft: true, what: `password field "${L.labelOf(p) || p.name || "password"}" says autocomplete="${p.getAttribute("autocomplete") || ""}" — on a ${signup ? "sign-up" : "sign-in"} form it is "${want}", so the browser offers to ${signup ? "generate and save a new" : "fill the saved"} password [FM11, autofill]`, where: L.where(p), selector: L.selector(p) });
+  }
+  return out;
+}));
 
 /* ───────────────────────── FM5 stale UI ───────────────────────── */
 

@@ -2700,11 +2700,23 @@ const menuGeometry = (headerBottom) => {
         if (r.height < 43.5 || r.width < 43.5)
             soft.push({ what: `open mobile menu: "${name(e)}" is a ${Math.round(r.width)}×${Math.round(r.height)}px tap target — under 44×44 px on a touch screen [3.5, WCAG 2.5.5]`, ...at(e) });
         if (r.bottom > innerHeight || r.top < 0) {
-            for (let p = e.parentElement; p && p !== document.body; p = p.parentElement)
-                if (/(auto|scroll)/.test(getComputedStyle(p).overflowY) && !scrollers.has(p))
+            // every ancestor that can be scrolled by script — overflow hidden too: scrollIntoView scrolls it, a finger
+            // cannot (5.2.0: the item is reachable only through an ancestor that really scrolls)
+            const scrollTops = new Map();
+            for (let p = e.parentElement; p && p !== document.body; p = p.parentElement) {
+                if (/(auto|scroll|hidden|clip)/.test(getComputedStyle(p).overflowY) && !scrollers.has(p))
                     scrollers.set(p, p.scrollTop);
+                scrollTops.set(p, p.scrollTop);
+            }
             e.scrollIntoView({ block: "nearest", behavior: "instant" });
             r = e.getBoundingClientRect();
+            const byHidden = [...scrollTops].some(([p, t]) => p.scrollTop !== t && !/(auto|scroll)/.test(getComputedStyle(p).overflowY));
+            if (byHidden)
+                hard.push({ what: `open mobile menu: "${name(e)}" is below the visible part of the menu and the menu does not scroll (its box is overflow: hidden) — it cannot be reached. Let the panel scroll (overflow-y: auto, max-height: 100dvh, min-h-0 on the list) [3.5, P10]`, ...at(e) });
+            // 5.2.0: still below (or above) the screen after scrolling it into view — nothing scrolls to it, so it cannot
+            // be reached (Parallel: the signed-in phone menu, account links and Sign out cut off below the screen)
+            if (r.top >= innerHeight - 4 || r.bottom <= 4)
+                hard.push({ what: `open mobile menu: "${name(e)}" is ${r.top >= innerHeight - 4 ? `below the bottom of the screen (top ${Math.round(r.top)}px of ${innerHeight}px)` : "above the top of the screen"} and the menu does not scroll to it — it cannot be reached. Let the panel scroll (overflow-y: auto, max-height: 100dvh, min-h-0 on the list) [3.5, P10]`, ...at(e) });
         }
         for (const [fx, fy] of [[0.5, 0.5], [0.12, 0.5], [0.88, 0.5]]) {
             const x = r.left + r.width * fx, y = r.top + r.height * fy;

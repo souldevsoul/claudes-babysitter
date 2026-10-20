@@ -74,6 +74,8 @@ Write the check's ID into `acceptance.skip`, and the reason into `acceptance.ski
 | C2 | The banner offers Analytics or Marketing only when such scripts actually load after "Accept all". | 12 products |
 | C4 | Closing the preferences closes everything; the banner does not stay underneath. | 2 products |
 | C5 | Only strictly necessary cookies are locked on. | 1 product |
+| C6 | Decline / Reject really declines: the banner closes, nothing beyond what is strictly necessary is stored (cookies, localStorage, sessionStorage; `acceptance.essentialStorage` names more), no analytics host is called, and the choice persists after a reload and on the next page. (5.2.0) | Parallel |
+| C7 | A link inside the cookie settings (or any open dialog) opens its page and the dialog closes; it never navigates under a still-open window. Run at one phone and one desktop width. (5.2.0) | Praxis |
 
 ### Money
 

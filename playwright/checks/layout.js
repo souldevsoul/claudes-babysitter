@@ -387,8 +387,15 @@ export async function textBreaks(page) {
       const c = pe.closest(CAND);
       if (c && !c.matches("body, html, main, section, article")) return c;
       for (let e = pe; e && e !== document.body; e = e.parentElement) { if (W.__uiButtonLike(e, true) || badgeLike(e)) return e; if (e.children.length > 3) break; }
+      // 5.2.0: any short label (≤ 40 characters of its own) — a pagination caption "Səhifə 1 / 2" squeezed between
+      // Previous and Next, a "ТАПСЫРМА" row label beside its value (Praxis at 360 in az / kk) are plain <span>s, and
+      // the candidates above never looked at them. Only whole words of letters count there (see `plainWord`), so a
+      // long e-mail, URL or code in a narrow column may still break where it must.
+      if (L.clean(pe.textContent).length <= 40 && !pe.closest("p, li, td, blockquote, figcaption, [role=log]")) { plain.add(pe); return pe; }
       return null;
     };
+    const plain = new Set();
+    const plainWord = (word) => /^[\p{L}\p{M}]{2,24}$/u.test(word.replace(/[«»"'“”‘’()]/g, ""));
     const tops = (rects, tol) => { const t = []; for (const r of rects) if (r.width > 0.5 && !t.some((x) => Math.abs(x - r.top) < tol)) t.push(r.top); return t.sort((a, b) => a - b); };
     const rng = document.createRange();
     const seen = new Set();
@@ -413,6 +420,7 @@ export async function textBreaks(page) {
         for (let i = s + 1; i < e; i++) { rng.setStart(n, i); rng.setEnd(n, i + 1); const r = rng.getClientRects()[0]; if (r && Math.abs(r.top - lt[0]) >= tol) { cut = i; break; } }
         const before = cut > 0 ? t[cut - 1] : "";
         if (/[-‐‑–—/_.,:;)\]]/.test(before) && !/\d/.test(t[cut] || "")) continue; // a real break opportunity
+        if (plain.has(el) && !plainWord(m[0])) continue; // a plain label: only a word of letters broken by letters
         const key = W.__uiSelector(el) + "|" + m[0]; if (seen.has(key)) continue; seen.add(key);
         const num = /\d/.test(m[0]) && /^[^\p{L}]*\d[\d\s.,  ]*[^\p{L}]*$|^\p{Sc}|\p{Sc}$/u.test(m[0]);
         const shown = cut > 0 ? `${t.slice(s, cut)}|${t.slice(cut, e)}` : m[0];

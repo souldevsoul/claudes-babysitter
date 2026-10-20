@@ -1,0 +1,350 @@
+{
+ "cmvaly7870001kw06txgjfjnc": {
+  "bucket": "MISSED",
+  "summary": "Cookies/Cancellation/Delivery policies lack the contents rail",
+  "check": "P2 per-policy consistency",
+  "fixture": "deferred",
+  "oldPassed": "P2 required contents only from 7 sections",
+  "why": "in scope, not done this round",
+  "by": "claude (LLM)",
+  "confirmed": false
+ },
+ "cmvam2ab80004kw06kg49kc72": {
+  "bucket": "MISSED",
+  "summary": "How It Works buttons labelled with raw URLs",
+  "check": "copy: a link whose label is a path",
+  "fixture": "deferred",
+  "oldPassed": "no check",
+  "why": "in scope, not done this round",
+  "by": "claude (LLM)",
+  "confirmed": false
+ },
+ "cmvam8yfg000bkw06re51rbik": {
+  "bucket": "MISSED",
+  "summary": "How It Works buttons styled differently from every other page",
+  "check": "1.20 one look per role across pages (new)",
+  "fixture": "test/misses-520.test.mjs",
+  "oldPassed": "1.17 compares with the site median only as square/rounded; 1.3/1.16 counts filled buttons only and allows variants; case never compared",
+  "why": "",
+  "by": "claude (LLM)",
+  "confirmed": false
+ },
+ "cmvamcs5f000gkw06mv1kxkew": {
+  "bucket": "MISSED",
+  "summary": "Square-cornered tags on /request vs rounded elsewhere",
+  "check": "1.20 one look per role across pages (new)",
+  "fixture": "test/misses-520.test.mjs",
+  "oldPassed": "no run between change and card; 1.17 only flags vs the median and runs once at 1440; tags are not a role in 1.3/1.16",
+  "why": "",
+  "by": "claude (LLM)",
+  "confirmed": false
+ },
+ "cmvamylmh000lkw06dsmdpdsx": {
+  "bucket": "OUT OF SCOPE",
+  "summary": "Remove the eye icon on hovered rows",
+  "why": "design decision",
+  "by": "claude (LLM)",
+  "confirmed": false
+ },
+ "cmvan5tsv000qkw0686qeobrx": {
+  "bucket": "MISSED",
+  "summary": "Pending tag square on the task page",
+  "check": "1.20 one look per role across pages (new)",
+  "fixture": "test/misses-520.test.mjs",
+  "oldPassed": "1.17's badge detector skipped a badge with a dot + label (two children)",
+  "why": "",
+  "by": "claude (LLM)",
+  "confirmed": false
+ },
+ "cmvan7byy000tkw06v1xwhajo": {
+  "bucket": "MISSED",
+  "summary": "Task Details drawer does not scroll",
+  "check": "2.14 text cut by a non-scrolling panel (new)",
+  "fixture": "test/misses-520.test.mjs",
+  "oldPassed": "states never measured clipped text; 2.10 took the clipped panel for a carousel (content runs past it)",
+  "why": "",
+  "by": "claude (LLM)",
+  "confirmed": false
+ },
+ "cmvanbn8z0010kw06gpxiqmyg": {
+  "bucket": "OUT OF SCOPE",
+  "summary": "Example profiles block: too much empty middle",
+  "why": "composition judgement",
+  "by": "claude (LLM)",
+  "confirmed": false
+ },
+ "cmvandxnt0017kw06at9a8qvx": {
+  "bucket": "MISSED",
+  "summary": "'Tasks' in the cabinet vs 'Orders' in the header menu",
+  "check": "3.7 names inside closed menus",
+  "fixture": "deferred",
+  "oldPassed": "3.7 collects visible nav only, the account menu was closed",
+  "why": "in scope, not done this round",
+  "by": "claude (LLM)",
+  "confirmed": false
+ },
+ "cmvanzasq001ekw0667trsfab": {
+  "bucket": "OUT OF SCOPE",
+  "summary": "Specialist page composition",
+  "why": "design decision",
+  "by": "claude (LLM)",
+  "confirmed": false
+ },
+ "cmvao79wg001hkw069dvs0n88": {
+  "bucket": "OUT OF SCOPE",
+  "summary": "Add Cancel on the task page",
+  "why": "product decision",
+  "by": "claude (LLM)",
+  "confirmed": false
+ },
+ "cmvaoli5u001kkw06rbdnkmol": {
+  "bucket": "OUT OF SCOPE",
+  "summary": "Remove gradient borders",
+  "why": "design decision",
+  "by": "claude (LLM)",
+  "confirmed": false
+ },
+ "cmvaos8lc0001l506b75hf7md": {
+  "bucket": "OUT OF SCOPE",
+  "summary": "Footer: drop 'Policies' heading, reorder",
+  "why": "owner decision",
+  "by": "claude (LLM)",
+  "confirmed": false
+ },
+ "cmvaov6540006l5064sjkpejc": {
+  "bucket": "MISSED",
+  "summary": "Square corners in the Example profiles block",
+  "check": "1.20 one look per role across pages (new)",
+  "fixture": "test/misses-520.test.mjs",
+  "oldPassed": "no run between change and card; per-page 1.17 vs median only",
+  "why": "",
+  "by": "claude (LLM)",
+  "confirmed": false
+ },
+ "cmvap68g30001l506wziyitox": {
+  "bucket": "MISSED",
+  "summary": "Sign-out works only on the second try",
+  "check": "A4 sign-out (fixed)",
+  "fixture": "test/misses-520.test.mjs",
+  "oldPassed": "A4 was skipped on every run: it needed LOGIN_EMAIL, the project signs in per role; it also never pressed the confirm dialog and never checked the host",
+  "why": "",
+  "by": "claude (LLM)",
+  "confirmed": false
+ },
+ "cmvap8d8r0006l506dsul9jll": {
+  "bucket": "MISSED",
+  "summary": "The same login error shown twice (toast + inline)",
+  "check": "FM12 one error, said once (new)",
+  "fixture": "test/misses-520.test.mjs",
+  "oldPassed": "FM3 checks that an error appears, not how many times",
+  "why": "",
+  "by": "claude (LLM)",
+  "confirmed": false
+ },
+ "cmvapcnd8000bl506e62jsnme": {
+  "bucket": "MISSED",
+  "summary": "Stacked mobile buttons of different widths",
+  "check": "stacked button widths",
+  "fixture": "deferred",
+  "oldPassed": "no check",
+  "why": "in scope, not done this round",
+  "by": "claude (LLM)",
+  "confirmed": false
+ },
+ "cmvapec86000il5060xag786e": {
+  "bucket": "OUT OF SCOPE",
+  "summary": "Add the currency switch to the burger menu",
+  "why": "feature request (parity rule to consider)",
+  "by": "claude (LLM)",
+  "confirmed": false
+ },
+ "cmvapigt0000nl506o3c7p1wg": {
+  "bucket": "MISSED",
+  "summary": "Awkward heading line breaks on mobile",
+  "check": "2.5 orphans (soft) / text-wrap balance",
+  "fixture": "deferred",
+  "oldPassed": "soft orphan rule only, not run on that version",
+  "why": "in scope, not done this round",
+  "by": "claude (LLM)",
+  "confirmed": false
+ },
+ "cmvaplntg000ul506pe2s63fa": {
+  "bucket": "MISSED",
+  "summary": "After creating a task the mobile list shifts left",
+  "check": "needs a seeded state",
+  "fixture": "deferred",
+  "oldPassed": "runs never create data (no DB writes)",
+  "why": "needs a fixture route with an existing task",
+  "by": "claude (LLM)",
+  "confirmed": false
+ },
+ "cmvappu390011l5068ottcgos": {
+  "bucket": "MISSED",
+  "summary": "Square frames on /become-a-specialist",
+  "check": "1.20 one look per role across pages (new)",
+  "fixture": "test/misses-520.test.mjs",
+  "oldPassed": "no run between change and card; per-page 1.17 vs median only",
+  "why": "",
+  "by": "claude (LLM)",
+  "confirmed": false
+ },
+ "cmvaptu5x0018l506qzqpivvx": {
+  "bucket": "MISSED",
+  "summary": "Signed-in mobile menu cannot scroll",
+  "check": "3.5 unreachable menu items + 2.14 (fixed/new)",
+  "fixture": "test/misses-520.test.mjs",
+  "oldPassed": "3.5 scrolled items into view with scrollIntoView, which also scrolls overflow:hidden panels a finger cannot",
+  "why": "",
+  "by": "claude (LLM)",
+  "confirmed": false
+ },
+ "cmvffbsy50008l706t3xpyv9u": {
+  "bucket": "MISSED",
+  "summary": "Cookie Decline does nothing",
+  "check": "C6 Decline declines (new)",
+  "fixture": "test/misses-520.test.mjs",
+  "oldPassed": "C1 only checked that a Reject button exists",
+  "why": "",
+  "by": "claude (LLM)",
+  "confirmed": false
+ },
+ "cmvfgptej0015l006x59wjzll": {
+  "bucket": "MISSED",
+  "summary": "Back/Continue do not scroll to the top",
+  "check": "4.4/3.8 step region top (fixed)",
+  "fixture": "test/misses-520.test.mjs",
+  "oldPassed": "the form's first button is Back, so the wizard walk never started; Back never pressed",
+  "why": "",
+  "by": "claude (LLM)",
+  "confirmed": false
+ },
+ "cmvgkdvjj002zl706bcmmv7yq": {
+  "bucket": "OUT OF SCOPE",
+  "summary": "Widen policy text",
+  "why": "design decision",
+  "by": "claude (LLM)",
+  "confirmed": false
+ },
+ "cmvgks7yc003jl70661id024d": {
+  "bucket": "OUT OF SCOPE",
+  "summary": "Remove a settings section",
+  "why": "product decision",
+  "by": "claude (LLM)",
+  "confirmed": false
+ },
+ "cmvglg256004nl706aabd8n0r": {
+  "bucket": "OUT OF SCOPE",
+  "summary": "Success pill after the contact form looks off",
+  "why": "taste (shape); FM13 covers the brief's success-looks-like-error case",
+  "by": "claude (LLM)",
+  "confirmed": false
+ },
+ "cmvglifin004xl706iszu9088": {
+  "bucket": "MISSED",
+  "summary": "Input border disappears in the gibberish error state",
+  "check": "1.9 inputs visible, in validation states",
+  "fixture": "deferred",
+  "oldPassed": "1.9 runs at rest only",
+  "why": "in scope, not done this round",
+  "by": "claude (LLM)",
+  "confirmed": false
+ },
+ "cmvglvnto006il7060rw2r0lh": {
+  "bucket": "OUT OF SCOPE",
+  "summary": "Make 'Matched on' interactive",
+  "why": "product decision",
+  "by": "claude (LLM)",
+  "confirmed": false
+ },
+ "cmvgoeygt004rjs06zvcc7xac": {
+  "bucket": "OUT OF SCOPE",
+  "summary": "Highlight the current page in footer links",
+  "why": "design request (3.5 covers the header nav only)",
+  "by": "claude (LLM)",
+  "confirmed": false
+ },
+ "cmvgogmsp004ujs06t4r5vboa": {
+  "bucket": "OUT OF SCOPE",
+  "summary": "Centre two columns of the Payment Policy credits table",
+  "why": "taste",
+  "by": "claude (LLM)",
+  "confirmed": false
+ },
+ "cmvgolh6g0051js06r0sos7qf": {
+  "bucket": "OUT OF SCOPE",
+  "summary": "Shorten the AML policy footer label",
+  "why": "naming decision",
+  "by": "claude (LLM)",
+  "confirmed": false
+ },
+ "cmvgqpcn90036l406lma7zca9": {
+  "bucket": "OUT OF SCOPE",
+  "summary": "Remove 'We accept' from the footer",
+  "why": "owner decision — contradicts F5; note for §4",
+  "by": "claude (LLM)",
+  "confirmed": false
+ },
+ "cmvgqpwky003bl406lb2dfcso": {
+  "bucket": "OUT OF SCOPE",
+  "summary": "Remove the AML policy",
+  "why": "owner decision (§4 removed pages)",
+  "by": "claude (LLM)",
+  "confirmed": false
+ },
+ "cmvgqr8hu003gl406tueezyi2": {
+  "bucket": "OUT OF SCOPE",
+  "summary": "More task options on Start from a wording",
+  "why": "product decision",
+  "by": "claude (LLM)",
+  "confirmed": false
+ },
+ "cmvgqss6d003ll4066f7kkfre": {
+  "bucket": "OUT OF SCOPE",
+  "summary": "Change the sample text format on /request",
+  "why": "copy decision",
+  "by": "claude (LLM)",
+  "confirmed": false
+ },
+ "cmvgqtkmg003ql406ei0iwyzg": {
+  "bucket": "OUT OF SCOPE",
+  "summary": "Add a Custom option on /tasks",
+  "why": "product decision",
+  "by": "claude (LLM)",
+  "confirmed": false
+ },
+ "cmvgqwcvr0001l006g81w5eei": {
+  "bucket": "OUT OF SCOPE",
+  "summary": "Account-created toast in light green",
+  "why": "design decision",
+  "by": "claude (LLM)",
+  "confirmed": false
+ },
+ "cmvgqxrn50006l0069v3nal2s": {
+  "bucket": "OUT OF SCOPE",
+  "summary": "Allow paying with cents",
+  "why": "product decision",
+  "by": "claude (LLM)",
+  "confirmed": false
+ },
+ "cmvgqz13x000bl006wky0s26c": {
+  "bucket": "OUT OF SCOPE",
+  "summary": "Rename the signed-in menu like Praxis",
+  "why": "naming decision",
+  "by": "claude (LLM)",
+  "confirmed": false
+ },
+ "cmvgr3j2w0001jy06avyo5q1d": {
+  "bucket": "OUT OF SCOPE",
+  "summary": "Remove sanctioned countries from the specialist application",
+  "why": "compliance decision",
+  "by": "claude (LLM)",
+  "confirmed": false
+ },
+ "cmvgr7oyl000ijy06dfyzw70n": {
+  "bucket": "OUT OF SCOPE",
+  "summary": "Expand the specialist terms",
+  "why": "legal decision",
+  "by": "claude (LLM)",
+  "confirmed": false
+ }
+}
