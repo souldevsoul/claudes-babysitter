@@ -6,6 +6,7 @@ import { test, expect, type Page } from "@playwright/test";
 import * as c from "./checks.js";
 import * as fit from "./checks/fit.js";
 import * as looks from "./checks/looks.js";
+import * as details from "./checks/details.js";
 import { loadConfig, loadRoutes, storageFor } from "./project.js";
 
 const cfg = loadConfig();
@@ -54,6 +55,14 @@ for (const route of ROUTES) {
       if (eye.length) test.info().annotations.push({ type: "check by eye", description: fmt(eye) });
       hard(list);
     });
+    test("2.15 a shadow is not cut off by a box that clips [P16]", async ({ page }) => {
+      await open(page, r);
+      const { hard: list, eye } = await details.shadowClipped(page);
+      if (eye.length) test.info().annotations.push({ type: "check by eye", description: fmt(eye) });
+      hard(list);
+    });
+    test("2.16 a pinned panel's scroll box ends on the screen [P16]", async ({ page }) => { await open(page, r); hard(await details.stuckScrollPastScreen(page)); });
+    test("6.13 a link in a sentence is not marked by colour alone (WCAG 1.4.1) [P34]", async ({ page }) => { await open(page, r); hard(await details.colourOnlyLinks(page)); });
     test("1.1 no native select/date/file/checkbox/radio [P01 P03 P50]", async ({ page }) => { await open(page, r); hard(await c.nativeControls(page)); });
     test("6.4 text ≥12px, legible weight, contrast ≥4.5:1 (3:1 large) [P11 P34]", async ({ page }) => {
       await open(page, r);

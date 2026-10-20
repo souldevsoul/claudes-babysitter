@@ -25,7 +25,8 @@
  * Idempotent: re-running updates in place — config is merged, hooks are de-duplicated, the agent
  * instructions live between markers and are replaced, never appended twice.
  */
-import { existsSync, readFileSync, writeFileSync, mkdirSync, readdirSync, statSync, copyFileSync, rmSync } from "node:fs";
+import { vendorCopy } from "../lib/update.js";
+import { existsSync, readFileSync, writeFileSync, mkdirSync, rmSync } from "node:fs";
 import { join, relative, resolve, dirname, basename } from "node:path";
 import { fileURLToPath } from "node:url";
 import { spawnSync, execSync } from "node:child_process";
@@ -131,17 +132,9 @@ if (mode === "package") {
   const exists = existsSync(join(toolPath, "bin/ui-check.mjs"));
   if (!exists || has("force") || TOOL === toolPath) {
     if (TOOL !== toolPath) {
-      const SKIP = /(^|\/)(node_modules|reports|test-results|playwright-report|\.babysitter|fixtures|\.git)(\/|$)/;
-      const copy = (from, to) => {
-        for (const f of readdirSync(from)) {
-          const a = join(from, f), b = join(to, f), r = relative(TOOL, a);
-          if (SKIP.test(r)) continue;
-          if (statSync(a).isDirectory()) copy(a, b);
-          else if (!DRY) { mkdirSync(to, { recursive: true }); copyFileSync(a, b); }
-        }
-      };
+      // the same files `babysitter update` copies (lib/update.js)
       if (!DRY && has("force")) rmSync(toolPath, { recursive: true, force: true });
-      copy(TOOL, toolPath);
+      vendorCopy(TOOL, toolPath, { dry: DRY });
       say(`vendored the tool (v${readJson(join(TOOL, "package.json")).version})`, toolPath);
     }
   } else say("tool already vendored (use --force to refresh)", toolPath);

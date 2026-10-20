@@ -12,6 +12,11 @@ tester.run("numeric-input-bounds", R["numeric-input-bounds"], {
     '<input type="number" min={1} max={100} step={1} />',
     '<Input type="number" name="credits" min={10} max={100000} />',
     '<Input name="amount" inputMode="decimal" min="1" max="20000" />',
+    // 5.3.0 (deskhand / proxy / tandem): bounds in the change handler, or the range written next to the field
+    '<Input id="tu-number" inputMode="numeric" autoComplete="cc-number" value={card.cardNumber} onChange={(e) => setCard((c) => ({ ...c, cardNumber: e.target.value.replace(/[^\\d ]/g, "").slice(0, 23) }))} />',
+    '<Input id="ob-hours" inputMode="numeric" value={hours} onChange={(e) => setHours(e.target.value.replace(/\\D/g, "").slice(0, 3))} invalid={!!errors.hours} />',
+    '<Field id="refund" label={`Credits back to the customer (1 to ${price - 1})`}><Input id="refund" inputMode="numeric" value={refund} onChange={(e) => setRefund(e.target.value.replace(/\\D/g, ""))} /></Field>',
+    '<Field label="Amount" htmlFor="tu-amount" hint={range ? `From ${a} to ${b}.` : undefined}><Input id="tu-amount" inputMode="decimal" value={amount} onChange={(e) => setAmount(e.target.value)} /></Field>',
     // bounded in a schema in the same file
     'const schema = z.object({ amount: z.coerce.number().min(1).max(20000) });\n<Input name="amount" type="number" />',
     'const s = z.object({ seats: z.number().int().positive().lte(50) });\n<input {...register("seats")} type="number" />',
@@ -45,6 +50,9 @@ tester.run("numeric-input-bounds", R["numeric-input-bounds"], {
     '<CreditAmountInput value={v} onChange={setV} min={10} max={100000} />',
   ],
   invalid: [
+    // digits only but no cap, a cap but letters allowed, a label without a range: still unbounded
+    { code: '<Input id="hours" inputMode="numeric" value={h} onChange={(e) => setH(e.target.value.replace(/\\D/g, ""))} />', errors: [{ messageId: "number" }] },
+    { code: '<Field label="Credits to refund"><Input id="credits" inputMode="numeric" value={c} onChange={(e) => setC(e.target.value.slice(0, 7))} /></Field>', errors: [{ messageId: "number" }] },
     // playfix /pricing "Custom amount", voicecraft "Custom credits"
     { code: '<Input name="amount" type="number" />', errors: [{ messageId: "number" }] },
     { code: '<input name="customCredits" inputMode="numeric" min={20} />', errors: [{ messageId: "number" }] },
@@ -95,6 +103,10 @@ tester.run("mutation-refreshes-ui", R["mutation-refreshes-ui"], {
     client('export function Docs() { const upload = async (type, file) => { setBusy(type); const res = await fetch("/api/onboarding/documents", { method: "POST", body: file }); if (res.ok) { setSaved((prev) => ({ ...prev, [type]: file.name })); } setBusy(null); }; }'),
     // truelogos lib/upload-client.ts: a module-level helper that returns the result to its caller
     client('export async function uploadToStore(file) { const res = await fetch("/api/upload", { method: "POST", body: file }); const data = await res.json(); if (res.ok) return { url: data.url }; return { error: data.error }; }'),
+    // deskhand / tandem (5.3.0): a send-only endpoint (reset link, code) whose handler shows a "sent" notice
+    client('export function ForgotForm() { const [done, setDone] = useState(false); async function submit(e) { setBusy(true); const res = await fetch("/api/auth/forgot-password", { method: "POST", body: "{}" }); setBusy(false); if (!res.ok) { setFormError("x"); return; } setDone(true); } }'),
+    client('export function VerifyEmail() { async function send() { const res = await fetch("/api/auth/resend-code", { method: "POST" }).catch(() => null); if (res?.ok) setSent(true); else setError("Try again"); } }'),
+    client('export function Contact() { const send = async () => { const r = await fetch(`/api/contact`, { method: "POST", body: "x" }); if (r.ok) setSent(true); }; }'),
     // Vertex delete account: signs out (navigates away)
     client('export function Settings() { const del = async () => { const res = await fetch("/api/user/delete", { method: "POST" }); toast.success("Deleted"); await signOut({ callbackUrl: "/" }); }; }'),
   ],
@@ -103,6 +115,9 @@ tester.run("mutation-refreshes-ui", R["mutation-refreshes-ui"], {
     { code: client('export function Gen() { const run = async () => { setLoading(true); await fetch("/api/generate", { method: "POST" }); setLoading(false); toast.success("Done"); }; }'), errors: [{ messageId: "stale" }] },
     { code: client('export function Settings() { async function save(e) { e.preventDefault(); const res = await fetch("/api/profile", { method: "PATCH", body: JSON.stringify(form) }); if (res.ok) { setSaved(true); } else { setError("Could not save"); } } }'), errors: [{ messageId: "stale" }] },
     { code: client('export function Row() { const del = async () => { await axios.delete("/api/items/1"); toast("Deleted"); }; }'), errors: [{ messageId: "stale" }] },
+    // a send-only endpoint with no notice at all, and a data endpoint with a "done" flag, are still stale
+    { code: client('export function ForgotForm() { async function submit() { setBusy(true); await fetch("/api/auth/forgot-password", { method: "POST" }); setBusy(false); } }'), errors: [{ messageId: "stale" }] },
+    { code: client('export function Wallet() { const top = async () => { const r = await fetch("/api/wallet/topup", { method: "POST" }); if (r.ok) setDone(true); }; }'), errors: [{ messageId: "stale" }] },
     // a handler inside a component that only returns a status is still stale
     { code: client('export function Row() { const del = async () => { const r = await fetch("/api/items/1", { method: "DELETE" }); toast("Deleted"); return; }; }'), errors: [{ messageId: "stale" }] },
   ],

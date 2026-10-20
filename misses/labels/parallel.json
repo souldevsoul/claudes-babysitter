@@ -384,5 +384,129 @@
   "why": "design decision",
   "by": "claude (LLM)",
   "confirmed": false
+ },
+ "cmvfgnlyf001ljt06cqeocgf8": {
+  "bucket": "OUT OF SCOPE",
+  "summary": "Onboarding: say the price is a minimum; show USD/EUR next to credits",
+  "why": "copy / feature request",
+  "by": "claude (LLM)",
+  "confirmed": false
+ },
+ "cmvfgj2q90009l006afydc8hm": {
+  "bucket": "OUT OF SCOPE",
+  "summary": "/request: drop the quantity field",
+  "why": "product decision",
+  "by": "claude (LLM)",
+  "confirmed": false
+ },
+ "cmvfghvr60001l006rbu5kidu": {
+  "bucket": "OUT OF SCOPE",
+  "summary": "/request: the hover line looks odd on wide rows",
+  "why": "taste",
+  "by": "claude (LLM)",
+  "confirmed": false
+ },
+ "cmvfgboim001yle06cqthragr": {
+  "bucket": "OUT OF SCOPE",
+  "summary": "Settings: password fields only in a dialog",
+  "why": "design decision",
+  "by": "claude (LLM)",
+  "confirmed": false
+ },
+ "cmvfg89ti0017jt061es6dz59": {
+  "bucket": "MISSED",
+  "summary": "/contact: the success message looks like the text that was there before",
+  "check": "a success message wears a success tone (FM13 compares with the error only) — deferred",
+  "fixture": "",
+  "oldPassed": "FM13 compares success with the form's error look; nothing compares it with the plain text it replaces",
+  "why": "",
+  "by": "claude (LLM)",
+  "confirmed": false
+ },
+ "cmvfg81wd0012jt065l0z3f6s": {
+  "bucket": "OUT OF SCOPE",
+  "summary": "/contact: split the text into two lines by topic",
+  "why": "copy judgement",
+  "by": "claude (LLM)",
+  "confirmed": false
+ },
+ "cmvfg5gh6000vl7060pqzf98x": {
+  "bucket": "OUT OF SCOPE",
+  "summary": "/contact orange band: make the text bolder",
+  "why": "weight preference; 6.4 contrast passes",
+  "by": "claude (LLM)",
+  "confirmed": false
+ },
+ "cmvfg3fcb000jjt06h05h9mct": {
+  "bucket": "OUT OF SCOPE",
+  "summary": "The green rays repeat on every page",
+  "why": "design decision",
+  "by": "claude (LLM)",
+  "confirmed": false
+ },
+ "cmvffzqvn001ple06w4jfobqt": {
+  "bucket": "OUT OF SCOPE",
+  "summary": "/pricing: drop 'or take a set amount'",
+  "why": "design decision",
+  "by": "claude (LLM)",
+  "confirmed": false
+ },
+ "cmvffudkp001jle06ifnqcls6": {
+  "bucket": "OUT OF SCOPE",
+  "summary": "/request brief on orange: make the text bolder",
+  "why": "weight preference; 6.4 contrast passes (the heuristic match was a states finding)",
+  "by": "claude (LLM)",
+  "confirmed": false
+ },
+ "cmvffn4y5000ejt06gd1xtxc4": {
+  "bucket": "MISSED",
+  "summary": "The closing CTA band is wider than the content above it",
+  "check": "one content width per page — deferred",
+  "fixture": "",
+  "oldPassed": "no check compares the content widths of consecutive sections",
+  "why": "",
+  "by": "claude (LLM)",
+  "confirmed": false
+ },
+ "cmvfflasa0008jt06zikl0uqk": {
+  "bucket": "OUT OF SCOPE",
+  "summary": "Footer: Contact into the company column, card marks right-aligned",
+  "why": "design decision",
+  "by": "claude (LLM)",
+  "confirmed": false
+ },
+ "cmvffjiks001ale06vyuhmfyi": {
+  "bucket": "OUT OF SCOPE",
+  "summary": "Home steps: too much space on the right",
+  "why": "spacing taste",
+  "by": "claude (LLM)",
+  "confirmed": false
+ },
+ "cmvffgg5c0015le064pk6c1vm": {
+  "bucket": "MISSED",
+  "summary": "Home: 'From brief to hired' centred while the other section headings are left-aligned",
+  "check": "one alignment per heading role on a page (1.20 for headings) — deferred",
+  "fixture": "",
+  "oldPassed": "1.20 compares buttons, chips, badges, cards and inputs; section headings are not a role there",
+  "why": "",
+  "by": "claude (LLM)",
+  "confirmed": false
+ },
+ "cmvffc73y000dl7066m2kif5r": {
+  "bucket": "OUT OF SCOPE",
+  "summary": "Cookie settings show partly and need a scroll",
+  "why": "design decision (the panel is a 50vh scroll box; everything is reachable)",
+  "by": "claude (LLM)",
+  "confirmed": false
+ },
+ "cmvffbmko0003l7068bm0oxf9": {
+  "bucket": "MISSED",
+  "summary": "Cookie settings: 'ALWAYS ON' is not level with 'Strictly necessary'",
+  "check": "badge-to-label baseline in one row — deferred",
+  "fixture": "",
+  "oldPassed": "2.7 compares text columns; a badge beside a label in items-start rows is not compared (the heuristic match was another states finding on /)",
+  "why": "",
+  "by": "claude (LLM)",
+  "confirmed": false
  }
 }

@@ -28,6 +28,11 @@
 //   misses [--project slug]… [--since ISO] [--findings findings.json]… [--dry-run]
 //                    → the miss loop: people's Nexus cards since the last run → CAUGHT / MISSED / OUT OF SCOPE,
 //                      misses/<slug>-<date>.md and the catch rate CAUGHT / (CAUGHT + MISSED) (NEXUS_URL, NEXUS_API_KEY)
+//   update [repo] [--to vX.Y.Z] [--dry-run] [--no-install] [--brief]
+//                    → re-vendor the latest release into the product (keeps babysitter.config.json and .babysitter/),
+//                      print what changed since the old version, add the version check to the CI workflows
+//   version-check    → the product's copy against the latest release: a minor behind warns, a major behind fails
+//   doctor           → how the product is wired (hooks, CI, config) + the version check
 //   after-merge      → the git post-merge / post-rewrite re-check: static check of what the merge changed, then the
 //                      runtime checks on the routes it reached (when a dev server / preview answers)
 import { spawnSync } from "node:child_process";
@@ -49,7 +54,30 @@ function playwright(args, env = process.env) {
 const node = (file, args) => process.exit(spawnSync(process.execPath, [join(root, file), ...args], { stdio: "inherit" }).status ?? 1);
 switch (cmd) {
   case "init": node("bin/ui-init.mjs", rest); break;
-  case "check": node("bin/ui-check.mjs", rest); break;
+  case "check": {
+    // the static check, then one line on the version of the copy (a major behind the latest release fails the check;
+    // BABYSITTER_NO_VERSION_CHECK=1 leaves it out — the editor hooks run ui-check directly and never ask the network)
+    const st = spawnSync(process.execPath, [join(root, "bin/ui-check.mjs"), ...rest], { stdio: "inherit" }).status ?? 1;
+    const machine = rest.some((a, i) => (a === "--format" && /^(json|agent)$/.test(rest[i + 1] || "")) || a === "--file");
+    if (process.env.BABYSITTER_NO_VERSION_CHECK || machine) process.exit(st);
+    const repoArg = rest.indexOf("--repo") >= 0 ? ["--repo", rest[rest.indexOf("--repo") + 1]] : [];
+    const v = spawnSync(process.execPath, [join(root, "bin/version-check.mjs"), ...repoArg], { stdio: "inherit" }).status ?? 0;
+    process.exit(st || v);
+    break;
+  }
+  case "update": node("bin/update.mjs", rest); break;
+  case "version-check": node("bin/version-check.mjs", rest); break;
+  case "doctor": {
+    const repo = rest.find((x) => !x.startsWith("-")) || process.cwd();
+    const { wiringStatus } = await import("../lib/wiring.js");
+    const w = wiringStatus(repo);
+    console.log(`Claude's Babysitter — ${repo}`);
+    for (const p of w.present) console.log(`  ✓ ${p}`);
+    for (const m of w.missing) console.log(`  ✗ ${m.piece} — ${m.fix}`);
+    const v = spawnSync(process.execPath, [join(root, "bin/version-check.mjs"), "--repo", repo], { stdio: "inherit" }).status ?? 0;
+    process.exit(v);
+    break;
+  }
   case "content": node("bin/content-lint.mjs", rest); break;
   case "audit": {
     // audit --diff <base>: the CI gate — only problems this branch adds since it left <base> fail the run
@@ -186,6 +214,6 @@ switch (cmd) {
   case "after-merge": node("bin/after-merge.mjs", rest); break;
   case "misses": node("bin/misses.mjs", rest); break;
   default:
-    console.log("usage: babysitter <init|check|audit|content|prepare|test-ui|e2e|fix-plan|after-merge|misses> [...]\n  e2e [--skip-prepare] [--quick] [--only ui|acceptance|content|product] [--last-failed]\n  init [repo] [--new|--existing] [--link|--vendor] [--ci] [--url URL] [--dev-url URL] [--dry-run] [--no-install] [--yes] [--force]");
+    console.log("usage: babysitter <init|update|check|version-check|doctor|audit|content|prepare|test-ui|e2e|fix-plan|after-merge|misses> [...]\n  e2e [--skip-prepare] [--quick] [--only ui|acceptance|content|product] [--last-failed]\n  init [repo] [--new|--existing] [--link|--vendor] [--ci] [--url URL] [--dev-url URL] [--dry-run] [--no-install] [--yes] [--force]");
     process.exit(cmd ? 2 : 0);
 }

@@ -452,5 +452,309 @@
   "why": "product decision",
   "by": "claude (LLM)",
   "confirmed": false
+ },
+ "cmvf9c7p6001nku06nxjcysw7": {
+  "bucket": "OUT OF SCOPE",
+  "summary": "Remove the shipping policy page",
+  "why": "product decision (the removed-page checks are brief §4)",
+  "by": "claude (LLM)",
+  "confirmed": false
+ },
+ "cmvf97esd001iku06bnji9bid": {
+  "bucket": "OUT OF SCOPE",
+  "summary": "Payments policy: the four steps as rows, not columns",
+  "why": "design decision",
+  "by": "claude (LLM)",
+  "confirmed": false
+ },
+ "cmvf8z4yy000pjn06iyxw50ef": {
+  "bucket": "OUT OF SCOPE",
+  "summary": "/pricing: reorder the sections",
+  "why": "design decision",
+  "by": "claude (LLM)",
+  "confirmed": false
+ },
+ "cmvf8u8xs0012jw064tzjjnds": {
+  "bucket": "MISSED",
+  "summary": "Dashboard: the tiles' shadow is cut off under the task and quick-actions boxes",
+  "check": "2.15 shadow not cut by a box that clips (new)",
+  "fixture": "test/misses-521.test.mjs",
+  "oldPassed": "no check measured shadows against the box that clips them (the column is overflow-hidden)",
+  "why": "",
+  "by": "claude (LLM)",
+  "confirmed": false
+ },
+ "cmvf8d4lx001bjv065sjccfl2": {
+  "bucket": "OUT OF SCOPE",
+  "summary": "/contact: centre the TOPIC column header",
+  "why": "layout taste",
+  "by": "claude (LLM)",
+  "confirmed": false
+ },
+ "cmvf8d28x0018jv06jn4uuemk": {
+  "bucket": "OUT OF SCOPE",
+  "summary": "/contact: topic tags as wide as the widest, centred",
+  "why": "design decision",
+  "by": "claude (LLM)",
+  "confirmed": false
+ },
+ "cmvf89xi70017ku069xjwh5j0": {
+  "bucket": "OUT OF SCOPE",
+  "summary": "Initials tile should be level with the name",
+  "why": "layout taste / feature (future picture)",
+  "by": "claude (LLM)",
+  "confirmed": false
+ },
+ "cmvf7l8sh000qjw069thxtzxa": {
+  "bucket": "OUT OF SCOPE",
+  "summary": "Is the knowledge quiz per specialisation",
+  "why": "a question about the product",
+  "by": "claude (LLM)",
+  "confirmed": false
+ },
+ "cmvf7jpxi000wkz06sdx8btvh": {
+  "bucket": "OUT OF SCOPE",
+  "summary": "Why is the rate capped at 500",
+  "why": "product decision (the brief's own example)",
+  "by": "claude (LLM)",
+  "confirmed": false
+ },
+ "cmvf7hop8000mkz06d71n7tmx": {
+  "bucket": "OUT OF SCOPE",
+  "summary": "Onboarding: 'rate in credits' does not say per what",
+  "why": "copy judgement",
+  "by": "claude (LLM)",
+  "confirmed": false
+ },
+ "cmvf7dfsq000ekz06t2e1i5h1": {
+  "bucket": "OUT OF SCOPE",
+  "summary": "Settings: explanatory copy feels AI-like; one column",
+  "why": "copy judgement",
+  "by": "claude (LLM)",
+  "confirmed": false
+ },
+ "cmvf7a7w2000ijw0627ysspcg": {
+  "bucket": "MISSED",
+  "summary": "Dashboard stat boxes: 'In progress' wraps to two lines while the others fit one",
+  "check": "one label wraps in a row of equal cards (2.12 per row) — deferred",
+  "fixture": "",
+  "oldPassed": "2.12 compares repeated rows' columns and is soft; equal sibling cards are not compared for wrapping labels",
+  "why": "",
+  "by": "claude (LLM)",
+  "confirmed": false
+ },
+ "cmvf793p6000bjw06qpn0port": {
+  "bucket": "OUT OF SCOPE",
+  "summary": "Wallet: centre Add credits with the stat boxes",
+  "why": "layout taste",
+  "by": "claude (LLM)",
+  "confirmed": false
+ },
+ "cmvf770ic000mjq0618ffv7pv": {
+  "bucket": "OUT OF SCOPE",
+  "summary": "Empty task board: 'Choose a task' and 'New task' do the same",
+  "why": "product decision (the heuristic match was a pagination finding on /dashboard/tasks)",
+  "by": "claude (LLM)",
+  "confirmed": false
+ },
+ "cmvf76quo0006ku06ewdbrs0h": {
+  "bucket": "MISSED",
+  "summary": "Account pages: the side nav label and the page header start at different heights",
+  "check": "sidebar / content top alignment across account pages — deferred",
+  "fixture": "",
+  "oldPassed": "no check compares the top of a side nav with the top of the content beside it",
+  "why": "",
+  "by": "claude (LLM)",
+  "confirmed": false
+ },
+ "cmvf703v3000djq06bp9nfmcx": {
+  "bucket": "OUT OF SCOPE",
+  "summary": "/contact: page header above the two columns",
+  "why": "design decision",
+  "by": "claude (LLM)",
+  "confirmed": false
+ },
+ "cmvf6ztal0008jq06ch9ck7as": {
+  "bucket": "OUT OF SCOPE",
+  "summary": "/contact: drop the text under the form; align the table columns",
+  "why": "design decision",
+  "by": "claude (LLM)",
+  "confirmed": false
+ },
+ "cmvf6voku0001jw06bg1r8w0p": {
+  "bucket": "MISSED",
+  "summary": "/become-partner: the timeline circles are not level with the step numbers",
+  "check": "marker-to-label alignment in step lists — deferred",
+  "fixture": "",
+  "oldPassed": "2.7 aligns text columns; it never compares a decorative marker with the label it marks",
+  "why": "",
+  "by": "claude (LLM)",
+  "confirmed": false
+ },
+ "cmvf6ssi80002jq06uhawt7sl": {
+  "bucket": "OUT OF SCOPE",
+  "summary": "Request-service: gap under the header; 'Select a specialist' box top level with the first result",
+  "why": "layout taste",
+  "by": "claude (LLM)",
+  "confirmed": false
+ },
+ "cmvcbqky80008jk065utopt83": {
+  "bucket": "OUT OF SCOPE",
+  "summary": "Cookie Decline does nothing and should go (only necessary cookies)",
+  "why": "product decision; C6 (Decline declines) passes on a site with necessary cookies only",
+  "by": "claude (LLM)",
+  "confirmed": false
+ },
+ "cmvcbn90h0001jk06g5m0n604": {
+  "bucket": "MISSED",
+  "summary": "Header: currency, Sign in, Join look like another (serif-like) font",
+  "check": "one font per header row (1.20 extended to fonts) — deferred",
+  "fixture": "",
+  "oldPassed": "same as f8e3xf: fonts are not compared per role",
+  "why": "",
+  "by": "claude (LLM)",
+  "confirmed": false
+ },
+ "cmvcb1w93000hic06mvrqn26h": {
+  "bucket": "OUT OF SCOPE",
+  "summary": "/contact: form on the left, info on the right",
+  "why": "design decision",
+  "by": "claude (LLM)",
+  "confirmed": false
+ },
+ "cmvcb1pl5000gjs06xrrpnrbs": {
+  "bucket": "OUT OF SCOPE",
+  "summary": "/contact: swap the columns; no descriptions in the topic dropdown",
+  "why": "design decision",
+  "by": "claude (LLM)",
+  "confirmed": false
+ },
+ "cmvcawwgv000cia06eehrxp4t": {
+  "bucket": "OUT OF SCOPE",
+  "summary": "/become-partner ladder: indents vs straight line; button at the top; repeated subheaders",
+  "why": "design decision",
+  "by": "claude (LLM)",
+  "confirmed": false
+ },
+ "cmvcaq7jd000cic0659xjgzzt": {
+  "bucket": "OUT OF SCOPE",
+  "summary": "Home catalogue: the whole row should link, not only the button",
+  "why": "feature request",
+  "by": "claude (LLM)",
+  "confirmed": false
+ },
+ "cmvcanfw80007ia06ofurude1": {
+  "bucket": "OUT OF SCOPE",
+  "summary": "Request-service: more information on the offering profiles",
+  "why": "feature request",
+  "by": "claude (LLM)",
+  "confirmed": false
+ },
+ "cmvcajcvd0002ia06802zbgio": {
+  "bucket": "OUT OF SCOPE",
+  "summary": "Home specialists section should be clickable",
+  "why": "feature request",
+  "by": "claude (LLM)",
+  "confirmed": false
+ },
+ "cmvcaefoe0001ic06s5ymsit5": {
+  "bucket": "OUT OF SCOPE",
+  "summary": "Footer: no hover arrow on the current page's link",
+  "why": "design decision",
+  "by": "claude (LLM)",
+  "confirmed": false
+ },
+ "cmvcaaitm000sl006rrkc3ukv": {
+  "bucket": "OUT OF SCOPE",
+  "summary": "More space between the footer brand block and the link columns",
+  "why": "spacing taste",
+  "by": "claude (LLM)",
+  "confirmed": false
+ },
+ "cmvcaadi4000pl006mjwc6iue": {
+  "bucket": "OUT OF SCOPE",
+  "summary": "Footer columns could be tighter; drop the arrow on the current page's link",
+  "why": "design decision",
+  "by": "claude (LLM)",
+  "confirmed": false
+ },
+ "cmvca7cmn000ck106w4jit512": {
+  "bucket": "OUT OF SCOPE",
+  "summary": "/pricing top-up: euro amount too big next to tiny slider numbers",
+  "why": "type-scale taste",
+  "by": "claude (LLM)",
+  "confirmed": false
+ },
+ "cmvca68690007k106v49glftr": {
+  "bucket": "OUT OF SCOPE",
+  "summary": "Text measure ~2/3 of the page at desktop; use the full width",
+  "why": "design decision (max-w-2xl measure is deliberate)",
+  "by": "claude (LLM)",
+  "confirmed": false
+ },
+ "cmvca275k0006l006840jox65": {
+  "bucket": "OUT OF SCOPE",
+  "summary": "/pricing: more left spacing near listed price / full width",
+  "why": "layout taste",
+  "by": "claude (LLM)",
+  "confirmed": false
+ },
+ "cmvca1wqh0001l006gzyj1q9q": {
+  "bucket": "OUT OF SCOPE",
+  "summary": "/pricing: centre the credits column",
+  "why": "layout taste",
+  "by": "claude (LLM)",
+  "confirmed": false
+ },
+ "cmvc9w53r0001k106hpbq9a2b": {
+  "bucket": "MISSED",
+  "summary": "/specialists: the sticky skill-area list ends below the screen, its last item never shows",
+  "check": "2.16 pinned panel's scroll box ends on the screen (new)",
+  "fixture": "test/misses-521.test.mjs",
+  "oldPassed": "2.14 handles fixed panels that do not scroll; nothing measured a sticky panel's scroll box against the screen while pinned (the heuristic match was a 1.6 hover finding on the same list)",
+  "why": "",
+  "by": "claude (LLM)",
+  "confirmed": false
+ },
+ "cmvc9rqey0004jk06954coc2u": {
+  "bucket": "OUT OF SCOPE",
+  "summary": "Gap between the catalogue stat label and value",
+  "why": "spacing taste",
+  "by": "claude (LLM)",
+  "confirmed": false
+ },
+ "cmvc9rk7z0001jk06diw23i42": {
+  "bucket": "OUT OF SCOPE",
+  "summary": "EUR/USD rate shown with 4 decimals; round to 2–3",
+  "why": "taste ('my personal opinion'); layout.rateDecimals is the product's setting",
+  "by": "claude (LLM)",
+  "confirmed": false
+ },
+ "cmvc9pjqa0008jq06n2f5xb70": {
+  "bucket": "OUT OF SCOPE",
+  "summary": "Decline in cookie settings has no point when only necessary cookies are set",
+  "why": "product decision (keep or drop the button); C6 checks that Decline declines and is remembered",
+  "by": "claude (LLM)",
+  "confirmed": false
+ },
+ "cmvc9o9tn0001jr061l47lv7o": {
+  "bucket": "MISSED",
+  "summary": "Cookie banner: the 'Cookie Policy' link is told from its sentence by colour only",
+  "check": "6.13 link marked by colour alone (new)",
+  "fixture": "test/misses-521.test.mjs",
+  "oldPassed": "no check compared an inline link with the text around it; 6.9 only reports underlines on non-links",
+  "why": "",
+  "by": "claude (LLM)",
+  "confirmed": false
+ },
+ "cmvc9ne7c0001jq06j6f8e3xf": {
+  "bucket": "MISSED",
+  "summary": "Header: currency switch, Sign in and Join use another font than the body and the other header links",
+  "check": "one font per header row (1.20 extended to fonts) — deferred",
+  "fixture": "",
+  "oldPassed": "1.20 compares radius, case and fill per role, not the font family; the header controls are font-mono beside font-body links",
+  "why": "",
+  "by": "claude (LLM)",
+  "confirmed": false
  }
 }

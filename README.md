@@ -49,6 +49,9 @@ npm run babysitter -- content                          # static copy lint (every
 npm run babysitter -- e2e                              # the full runtime run (every suite, viewport, language, role)
 npm run babysitter -- e2e --quick                      # fast profile while iterating: 390 + 1440
 npm run babysitter -- fix-plan                         # the last run's findings grouped by cause, with files to change
+npm run babysitter -- update                           # re-vendor the latest release; keeps babysitter.config.json and .babysitter/
+npm run babysitter -- version-check                    # this copy vs the latest release: minor behind warns, major behind fails
+npm run babysitter -- doctor                           # what is wired (hooks, CI, config) + the version check
 ```
 
 > Use `npm run babysitter`, not a bare `npx babysitter`. The tool is vendored, not an npm dependency, so `npx babysitter` would download an unrelated package with that name from the registry.
@@ -67,6 +70,16 @@ Or install it as a dev dependency: `npm i -D github:souldevsoul/claudes-babysitt
 | `templates/` | Config, CI workflow, agent instructions, Claude settings |
 | `docs/` | The guidelines the rules enforce |
 | `test/`, `fixtures/` | `npm test`: RuleTester, Stylelint fixtures, end-to-end cases |
+
+## What changed in 5.3.0 (copies do not fall behind: update and the version check)
+
+`babysitter update` re-vendors the latest release into `tools/claudes-babysitter` (or moves a devDependency pin),
+leaves `babysitter.config.json` and `.babysitter/` alone and prints what changed since the old version.
+`babysitter version-check` compares the copy with the latest tag on GitHub: a minor behind warns, a major behind fails;
+it runs in the CI templates, after `babysitter check` and in `babysitter doctor`. With every Nexus card visible
+(souldevsoul/nexus#1), the miss loop's catch rate over the 16–20 October round is Praxis 0/38 and Parallel 0/23; three
+of the newly visible misses are checks (2.15 cut shadows, 2.16 a pinned list that ends below the screen, 6.13 a link
+marked by colour alone). Details: [`CHANGELOG.md`](CHANGELOG.md).
 
 ## What changed in 5.2.0 (the miss loop; text shown in full; one look per role; live vs test)
 

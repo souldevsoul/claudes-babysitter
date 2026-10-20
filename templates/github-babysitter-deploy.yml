@@ -53,6 +53,8 @@ jobs:
           node-version: 22
       - name: Install
         run: {{INSTALL}}
+      - name: Babysitter version (a minor behind the latest release warns, a major behind fails — babysitter update)
+        run: {{RUN}} version-check
       - name: Babysitter — everything, every language, every viewport (findings are blocking)
         run: {{RUN}} e2e
       - name: Fix plan

@@ -32,6 +32,9 @@ jobs:
       - name: Install
         run: npm ci # "prepare" → babysitter install-hooks is a no-op in CI
 
+      - name: Babysitter version (a minor behind the latest release warns, a major behind fails — babysitter update)
+        run: npx --no babysitter version-check
+
       - name: Babysitter — fail on new UI problems
         env:
           BASE: ${{ github.base_ref }} # via env, never interpolated into the script

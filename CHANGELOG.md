@@ -2,6 +2,64 @@
 
 Earlier releases (4.11.1 and before) are described in the README under "What changed in …".
 
+## 5.3.0 — copies do not fall behind: `babysitter update` and the version check; catch rate over every card: Praxis 0/38, Parallel 0/23 (2026-10-20)
+
+**Catch rate, every card** (`babysitter misses`, cards since 2026-10-16, suggested buckets — a person confirms them in
+`misses/labels/*.json`): **Praxis 0/38** (92 cards: 38 missed, 54 out of scope), **Parallel 0/23** (63 cards: 23
+missed, 40 out of scope). 5.2.0 measured 0/30 and 0/19 on the cards Nexus listed through an API key (only those with a
+severity); souldevsoul/nexus#1 is deployed now and `?all=1` lists every card, so 40 more Praxis cards and 16 more
+Parallel cards of the round were classified — all of them Helena's voice-review cards, most of them design decisions.
+The 12 in-scope ones: 3 are checks in this release (2.15, 2.16, 6.13, `test/misses-521.test.mjs`); 9 are listed in the
+reports with the reason (fonts per header row, a timeline marker level with its label, side-nav vs content top,
+one label wrapping in a row of equal cards, a badge level with its label, heading alignment per page, one content
+width per page, a success message dressed like plain text). The heuristic matched 6 Praxis and 12 Parallel cards to a
+finding of the last run; none was the defect the card describes (a hover finding on the same list, a pagination
+finding on the same route, a timeout) — the labels say so. Reports: `misses/praxis-2026-10-20.md`,
+`misses/parallel-2026-10-20.md`.
+
+**New command: `babysitter update [repo]`** — re-vendors the latest release tag (or `--to vX.Y.Z`) into
+`tools/claudes-babysitter`: files the release added, changed or removed, the same files `init --vendor` copies, the
+copy's `node_modules` refreshed with npm install. A pinned devDependency (`github:…#vX.Y.Z`) gets its pin moved.
+`babysitter.config.json`, `.babysitter/` (findings, baseline, state), allowances, the product's e2e, hooks and
+CLAUDE.md are not touched. It prints the release notes since the old version (CHANGELOG.md, and the README's "What
+changed in …" for releases before 5.0.0), refuses to overwrite uncommitted edits inside the copy (`--force`), and adds
+the version check to the CI workflows `init --ci` wrote before (once, after the step that installs the copy).
+`--dry-run`, `--no-install`, `--brief`. `test/update.test.mjs` runs it against a local upstream with release tags.
+
+**New command: `babysitter version-check`** — the product's copy (vendored, installed or pinned) against the latest
+release tag on GitHub (`git ls-remote`, cached 12 h; `BABYSITTER_LATEST` pins it): a patch behind is a note, a minor
+behind warns, **a major behind fails** (exit 1, `::error` under GitHub Actions); offline is a note, never a failure.
+It runs in the CI templates `init --ci` writes (PR gate, after-deploy run, package-mode gate), after `babysitter
+check` (a major behind fails the check; `--format json|agent`, `--file` and `BABYSITTER_NO_VERSION_CHECK=1` leave it
+out — the editor hooks call ui-check directly and never ask the network), and in the new **`babysitter doctor`**
+(what is wired and what is not, then the version line). The wiring banner names a CI without the version check.
+
+**New checks** (`playwright/checks/details.js`, `docs/checks-details.md`, every route and viewport):
+- **2.15 a shadow is not cut off by a box that clips** — a card shadow that shows on one side and is cut on another
+  by an ancestor with overflow hidden / clip (or an `auto` axis that does not scroll). Hard from 12px cut, smaller
+  cuts are "check by eye". (Praxis /dashboard tiles: the column is `overflow-hidden`.)
+- **2.16 a pinned panel's scroll box ends on the screen** — a sticky / fixed panel whose scroll box ends below the
+  screen while pinned: its last items can never be shown. (Praxis /specialists skill-area list.)
+- **6.13 a link in a sentence is not marked by colour alone** — WCAG 1.4.1 (F73): no underline, border, fill, weight
+  or icon, and within 3:1 of the text around it. (Praxis cookie banner "Cookie Policy".)
+
+Live, public pages at 1440 and 390 (Praxis /, /specialists, /pricing, /contact; Parallel /, /pricing, /about; vertex,
+truelogos, sprout, deskhand, proxy, tandem): 2.15 and 2.16 stay quiet (the Praxis tiles and skill-area list are fixed
+on the site, the fixtures keep them); 6.13 finds the Parallel cookie banner's "Cookie Policy" (font-medium
+text-primary, 2.87:1 against the sentence — the Praxis card's defect, still live on Parallel). Its first pass also took
+the footer brand names of truelogos, deskhand and proxy (an `inline-flex` text logo beside its tagline) for links in a
+sentence; a link laid out as a box of its own is now left alone, with a fixture.
+
+**False alarms on the products moving from 4.11.1** (found by the upgrade runs, each with RuleTester cases):
+- **FM5 `ui/mutation-refreshes-ui`**: a send-only endpoint (forgot / reset password, resend code, contact) whose
+  handler shows a done / sent notice is not stale UI — the notice is the update (deskhand forgot / reset password,
+  tandem forgot, verify-email, confirm-email). A data endpoint with only a "done" flag still fails.
+- **FM1 `ui/numeric-input-bounds`**: a change handler that keeps digits only and caps the length
+  (`.replace(/\D/g, "").slice(0, 3)`), a card number capped in its handler, the kit's `invalid={…}` on a digits-only
+  field, and a range written in the field wrapper's label or hint ("1 to {max}", "From … to …") are bounds (deskhand
+  card number, hours, refund credits, top-up amount; proxy card number; tandem partial refund). A cap without the
+  digit filter, or digits without a cap, still fail.
+
 ## 5.2.0 — the miss loop: catch rate 0/30 on Praxis, 0/19 on Parallel; 24 of the 49 misses are now checks (2026-10-20)
 
 **Catch rate** (`babysitter misses`, cards since 2026-10-16, suggested buckets — a person confirms them in

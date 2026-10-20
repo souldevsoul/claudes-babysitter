@@ -15,6 +15,10 @@ const FLAG_SETTER = /^set(Is|Has)?(Loading|Saving|Submitting|Pending|Busy|Error|
 // …but a "saved / done" setter that stores data (setSaved((prev) => ({ ...prev, [type]: file.name })), an object or a
 // variable) is the page's record of what was saved (Praxis onboarding uploads)
 const DATA_FLAG = /^set(Saved|Done|Sent|Submitted|Success)$/;
+// an endpoint that only SENDS something (a reset link, a code, a contact message) changes nothing the page lists: the
+// "done / sent" notice the handler shows is the whole update (deskhand / tandem forgot-password, resend-code, 5.3.0)
+const SEND_ONLY = /\/auth\/[\w-]+|\/(forgot|reset|resend|verify|verification|magic-?link|otp|contact|support|feedback|newsletter|subscribe|unsubscribe|enquir\w*|inquir\w*)\b/i;
+const DONE_FLAG = /\bset(Done|Sent|Success|Submitted|Saved|Notice|Message|Status)\s*\(/;
 const refreshesState = (text) => [...text.matchAll(/\b(set[A-Z]\w*)\s*\(\s*([^)\s]?)/g)].some((m) => !FLAG_SETTER.test(m[1]) || (DATA_FLAG.test(m[1]) && /[({\[]/.test(m[2])));
 const isFunc = (n) => n && /^(FunctionDeclaration|FunctionExpression|ArrowFunctionExpression)$/.test(n.type);
 const funcName = (f) => (f.id && f.id.name) || (f.parent && f.parent.type === "VariableDeclarator" && f.parent.id.type === "Identifier" ? f.parent.id.name : "");
@@ -35,7 +39,7 @@ export const mutationRefreshesUi = {
       CallExpression(node) {
         if (!client) return;
         const c = node.callee;
-        let how = null;
+        let how = null, url0 = "";
         if (c.type === "Identifier" && c.name === "fetch") {
           const opts = node.arguments[1];
           if (!opts || opts.type !== "ObjectExpression") return;
@@ -43,6 +47,8 @@ export const mutationRefreshesUi = {
           const v = m && m.value.type === "Literal" ? String(m.value.value) : m && m.value.type === "TemplateLiteral" && !m.value.expressions.length ? m.value.quasis[0].value.cooked : null;
           if (!v || !MUTATING.test(v)) return;
           how = `fetch(…, { method: "${v.toUpperCase()}" })`;
+          const url = node.arguments[0];
+          url0 = url && url.type === "Literal" ? String(url.value) : url && url.type === "TemplateLiteral" ? url.quasis.map((q) => q.value.cooked).join("…") : "";
         } else if (c.type === "MemberExpression" && c.property.type === "Identifier" && MUTATING.test(c.property.name) && c.object.type === "Identifier" && CLIENTS.test(c.object.name)) {
           how = `${c.object.name}.${c.property.name}(…)`;
         } else return;
@@ -59,6 +65,7 @@ export const mutationRefreshesUi = {
         // its caller applies it (truelogos lib/upload-client.ts)
         if (!inComponent && /\breturn\s+[^;\s]/.test(text)) return;
         if (REFRESH.test(text) || refreshesState(text)) return;
+        if (SEND_ONLY.test(url0) && DONE_FLAG.test(text)) return;
         // handing the result back to the caller: `return fetch(…)` / `return res.json()` / `return await …`
         if (/\breturn\s+(await\s+)?[\w.]+\s*(\(|$)/m.test(text) && /\breturn\s+(await\s+)?(fetch|axios|api|http|client|res|response|r|data|json|result)\b/.test(text)) return;
         context.report({ node, messageId: "stale", data: { how } });

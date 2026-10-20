@@ -102,7 +102,21 @@ export const numericInputBounds = {
         const va = getAttr(node, "value");
         const ve = va && va.value && va.value.type === "JSXExpressionContainer" ? va.value.expression : null;
         const valueVar = ve ? context.sourceCode.getText(ve).replace(/\[.*$/, "").replace(/\?\./g, ".") : "";
-        candidates.push({ node, kind, fieldName, type, has, val, valueVar: /^[\w.]+$/.test(valueVar) ? valueVar : "" });
+        // 5.3.0 (deskhand / proxy / tandem): the bounds can live in the change handler — digits only
+        // (.replace(/\D/g, "") or /[^\d ]/g) and a length cap (.slice(0, 23)) — or be stated next to the field: a
+        // range in the label / hint of the field wrapper (<Field label="Credits back (1 to {max})">, hint="From … to …")
+        const oc = getAttr(node, "onChange");
+        const ocText = oc && oc.value ? context.sourceCode.getText(oc.value) : "";
+        const capped = /\.(slice|substring|substr)\(\s*0\s*,\s*\d+\s*\)/.test(ocText);
+        const digitsOnly = /replace\(\s*\/(\\D|\[\^\\d[^\]]*\])\/g/.test(ocText);
+        let rangeShown = false;
+        const wrap = node.parent && node.parent.parent && node.parent.parent.type === "JSXElement" ? node.parent.parent.openingElement : null;
+        if (wrap) for (const at of wrap.attributes) {
+          if (at.type !== "JSXAttribute" || !/^(label|hint|description|helperText|helper)$/.test(at.name.name) || !at.value) continue;
+          if (/\b(from|between)\b[^]*\b(to|and)\b|\bup to\b|\b\d[\d,.]*\s*(to|–)\s*[\d$]|\bat most\b|\bmax(imum)?\b|\bmin(imum)?\b/i.test(context.sourceCode.getText(at.value))) rangeShown = true;
+        }
+        const invalidProp = (() => { const a = getAttr(node, "invalid"); return !!a && a.value && a.value.type === "JSXExpressionContainer" && a.value.expression.type !== "Literal"; })();
+        candidates.push({ node, kind, fieldName, type, has, val, capped, digitsOnly, rangeShown, invalidProp, valueVar: /^[\w.]+$/.test(valueVar) ? valueVar : "" });
       },
       "Program:exit"() {
         for (const c of candidates) {
@@ -110,7 +124,7 @@ export const numericInputBounds = {
           const schema = bounded.get(c.fieldName) || null;
           const reg = registers.get(c.fieldName) || null;
           if (LENGTH_KINDS.has(c.kind)) {
-            if (c.has("maxLength") || c.has("pattern")) continue;
+            if (c.has("maxLength") || c.has("pattern") || c.capped) continue;
             if (schema && ["max", "length", "regex", "matches", "refine", "superRefine"].some((m) => schema.has(m))) continue;
             if (reg && (reg.has("maxLength") || reg.has("pattern") || reg.has("validate"))) continue;
             context.report({ node: c.node, messageId: "length", data: { what } });
@@ -126,6 +140,9 @@ export const numericInputBounds = {
           if (inv && inv.value && inv.value.type === "JSXExpressionContainer" && inv.value.expression.type !== "Literal") continue;
           // a digit-only box with a length cap (one digit per box, at most 7 digits): no negative, no 999999999
           if (c.has("maxLength") && c.kind === "number") continue;
+          if (c.digitsOnly && c.capped) continue; // the change handler keeps digits only, at most N of them
+          if (c.rangeShown) continue; // the allowed range is written next to the field
+          if (c.invalidProp && c.digitsOnly) continue; // the kit's invalid={…} is aria-invalid: validated on the field
           const missing = !lo && !hi ? "min / max" : !lo ? "min" : "max";
           context.report({ node: c.node, messageId: "number", data: { what, missing } });
         }
