@@ -90,7 +90,7 @@ async function crawl(context, seeds, auth) {
   for (;;) {
   if (!queue.length && !unlinkedPhase && cfg.crawl?.unlinked !== false && templates.length) {
     unlinkedPhase = true;
-    const statics = templates.map(noLocale).filter((t) => !/\[/.test(t) && !/(^|\/)(api|_[^/]*)(\/|$)/.test(t) && !exclude.some((r) => r.test(t)) && !(cfg.forbiddenPages || []).includes(t));
+    const statics = templates.map(noLocale).filter((t) => !/\[/.test(t) && !/^\/api(\/|$)|(^|\/)_[^/]*(\/|$)/.test(t) && !exclude.some((r) => r.test(t)) && !(cfg.forbiddenPages || []).includes(t));
     for (const t of [...new Set(statics)]) if (!seen.has(keyOf(t))) queue.push(t);
     unlinkedStart.set(auth, new Set(queue));
   }

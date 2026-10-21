@@ -45,7 +45,7 @@ const ids = (list, re) => list.filter((f) => re.test(`${f.check || f.id || ""} $
 
 try {
   /* ═════ Parallel zu9088: the input border disappears in the error state (1.9 inside states) ═════ */
-  const band = (invalid) => doc(`<main style="padding:40px"><section style="background:#ff6a1f;padding:32px"><form onsubmit="event.preventDefault();n.setAttribute('aria-invalid','true');e.hidden=false"><label>Name <input id="n" name="name" required style="width:240px;padding:8px;background:#ff6a1f;border:2px solid #111"></label><p id="e" hidden style="color:#111">Enter your name</p><button type="submit" style="background:#111;color:#fff;padding:8px 16px;border:0">Send</button></form></section></main>`, `input[aria-invalid=true]{border-color:${invalid}}`);
+  const band = (invalid) => doc(`<main style="padding:40px"><section style="background:#ff6a1f;padding:32px"><form onsubmit="event.preventDefault();n.setAttribute('aria-invalid','true');e.hidden=false"><label>Name <input id="n" name="name"></label><p id="e" hidden style="color:#111">Enter your name</p><button type="submit" style="background:#111;color:#fff;padding:8px 16px;border:0">Send</button></form></section></main>`, `#n{width:240px;padding:8px;background:#ff6a1f;border:2px solid #111}#n[aria-invalid=true]{border-color:${invalid}}`);
   await test("zu9088 1.9 in the error state: a red edge on an orange band (1.2:1) is reported after the empty submit; an ink edge passes", async (page) => {
     await load(page, band("#e5484d"));
     const r = await states(page);
@@ -95,7 +95,7 @@ try {
   });
 
   /* ═════ Praxis dejlep: rate 25 refused although the message says "between 25 and 500" (FM1 stated bounds) ═════ */
-  const rate = (cmp) => doc(`<main style="padding:40px"><form id="f"><label>Hourly rate, credits <input name="rate" inputmode="numeric" id="r"></label><p id="e" class="error" style="color:#b91c1c"></p><button type="submit">Save rate</button></form></main><script>f.onsubmit=async(ev)=>{ev.preventDefault();const v=Number(r.value);if(!/^\\d+$/.test(r.value)||${cmp}){e.textContent='Your rate must be between 25 and 500 credits';r.setAttribute('aria-invalid','true');return}e.textContent='';r.removeAttribute('aria-invalid');await fetch('/api/rate',{method:'POST',body:r.value})}</script>`);
+  const rate = (cmp) => doc(`<main style="padding:40px"><form id="f"><label>Hourly rate, credits <input name="rate" inputmode="numeric" id="r"></label><p id="e" class="error" style="color:#b91c1c"></p><button type="submit">Save rate</button></form></main><script>const check=()=>{const v=Number(r.value);if(!/^\\d+$/.test(r.value)||${cmp}){e.textContent='Your rate must be between 25 and 500 credits';r.setAttribute('aria-invalid','true');return false}e.textContent='';r.removeAttribute('aria-invalid');return true};r.oninput=check;f.onsubmit=async(ev)=>{ev.preventDefault();if(check())await fetch('/api/rate',{method:'POST',body:r.value})}</script>`);
   await test("dejlep FM1: the stated bounds are allowed — 'between 25 and 500' with v <= 25 refused fails; v < 25 passes", async (page) => {
     await load(page, rate("v<=25||v>500"));
     const bad = ids(await fm.numericBounds(page), /refuses 25/);
@@ -107,7 +107,7 @@ try {
   /* ═════ Parallel uzbnam: the onboarding walk stops at "Choose at least one" — the DOB picker "Da…" is never seen ═════ */
   const wiz = (dayStyle) => doc(`<main style="padding:24px"><section id="s1"><h2>Your disciplines</h2><fieldset><legend>Disciplines</legend><label><input type="checkbox" name="d" value="ml"> ML</label><label><input type="checkbox" name="d" value="nlp"> NLP</label></fieldset><p id="err" role="alert" style="color:#b91c1c"></p><button id="go">Continue</button></section><section id="s2" hidden><h2>Identity</h2><p>Date of birth</p><button role="combobox" aria-expanded="false" style="${dayStyle}">Day</button><button role="combobox" aria-expanded="false">Month</button></section></main><script>go.onclick=()=>{if(!document.querySelector('input[name=d]:checked')){err.textContent='Choose at least one discipline';return}s1.hidden=true;s2.hidden=false}</script>`);
   await test("uzbnam wizard: the walk ticks the group the step's error asks for, reaches step 2, and 2.14 sees 'Day' cut to 'Da…'; a wide trigger passes", async (page) => {
-    await load(page, wiz("width:44px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;padding:6px"));
+    await load(page, wiz("width:30px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;padding:6px"));
     const r = await states(page);
     assert.ok(r.states.some((x) => /wizard: [1-9]/.test(x)), JSON.stringify(r.states));
     assert.ok(ids(r.findings, /2\.14|N6/).some((f) => /Day|Da…/.test(f.what)), JSON.stringify(r.findings, null, 1));
