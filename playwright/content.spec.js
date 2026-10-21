@@ -206,7 +206,8 @@ test.describe("content site-wide", () => {
                 }
             }
             const consistency = ["CT19", "CT20", "CT21", "CT22"].some(on) ? k.consistencyRendered(byLocale, cfg, { defaultLocale: DEFAULT_LOCALE, deadLinks: dead, redirects }) : [];
-            hard([...(on("CT7") ? k.localeDateFindings(byLocale) : []), ...consistency]);
+            note(consistency.filter((x) => x.soft), "one list in two orders (CT31) — check which order is meant");
+            hard([...(on("CT7") ? k.localeDateFindings(byLocale) : []), ...consistency.filter((x) => !x.soft)]);
         }
     });
     test("CT11 other languages the site offers (hreflang) are translated", async ({ browser }) => {

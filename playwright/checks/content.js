@@ -9,7 +9,7 @@ import {
   looksLikeKey, isRtl, LEGAL_FAMILIES, legalFamily, normName, AUTO_VARIANTS, numericFacts, factConflicts, ruleId,
 } from "../../lib/content-rules.js";
 import { checkEmails } from "../../lib/email-dns.js";
-import { consistencyFindings, normLabel } from "../../lib/content-consistency.js";
+import { consistencyFindings, normLabel, listOrders } from "../../lib/content-consistency.js";
 
 export { contentConfig };
 
@@ -127,7 +127,9 @@ export const collectCopy = (page) => page.evaluate(() => {
     const kind = /\b(btn|button)\b/i.test(a.className || "") || a.getAttribute("role") === "button" ? "button" : "link";
     links.push({ i: els.push(a) - 1, path: u.pathname.replace(/\/$/, "") || "/", label, region, kind });
   }
-  return { segs, emails, mailto, legal, copyright, h1, title: document.title || "", lang: document.documentElement.getAttribute("lang") || "", dir: document.documentElement.getAttribute("dir") || "", brand, alternates, path: location.pathname, links };
+  // 5.5.0 (Praxis 992bgb): does the page itself (not its footer) show payment marks?
+  const marks = Array.from(document.querySelectorAll("img, svg, [role=img], [aria-label], [title]")).some((x) => !x.closest("footer, [role=contentinfo]") && window.__uiVisible(x) && /visa|master ?card|maestro|amex|american express/i.test([x.getAttribute("alt"), x.getAttribute("aria-label"), x.getAttribute("title"), x.getAttribute("src"), x.querySelector?.("title")?.textContent].join(" ")));
+  return { segs, emails, mailto, legal, copyright, h1, title: document.title || "", lang: document.documentElement.getAttribute("lang") || "", dir: document.documentElement.getAttribute("dir") || "", brand, alternates, path: location.pathname, links, marks };
 });
 
 /** Where each element sits, for the report (one round-trip for all findings of a page). */
@@ -325,6 +327,7 @@ export function pageRecord(route, copy, locale = null) {
     copyright: copy.copyright?.text || null, lastUpdated: lastUpdatedDates(copy.segs).map((d) => ({ kind: d.kind, iso: d.iso, text: d.text })),
     segs: copy.segs.filter((s) => !s.footer).map((s) => ({ text: s.text, kind: s.kind })), footerSegs: copy.segs.filter((s) => s.footer).map((s) => s.text),
     lang: copy.lang || "", brand: copy.brand || [], links: (copy.links || []).map(({ path, label, region, kind }) => ({ path, label, region, kind })),
+    marks: typeof copy.marks === "boolean" ? copy.marks : undefined,
   };
 }
 
@@ -427,7 +430,7 @@ export function siteOf(records, defaultLocale = null) {
     for (const s of [...r.segs, ...r.footerSegs.map((t) => ({ text: t, kind: "body" }))]) texts.push({ text: s.text, kind: s.kind, locale, where: `${route} "${String(s.text).replace(/\s+/g, " ").slice(0, 60)}"`, route });
     if (r.title) texts.push({ text: r.title, kind: "title", locale, where: `${route} <title>`, route });
     for (const l of r.links || []) links.push({ ...l, label: normLabel(l.label), locale, where: `${route} ${l.region}`, route });
-    if (!seen.has(`${locale}|${route}`)) { seen.add(`${locale}|${route}`); pages.push({ path: route, names: r.h1 || [], title: r.title || "", where: `${route} <h1>`, locale }); }
+    if (!seen.has(`${locale}|${route}`)) { seen.add(`${locale}|${route}`); pages.push({ path: route, names: r.h1 || [], title: r.title || "", where: `${route} <h1>`, locale, marks: r.marks }); }
   }
   return { texts, links, pages };
 }
@@ -447,9 +450,11 @@ export function consistencyRendered(byLocale, cfg = {}, { defaultLocale = null, 
   const en = (x) => !x.locale || /^en\b/i.test(x.locale);
   const brand = [...new Set(all.flatMap((r) => r.brand || []))];
   const groups = [
-    ...consistencyFindings({ texts: site.texts, links: [], pages: [] }, { ...cc, skip: [...(cc.skip || []), "CT20", "CT21", "CT22"] }, cfg),
+    ...consistencyFindings({ texts: site.texts, links: [], pages: [] }, { ...cc, skip: [...(cc.skip || []), "CT20", "CT21", "CT22", "CT15", "CT23", "CT27", "F5", "M3"] }, cfg),
     ...consistencyFindings({ texts: site.texts.filter(en), links: site.links.filter(en), pages: site.pages.filter(en), deadLinks }, { ...cc, skip: [...(cc.skip || []), "CT19"] }, cfg, { brand, skipLegal: true }),
   ];
+  // 5.5.0 (Compass ey1511): CT31 one order for one list — soft, a person decides
+  if (!(cc.skip || []).includes("CT31")) groups.push(...listOrders(site.texts.filter(en)));
   // one finding per concept (fix-plan's unit: one cause, every page): the variants' fixes side by side
   const by = new Map();
   for (const g of groups) {
@@ -457,7 +462,7 @@ export function consistencyRendered(byLocale, cfg = {}, { defaultLocale = null, 
     const e = by.get(k);
     if (e) { if (!e.fixes.includes(g.fix)) e.fixes.push(g.fix); } else by.set(k, { g, fixes: [g.fix] });
   }
-  return [...by.values()].map(({ g, fixes }) => ({ id: g.id, what: `${g.what} — fix: ${fixes.join("; ")} [${g.id}]`, where: "site-wide", concept: g.concept }));
+  return [...by.values()].map(({ g, fixes }) => ({ id: g.id, what: `${g.what} — fix: ${fixes.join("; ")} [${g.id}]`, where: "site-wide", concept: g.concept, ...(g.soft ? { soft: true } : {}) }));
 }
 
 /** CT7 the same document shows the same "last updated" date in every language. @param byLocale Map(locale → records) */
