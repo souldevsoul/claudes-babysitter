@@ -375,7 +375,7 @@ export async function cookieConsent(page, { acc = DEFAULTS } = {}) {
     if (!(await accept.isVisible().catch(() => false)))
         return [{ id: "C1", what: "no cookie banner with an Accept button on a first visit [C1, BQA 7]", where: "page" }];
     // the banner's own buttons (a footer "Manage cookies" link is a different control)
-    const inBanner = await accept.evaluate((b) => { const box = b.closest('[class*=cookie i], [id*=cookie i], [class*=consent i], [id*=consent i], [role=dialog], [role=alertdialog], [role=region], [aria-label*=cookie i]'); (box || b.parentElement).setAttribute("data-bs-cookie-banner", ""); return !!box || /cookie|consent|kuki|куки|cookies/i.test(b.parentElement?.textContent || ""); }).catch(() => false);
+    const inBanner = await accept.evaluate((b) => { const box = b.closest('[class*=cookie i], [id*=cookie i], [class*=consent i], [id*=consent i], [role=dialog], [role=alertdialog], [role=region], [aria-label*=cookie i]'); (box || b.parentElement).setAttribute("data-bs-cookie-banner", ""); const COOKIE = /cookie|consent|kuki|куки|çerez|печенье/i; return !!box && (COOKIE.test(`${box.className} ${box.id} ${box.getAttribute("aria-label") || ""}`) || COOKIE.test(box.textContent || "")) || COOKIE.test(b.parentElement?.textContent || ""); }).catch(() => false);
     const label = ((await accept.textContent().catch(() => "")) || "").trim();
     // an "OK" that is not part of a cookie notice (a dialog's OK) is not a banner
     if (OK_ONLY.test(label) && !inBanner)
