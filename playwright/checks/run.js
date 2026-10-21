@@ -10,6 +10,7 @@
 import * as c from "../checks.js";
 import * as a from "../acceptance.js";
 import * as fit from "./fit.js";
+import * as copy from "./copy.js";
 import { untranslatedReason, untranslatedWhat } from "../../lib/content-rules.js";
 
 /* ───────────────────────── shared ───────────────────────── */
@@ -44,7 +45,7 @@ const stickyTop = (page) => page.evaluate(() => {
 });
 
 /** The checks that depend on what is on screen: re-run in every state. */
-export async function measure(page, { allowLightWeights = false, noTax = true, thousandsFrom = 1000 } = {}) {
+export async function measure(page, { allowLightWeights = false, noTax = true, thousandsFrom = 1000, cfg: cfgOpt = null } = {}) {
     const list = [];
     const add = (check, arr) => { for (const f of arr || []) list.push({ ...f, check }); };
     add("2.1", await c.horizontalOverflow(page).catch(() => []));
@@ -57,6 +58,8 @@ export async function measure(page, { allowLightWeights = false, noTax = true, t
     // open mobile menu, a drawer, a listbox and a dialog are measured as a reader sees them
     add("2.14", (await fit.textCutOff(page).catch(() => ({ hard: [] }))).hard);
     add("2.14", await fit.popupOffScreen(page).catch(() => []));
+    // 5.5.0 (Compass q0qz7n, 4ec28x, wee3g3): the copy rules in every state — a wizard step, an open menu, a result
+    for (const f of await copy.stateCopyFindings(page, cfgOpt ?? {}).catch(() => [])) list.push({ ...f, check: f.id });
     return list;
 }
 const keyOf = (f) => `${f.check}|${f.selector || f.where}|${String(f.what).replace(/\d+(\.\d+)?/g, "#")}`;

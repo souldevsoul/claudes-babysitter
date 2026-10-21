@@ -10,6 +10,9 @@
 import { test, expect } from "@playwright/test";
 import * as c from "./checks.js";
 import * as k from "./checks/content.js";
+import * as cp from "./checks/copy.js";
+import { titleFindings, slugFindings, nearCopies, readCopyRegistry, recordCopy } from "../lib/copy-rules.js";
+import { resolveStage } from "../lib/stage.js";
 import { translationKeys } from "../lib/content-lint.js";
 import { loadConfig, loadRoutes, loadLocales, applyLocale as applyDetected, localize, STORAGE, STATE_DIR, ROOT, authTag, storageFor } from "./project.js";
 import { existsSync } from "node:fs";
@@ -32,6 +35,7 @@ const DEF = (DETECTED.locales || []).find((l) => l.default) || null;
 const LOCALES = cc.locales?.length ? cc.locales : (DETECTED.locales || []).filter((l) => !l.default).map((l) => ({ ...l, detected: true }));
 const DEFAULT_LOCALE = cc.defaultLocale || DETECTED.default || DEF?.code || null;
 const CACHE = k.dnsCache(STATE_DIR);
+const STAGE = (() => { try { return resolveStage(cfg, `${STATE_DIR}/stage.json`)?.stage || null; } catch { return null; } })();
 let KEYS = null;
 const keys = () => (KEYS ??= (() => { try {
     const s = translationKeys(ROOT);
@@ -89,6 +93,11 @@ for (const route of ROUTES) {
                 test.info().annotations.push({ type: "could not verify", description: info.join("\n") });
             hard(list);
         });
+        // 5.5.0 (Parallel 49kc72, Kindred 2b9nt9, Compass wee3g3 / 2hxrol / 4bw126 / 3eikk6)
+        test("CT12/CT25/CT29/CT30/P4 no link labelled with its path, no brand URL on another host, e-mails as typed, no catalogue of zeros, section numbers match the contents", async ({ page }) => {
+            await open(page, r);
+            hard(await cp.copyExtrasFindings(page, cfg, { siteWide: true, stage: STAGE }));
+        });
         test("CT12/CT13 no translation keys on screen; <html lang>/dir match the language", async ({ page }) => {
             await open(page, r);
             hard((await k.languageFindings(page, { cfg, keys: keys(), locale: DEFAULT_LOCALE })).hard);
@@ -131,13 +140,21 @@ for (const loc of LOCALES) {
 test.describe("content site-wide", () => {
     test.beforeEach(() => once());
     // every route once per language: the records feed CT7 / CT15–CT18
-    async function crawl(browser, loc = null) {
+    // one crawl per language for every site-wide test of this worker (5.5.0: a third site-wide test joined)
+    const CRAWLS = new Map();
+    function crawl(browser, loc = null) {
+        const key = loc?.code || "";
+        if (!CRAWLS.has(key)) CRAWLS.set(key, crawlOnce(browser, loc).catch((e) => { CRAWLS.delete(key); throw e; }));
+        return CRAWLS.get(key);
+    }
+    const record = async (page, path, loc, template) => { const rec = k.pageRecord(path, await k.collectCopy(page), loc?.code || null); rec.extras = await cp.copyExtrasData(page).catch(() => null); rec.slugs = rec.extras?.slugs || []; rec.template = template || null; return rec; };
+    async function crawlOnce(browser, loc = null) {
         const recs = [];
         for (const route of ROUTES) {
             const ctx = await ctxFor(browser, route);
             const page = await ctx.newPage();
             await open(page, route.path, loc);
-            recs.push(k.pageRecord(route.path, await k.collectCopy(page), loc?.code || null));
+            recs.push(await record(page, route.path, loc, route.template));
             await ctx.close();
         }
         // legal pages the footer links to but the crawl did not reach
@@ -147,7 +164,7 @@ test.describe("content site-wide", () => {
             const ctx = await ctxFor(browser, null);
             const page = await ctx.newPage();
             await open(page, p, loc);
-            recs.push(k.pageRecord(p, await k.collectCopy(page), loc?.code || null));
+            recs.push(await record(page, p, loc, null));
             await ctx.close();
         }
         return recs;
@@ -209,6 +226,24 @@ test.describe("content site-wide", () => {
             note(consistency.filter((x) => x.soft), "one list in two orders (CT31) — check which order is meant");
             hard([...(on("CT7") ? k.localeDateFindings(byLocale) : []), ...consistency.filter((x) => !x.soft)]);
         }
+    });
+    // 5.5.0 (Compass r7i2dc / ebev0t / bymtup / 853l4n / 33jce3 / 8t3qh1, Kindred brypwi)
+    test("CT24/CT26/CT28/6.15 no headline copied from a sibling product, no slug shown as a name, one letter case per heading, every page its own <title>", async ({ browser }) => {
+        test.setTimeout(120_000 + ROUTES.length * 20_000 * (1 + LOCALES.length));
+        const base = await crawl(browser);
+        const out = [];
+        if (on("CT26")) out.push(...slugFindings(base));
+        if (on("CT28")) out.push(...cp.siteCaseFindings(base, cfg));
+        if (on("6.15")) {
+            out.push(...titleFindings(base, { brands: [cfg.name].filter(Boolean) }));
+            for (const loc of LOCALES) out.push(...titleFindings(await crawl(browser, loc), { brands: [cfg.name].filter(Boolean) }).map((o) => ({ ...o, what: `[${loc.code}] ${o.what}` })));
+        }
+        // CT24: the public h1s of every product this machine has checked (~/.claudes-babysitter/copy.json)
+        const self = cfg.name || new URL(test.info().project.use.baseURL || "http://x").hostname;
+        const mine = base.filter((r) => !ROUTES.find((x) => x.path === r.route)?.auth).flatMap((r) => (r.h1 || []).slice(0, 1).map((text) => ({ route: r.route, text })));
+        if (on("CT24")) out.push(...nearCopies(mine, readCopyRegistry(), self));
+        recordCopy(self, mine);
+        hard(out);
     });
     test("CT11 other languages the site offers (hreflang) are translated", async ({ browser }) => {
         test.skip(LOCALES.length > 0, "the languages are known (content.locales or prepare): each has its own tests");
