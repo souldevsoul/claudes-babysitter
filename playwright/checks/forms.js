@@ -692,7 +692,7 @@ export const creditsUpFront = async (page) => (await lib(page), page.evaluate(()
 /* ───────────────────────── FM7 password lifecycle ───────────────────────── */
 
 const FORGOT_RE = /forgot|reset (your |my )?password|trouble (signing|logging) in|can'?t (sign|log) in|recover|забыли/i;
-const NOT_REAL_RE = /not (yet )?available|coming soon|not (yet )?(supported|implemented)|contact (our )?support to reset|email us to reset|пока недоступ|скоро/i;
+const NOT_REAL_RE = /not (yet )?available|coming soon|(reset|password)[^.\n]{0,40}\bis closed\b|(cannot|can'?t|can not) send (e-?mail|emails)|write to us (to|from the contact page)|not (yet )?(supported|implemented)|contact (our )?support to reset|email us to reset|пока недоступ|скоро/i;
 const NEUTRAL_RE = /if (an |the )?account|if (this|that|the) (e-?mail|address)|check your (inbox|e-?mail|mail)|we('ve| have)? sent|sent (you )?(a|an|the)? ?(reset|recovery|password|magic)? ?(link|email|instructions)|instructions|link (is )?on its way|письм|ссылк/i;
 
 /** FM7a — the sign-in page links "Forgot password?" to a real page with an email field; its submit (sandboxed) confirms neutrally. */

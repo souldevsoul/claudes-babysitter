@@ -2,6 +2,37 @@
 
 Earlier releases (4.11.1 and before) are described in the README under "What changed in …".
 
+## 5.3.1 — the upgrade runs on deskhand, proxy and tandem: three false alarms fixed, the closed password reset named (2026-10-21)
+
+deskhand, proxy and tandem moved from 4.11.1 to 5.3.0 with `babysitter update` (their 4.11.1 copies' lock file was out
+of sync, so `npm ci --prefix tools/claudes-babysitter` failed; 5.3.0's installs). Each ran `e2e` against production
+at 390 + 1440, the old copy and the new one on the same pages (deskhand: all 19 public pages; proxy and tandem: 8):
+failing tests 39 → 92 (deskhand), 60 → 79 (proxy), 59 → 70 (tandem). The new ones come from 5.x checks the 4.11.1
+copies never had; most are real:
+- password reset by email is closed on all three (deskhand / proxy: "closed right now… write to us"; tandem: "can't
+  send email yet") — FM7; the products wait for an e-mail provider, so it is known, but no user can reset a password;
+- the sign-up e-mail field has no `autocomplete="username"` on all three — FM11 (the Praxis autofill bug);
+- the full site footer on sign-in / sign-up / reset on all three — FM8;
+- deskhand: the footer wordmark is not a link (1.11, one cause on every page), Reject is not remembered after a reload
+  (C6), an ISO date in a legal page (CT6);
+- proxy: a failed sign-in (500) says nothing and keeps the password (FM3/FM4), buttons pill on some pages and rounded
+  on others (1.20), no apple-touch-icon (6.11);
+- tandem: headings that end with a period (CT4), a country option cut with an ellipsis (2.14).
+deskhand's CT8 hits ("…under the .") come from the company-details placeholder, which is an owner decision for now.
+
+Fixed false alarms (fixtures in `test/misses-521.test.mjs`):
+- **3.6** an auth page's minimal header (the logo and "Back to home", which FM8 asks for) no longer has to stay on
+  screen: there is no navigation to keep in reach (deskhand, proxy: /signin, /signup, /forgot-password).
+- **1.11** a photo is not the logo: an image cropped to fill its box (`object-fit: cover`) or taller than 160px, and
+  "brand" in an image's file path (`/brand/r4/assistants.webp`), no longer make a logo candidate (proxy home).
+- **FM7** names a reset page that says reset by email "is closed", "can't send email" or "write to us from the contact
+  page" as not available, instead of "no email field".
+
+Still reported, to look at by eye: 2.7 near-miss alignment and 1.6 hover on select triggers (soft checks), 6.5 heading
+looks per level, 1.2 contact topics in a deliberate order (proxy, tandem), deskhand's /faq accordion regions measured
+above the screen (1.2), tandem /terms contents links measured before the scroll settled (3.8), proxy "One credit is
+$0.112" (money: a unit price with 3 decimals — `layout.rateDecimals` covers rates, not this).
+
 ## 5.3.0 — copies do not fall behind: `babysitter update` and the version check; catch rate over every card: Praxis 0/38, Parallel 0/23 (2026-10-20)
 
 **Catch rate, every card** (`babysitter misses`, cards since 2026-10-16, suggested buckets — a person confirms them in

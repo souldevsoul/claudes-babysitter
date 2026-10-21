@@ -8,6 +8,8 @@ import assert from "node:assert/strict";
 import { createServer } from "node:http";
 import { chromium } from "@playwright/test";
 import * as c from "../playwright/checks.js";
+import * as L from "../playwright/checks/layout.js";
+import * as F from "../playwright/checks/forms.js";
 
 const opt = async (path) => { try { return await import(path); } catch { return {}; } };
 const D = await opt("../playwright/checks/details.js");
@@ -24,7 +26,7 @@ const server = createServer((req, res) => {
 await new Promise((r) => server.listen(0, "127.0.0.1", r));
 const ORIGIN = `http://127.0.0.1:${server.address().port}`;
 const doc = (body, head = "") => `<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width"><title>Page</title><style>*{box-sizing:border-box}body{margin:0;font:14px/1.4 Arial;background:#fff;color:#111}${head}</style></head><body>${body}</body></html>`;
-async function load(page, html) { site = { "/": html }; await page.goto(ORIGIN + "/", { waitUntil: "load" }); await page.waitForTimeout(100); }
+async function load(page, html, extra = {}) { site = { "/": html, ...extra }; await page.goto(ORIGIN + "/", { waitUntil: "load" }); await page.waitForTimeout(100); }
 async function test(name, fn, viewport = { width: 1280, height: 800 }) {
   if (only && !only.test(name)) return;
   const ctx = await browser.newContext({ viewport });
@@ -108,6 +110,32 @@ try {
     // the © line's "Legal" link is the same colour as its text (1:1): that one IS colour-less — it must be reported
     assert.equal(r.length, 1, JSON.stringify(r));
     assert.ok(/Legal/.test(r[0].what), "only the link that nothing marks");
+  });
+  /* ═══════════ 3.6 false alarm from the 5.3.0 upgrades (deskhand, proxy auth pages) ═══════════ */
+  await test("3.6: an auth page's minimal header (logo + Back to home) may scroll away; a header with navigation still has to stay", async (page) => {
+    const page2 = (head) => doc(`<header style="height:64px;display:flex;justify-content:space-between;align-items:center;padding:0 24px">${head}</header><main style="height:2400px"><h1>Sign in</h1></main>`);
+    await load(page, page2(`<a href="/">Deskhand</a><a href="/">← Back to home</a>`));
+    const minimal = await L.stickyHeader(page);
+    assert.equal(minimal.applicable, false); assert.equal(minimal.minimal, true);
+    await load(page, page2(`<a href="/">Deskhand</a><nav><a href="/pricing">Pricing</a><a href="/how-it-works">How it works</a></nav>`));
+    const full = await L.stickyHeader(page);
+    assert.equal(full.applicable, true); assert.equal(full.ok, false, "a real header that scrolls away is still reported");
+  });
+  await test("1.11 (proxy): a cover photo from /brand/ in an aside card is not the logo; an unlinked footer wordmark still is", async (page) => {
+    const html = (foot) => doc(`<header><a href="/"><img alt="Proxy logo" src="/logo.svg" width="80" height="24"></a></header><main><section><aside><article style="position:relative;height:420px"><img id="cover" alt="A woman working at a laptop" src="/brand/r4/assistants.webp" style="position:absolute;inset:0;width:100%;height:100%;object-fit:cover"><h2>Assistants</h2></article></aside></section></main><footer>${foot}</footer>`);
+    await load(page, html(`<a href="/" class="logo">Proxy</a>`));
+    const ok = (await L.logoHome(page)).hard.filter((f) => /logo is not a link/.test(f.what));
+    assert.deepEqual(ok, [], JSON.stringify(ok));
+    await load(page, html(`<p class="logo" style="font-weight:700;font-size:20px">Proxy</p>`));
+    assert.ok((await L.logoHome(page)).hard.some((f) => /footer logo is not a link/.test(f.what)), "the footer wordmark that is not a link is still reported");
+  });
+  await test("FM7 (deskhand, proxy): a reset page that says reset by email 'is closed right now' is named as not available", async (page) => {
+    const signin = doc(`<form><label>Email <input type="email" name="email"></label><label>Password <input type="password" name="password"></label><button>Sign in</button></form><a href="/forgot-password">Forgot your password?</a>`);
+    await load(page, signin, { "/signin": signin, "/forgot-password": doc(`<h1>Reset your password</h1><p>Password reset by email is closed right now, because we cannot send email yet. Write to us from the contact page and our team will help.</p>`) });
+    const r = await F.forgotPassword(page, ORIGIN + "/signin");
+    assert.ok(r.some((f) => /says it is not available \("Password reset by email is closed/.test(f.what)), JSON.stringify(r));
+    await load(page, signin, { "/signin": signin, "/forgot-password": doc(`<h1>Forgot your password?</h1><p>Password reset works with a link we email to you, and TANDEM can't send email yet.</p>`) });
+    assert.ok((await F.forgotPassword(page, ORIGIN + "/signin")).some((f) => /not available \("[^"]*can't send email/.test(f.what)), "tandem's wording");
   });
 } finally {
   await browser.close();

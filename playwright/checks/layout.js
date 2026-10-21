@@ -169,12 +169,16 @@ const logoScan = (scope) => {
     // in the site chrome; outside it only the mark at the top of a bare page (auth screens without a header)
     if (!scope && !chrome(e) && (hasChrome || e.getBoundingClientRect().top + scrollY > 260)) return;
     if (e.closest("button, [role=button], label, select")) return;
+    // a photo is not the mark: taller than 160 px, or cropped to fill its box (proxy: a card's cover picture, 5.3.0)
+    if (e.getBoundingClientRect().height > 160 || (e.tagName === "IMG" && getComputedStyle(e).objectFit === "cover")) return;
     cands.add(e);
   };
   // marked as a logo
   for (const e of root.querySelectorAll('[class*=logo i], [id*=logo i], [alt*=logo i], [aria-label*=logo i], [data-logo], [class*=brand i], [src*=logo i], img[alt], svg[aria-label]')) {
     const a = attrs(e);
-    if (/logo|brand|wordmark/i.test(a) || (brand && L.norm(e.getAttribute("alt") || e.getAttribute("aria-label") || "") === brand)) consider(e);
+    // "brand" in a file path (/brand/r4/assistants.webp) names an asset folder, not the logo
+    const own = [e.getAttribute("class"), e.id, e.getAttribute("alt"), e.getAttribute("aria-label"), e.getAttribute("title"), e.getAttribute("data-testid")].filter((x) => typeof x === "string").join(" ");
+    if (/logo|wordmark/i.test(a) || /brand/i.test(own) || (brand && L.norm(e.getAttribute("alt") || e.getAttribute("aria-label") || "") === brand)) consider(e);
   }
   // the brand name written out (wordmark) in the chrome
   if (brand) for (const e of root.querySelectorAll("span, div, p, strong, b, a, h1, h2, h3, h4, h5, h6")) {
@@ -725,10 +729,15 @@ export async function stickyHeader(page, distance = 1000) {
     // the header bar may sit under a promo/marquee strip (sprout.boutique: a 36 px ticker above the nav)
     const h = L.header().find((e) => W.__uiVisible(e) && e.getBoundingClientRect().top <= 120 && e.getBoundingClientRect().height <= 220);
     if (!h) return null;
+    // an auth page's minimal header (FM8: the logo and "Back to home", no navigation) has nothing to keep in reach
+    // (deskhand / proxy /signin, /signup, /forgot-password — 5.3.0)
+    const home = (a) => { try { return new URL(a.href, location.href).pathname === "/"; } catch { return false; } };
+    const nav = [...h.querySelectorAll("a[href], button, [role=button]")].filter((e) => W.__uiVisible(e) && !(e.tagName === "A" && (home(e) || W.__uiBackLink(e))));
+    if (!nav.length) return { minimal: true };
     h.setAttribute("data-bs-head", "");
     return { where: W.__uiDescribe(h), selector: W.__uiSelector(h), human: W.__uiHuman(h), room: document.documentElement.scrollHeight - innerHeight };
   });
-  if (!pre) return { applicable: false };
+  if (!pre || pre.minimal) return { applicable: false, minimal: !!pre?.minimal };
   if (pre.room < 400) return { applicable: false };
   const y = Math.min(distance, pre.room);
   await page.evaluate((y) => window.scrollTo({ top: y, behavior: "instant" }), y);

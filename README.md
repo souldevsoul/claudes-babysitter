@@ -71,6 +71,12 @@ Or install it as a dev dependency: `npm i -D github:souldevsoul/claudes-babysitt
 | `docs/` | The guidelines the rules enforce |
 | `test/`, `fixtures/` | `npm test`: RuleTester, Stylelint fixtures, end-to-end cases |
 
+## What changed in 5.3.1 (the upgrade runs on deskhand, proxy and tandem)
+
+Three false alarms the first 5.3.0 runs on deskhand, proxy and tandem showed (3.6 on a minimal auth header, 1.11 on a
+cover photo, FM7's message for a closed reset), each with a fixture; the real findings of those runs are listed in
+[`CHANGELOG.md`](CHANGELOG.md).
+
 ## What changed in 5.3.0 (copies do not fall behind: update and the version check)
 
 `babysitter update` re-vendors the latest release into `tools/claudes-babysitter` (or moves a devDependency pin),

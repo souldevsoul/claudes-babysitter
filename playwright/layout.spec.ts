@@ -93,7 +93,7 @@ for (const route of ROUTES) {
     test("3.6 the header stays on screen after scrolling 1000 px [sticky-header]", async ({ page }) => {
       await open(page, r);
       const s = await L.stickyHeader(page, Number(lay.stickyDistance ?? 1000));
-      test.skip(!s.applicable, "no header bar at the top, or the page does not scroll 400 px");
+      test.skip(!s.applicable, s.minimal ? "a minimal header (the logo and Back to home): no navigation to keep in reach" : "no header bar at the top, or the page does not scroll 400 px");
       const list = s.ok ? [] : [{ what: s.what!, where: s.where! }];
       if (lay.stickyHeader === false) soft(list, "header scrolls away (layout.stickyHeader is false: reported, not failed)");
       else hard(list);
