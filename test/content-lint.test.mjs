@@ -274,7 +274,7 @@ await t("fixture repo: every planted problem is found, nothing else", async () =
   const expect = [
     ["messages/en.json", "content/trailing-period", /home\.title/], ["messages/en.json", "content/unfinished", /open at launch/],
     ["messages/en.json", "content/date-format", /October 1, 2026/], ["messages/en.json", "content/last-updated", /legal\.terms: "last updated" dates differ/],
-    ["messages/en.json", "content/test-data", /New Company 2/], ["messages/en.json", "content/grammar", /1 profiles/], ["messages/en.json", "content/email-domain", /vercel\.app/],
+    ["messages/en.json", "content/test-data", /New Company 2/], ["messages/en.json", "content/grammar", /1 profiles/], ["messages/en.json", "content/grammar", /\{count\} profiles/], /* 5.5.0: "{count} profiles" shows "1 profiles" (Compass q0qz7n) */ ["messages/en.json", "content/email-domain", /vercel\.app/],
     ["messages/en.json", "content/missing-key", /onlyEn exists in en but is missing in az/], ["messages/az.json", "content/missing-key", /onlyAz exists in az but is missing in en/],
     ["messages/az.json", "content/unfinished", /tezliklə/], ["messages/az.json", "content/untranslated", /pricing\.fee in az contains English/],
     ["messages/az.json", "content/last-updated", /az says 2026-10-05, en says 2026-10-01/], ["messages/az.json", "content/untranslated", /footer\.company in az is the en text unchanged/],
