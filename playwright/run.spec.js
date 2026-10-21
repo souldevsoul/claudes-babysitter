@@ -20,7 +20,7 @@ const acc = a.acceptanceConfig(cfg);
 const STRICT = process.env.STRICT !== "0";
 const st = cfg.states || {};
 const allowLight = !!cfg.allow?.lightWeights;
-const opts = { allowLightWeights: allowLight, noTax: acc.noTax, thousandsFrom: acc.thousandsFrom };
+const opts = { allowLightWeights: allowLight, noTax: acc.noTax, thousandsFrom: acc.thousandsFrom, customAmount: acc.customAmount };
 const DEFAULT = LOC.locales.find((l) => l.default) || null;
 const OTHERS = LOC.locales.filter((l) => !l.default);
 // states and scroll: the narrowest and the widest viewport of the run (360 + 1440 by default)
