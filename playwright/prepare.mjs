@@ -66,7 +66,8 @@ const idKey = (p) => p.split("/").map((s) => (/^\d+$|^[0-9a-f]{8,}$|^[0-9a-f-]{2
 const keyOf = (p) => templateFor(p) || idKey(p);
 
 const browser = await chromium.launch({ channel: process.env.PW_CHANNEL || "chrome" });
-const crawlReport = { base, roles: [], dynamicTemplates: dynamic, missingDynamic: [], capped: [], clickedRows: [], locales: null };
+const crawlReport = { base, roles: [], dynamicTemplates: dynamic, missingDynamic: [], capped: [], clickedRows: [], locales: null, unlinked: [] };
+const unlinkedStart = new Map();
 
 /**
  * Breadth-first crawl from `seeds`. One page per route template (a /tasks/[id] instance is opened once). Links to a
@@ -81,12 +82,25 @@ async function crawl(context, seeds, auth) {
   const seen = new Map();
   const visited = () => [...seen.values()].filter(Boolean).length;
   let capped = 0;
+  // 5.5.0 (Kindred ga1ipn, d6p4gh, spdonv, gm21xv, 2b9nt9): a page nothing links to (/admin, /docs/api) was never
+  // opened, so no check ever saw it. When the links run out, every static page route of the repo that was not reached
+  // is opened too (crawl.unlinked: false turns it off; api/, _private and crawl.exclude stay out).
+  let unlinkedPhase = false;
+  const unlinkedCap = maxPages + Number(cfg.crawl?.unlinkedMax ?? 30);
+  for (;;) {
+  if (!queue.length && !unlinkedPhase && cfg.crawl?.unlinked !== false && templates.length) {
+    unlinkedPhase = true;
+    const statics = templates.map(noLocale).filter((t) => !/\[/.test(t) && !/(^|\/)(api|_[^/]*)(\/|$)/.test(t) && !exclude.some((r) => r.test(t)) && !(cfg.forbiddenPages || []).includes(t));
+    for (const t of [...new Set(statics)]) if (!seen.has(keyOf(t))) queue.push(t);
+    unlinkedStart.set(auth, new Set(queue));
+  }
+  if (!queue.length) break;
   while (queue.length) {
     const path = queue.shift();
     const key = keyOf(path);
     if (seen.has(key) || exclude.some((r) => r.test(path))) continue;
     const isNewDynamic = dynamic.includes(templateFor(path));
-    if (visited() >= maxPages && !isNewDynamic) { capped++; continue; }
+    if (visited() >= (unlinkedPhase ? unlinkedCap : maxPages) && !isNewDynamic) { capped++; continue; }
     const res = await page.goto(new URL(path, base).href, { waitUntil: "domcontentloaded", timeout: 30000 }).catch(() => null);
     if (!res || res.status() >= 400) { seen.set(key, null); continue; }
     await page.waitForLoadState("networkidle", { timeout: 8000 }).catch(() => {});
@@ -129,9 +143,13 @@ async function crawl(context, seeds, auth) {
       }
     }
   }
+  }
   if (capped) crawlReport.capped.push(`${auth ? "signed-in" : "public"}: ${capped} more link(s) not opened (crawl.maxPages ${maxPages})`);
   await page.close();
-  return [...new Set([...seen.values()].filter(Boolean))];
+  const found = [...new Set([...seen.values()].filter(Boolean))];
+  const only = unlinkedStart.get(auth) || new Set();
+  for (const p of found) if (only.has(p) && !crawlReport.unlinked.includes(p)) crawlReport.unlinked.push(p);
+  return found;
 }
 
 /* ───────── sign in ───────── */
@@ -257,6 +275,7 @@ writeFileSync(resolve(dir, "crawl.json"), JSON.stringify(crawlReport, null, 2));
 const byRole = crawlReport.roles.filter((r) => r.ok).map((r) => `${r.pages} as ${r.name}`).join(", ");
 log(`${publicRoutes.length} public${byRole ? ` + ${byRole}` : ""} pages → .babysitter/routes.json`);
 if (crawlReport.locales) log(`languages: ${crawlReport.locales.codes.join(", ")} → .babysitter/locales.json`);
+if (crawlReport.unlinked.length) log(`${crawlReport.unlinked.length} page(s) no link leads to, opened from the repo's routes: ${crawlReport.unlinked.slice(0, 8).join(", ")}${crawlReport.unlinked.length > 8 ? " …" : ""}`);
 if (crawlReport.missingDynamic.length) log(`⚠ no page found for ${crawlReport.missingDynamic.length} dynamic route(s): ${crawlReport.missingDynamic.join(", ")} — link them from a list, or set sampleParams in babysitter.config.json`);
 for (const c of crawlReport.capped) log(`⚠ crawl cap: ${c}`);
 for (const r of crawlReport.roles.filter((x) => !x.ok)) log(`⚠ role "${r.name}" not checked: ${r.why}`);

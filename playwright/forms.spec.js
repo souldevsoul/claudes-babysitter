@@ -80,6 +80,12 @@ for (const route of ROUTES) {
             await open(page, r);
             report(await fm.submitOutcomes(page), "FM3/FM4");
         });
+        test("FM14/FM15 a phone field takes a real number and comes after Country; a file field says what it takes [phone-input, file-input]", async ({ page }) => {
+            test.skip(!on("FM14") && !on("FM15"), why("FM14"));
+            test.setTimeout(180_000);
+            await open(page, r);
+            report([...(on("FM15") ? await fm.fileHints(page) : []), ...(on("FM14") ? await fm.phoneFields(page) : [])], "FM14/FM15");
+        });
         if (!AUTH_PAGES.includes(r)) {
             // sign-in / sign-up eyes are acceptance A1; this covers settings, reset and every other page with a password
             test("FM7 every password field (settings, reset, confirm) has its own show/hide eye [pw-toggle ×24]", async ({ page }) => {

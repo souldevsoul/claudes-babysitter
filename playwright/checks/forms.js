@@ -188,7 +188,7 @@ export function pageLib() {
     const described = f ? (f.getAttribute("aria-describedby") || "").split(/\s+/).filter(Boolean).map((id) => document.getElementById(id)?.innerText || "").join(" ") : "";
     const RANGE = /(min(imum)?|max(imum)?|up to|from|between|limit|range|at (least|most))\D{0,25}\d|\d[\d.,\s]*\s*(to|–|—|-|…|\.\.)\s*[^\d\s]{0,3}\s*\d|(от|до|не (менее|более)|ən (az|çox)|кемінде|ең көп)\D{0,15}\d/i;
     const hint = (!!near && RANGE.test(near.innerText || "")) || RANGE.test(described);
-    const out = { hint, inline: [], elsewhere: [], invalid: !!f && f.getAttribute("aria-invalid") === "true", native: !!f && f.validity && !f.validity.valid, value: f ? f.value : null };
+    const out = { hint, nearText: `${near ? clean(near.innerText).slice(0, 400) : ""} ${clean(described).slice(0, 200)}`.trim(), inline: [], elsewhere: [], invalid: !!f && f.getAttribute("aria-invalid") === "true", native: !!f && f.validity && !f.validity.valid, value: f ? f.value : null };
     for (const line of fresh()) {
       if (!ERR.test(line)) continue;
       const els = Array.from(document.querySelectorAll("body *")).filter((e) => vis(e) && clean(e.innerText) === line);
@@ -236,11 +236,49 @@ export function pageLib() {
       for (let p = el; p && p !== document.body && !toast; p = p.parentElement) if (/^(fixed|sticky)$/.test(getComputedStyle(p).position) && !(form && p.contains(form))) toast = !(form && form.contains(el));
       const bs = getComputedStyle(box), ts = getComputedStyle(el);
       const rgb = (c) => window.__uiRGBA(c).slice(0, 3).map(Math.round).join(",");
-      out.push({ text: line.slice(0, 120), toast, where: where(el), look: { color: rgb(ts.color), fill: window.__uiRGBA(bs.backgroundColor)[3] > 0.05 ? rgb(bs.backgroundColor) : "none", border: parseFloat(bs.borderTopWidth) > 0 || parseFloat(bs.borderLeftWidth) > 0 ? rgb(parseFloat(bs.borderLeftWidth) > parseFloat(bs.borderTopWidth) ? bs.borderLeftColor : bs.borderTopColor) : "none", icon: !!box.querySelector("svg, img") } });
+      out.push({ text: line.slice(0, 120), toast, where: where(el), selector: selector(el), ratio: window.__uiContrast ? Math.round(window.__uiContrast(el).ratio * 100) / 100 : null, weight: Number(ts.fontWeight) || 400, look: { color: rgb(ts.color), fill: window.__uiRGBA(bs.backgroundColor)[3] > 0.05 ? rgb(bs.backgroundColor) : "none", border: parseFloat(bs.borderTopWidth) > 0 || parseFloat(bs.borderLeftWidth) > 0 ? rgb(parseFloat(bs.borderLeftWidth) > parseFloat(bs.borderTopWidth) ? bs.borderLeftColor : bs.borderTopColor) : "none", icon: !!box.querySelector("svg, img") } });
     }
     return out;
   }
-  window.__bsf = { clean, vis, where, selector, labelOf, keyOf, numericKind, roleOf, fieldsOf, submitOf, kindOf, describe, looseNumeric, mark, fresh, errorsFor, outcome, messages, ERR, OK, BUSY, PAY, DESTRUCT };
+  /**
+   * FM13 (5.5.0, Parallel s6dz59): the texts that sit next to the submit before it is pressed ("We reply within a
+   * day."), with their look — a success message that takes their place in the same look reads as the old text.
+   */
+  function priorMark(formIndex) {
+    const form = document.querySelector(`[data-bsf="${formIndex}"]`);
+    const btn = document.querySelector(`[data-bsf-submit="${formIndex}"]`);
+    window.__bsPrior = [];
+    const zones = [btn && btn.parentElement, form && form.lastElementChild, form && form.parentElement].filter(Boolean);
+    for (const z of zones) for (const el of [z, ...z.querySelectorAll("p, span, small, div")]) {
+      if (!vis(el) || el.children.length || el === btn || (btn && btn.contains(el)) || el.closest("label, input, button, select, textarea")) continue;
+      const t = clean(el.textContent);
+      if (t.length < 4 || t.length > 160 || window.__bsPrior.some((x) => x.el === el)) continue;
+      const cs = getComputedStyle(el);
+      window.__bsPrior.push({ el, parent: el.parentElement, text: t, color: cs.color, weight: cs.fontWeight, size: cs.fontSize });
+    }
+    return window.__bsPrior.length;
+  }
+  /** Does the success line `line` stand where a prior text stood, looking the same (colour, weight, size, no box, no icon)? */
+  function likePrior(line) {
+    const els = Array.from(document.querySelectorAll("body *")).filter((e) => vis(e) && clean(e.innerText) === line);
+    const el = els[els.length - 1];
+    if (!el) return null;
+    const cs = getComputedStyle(el);
+    for (const p of window.__bsPrior || []) {
+      const here = p.el === el || (p.parent && (p.parent === el.parentElement || p.parent.contains(el)) && (!p.el.isConnected || !vis(p.el)));
+      if (!here) continue;
+      let boxed = false, icon = false;
+      for (let q = el, d = 0; q && d < 3 && q !== document.body; q = q.parentElement, d++) {
+        const qs = getComputedStyle(q);
+        if (window.__uiRGBA(qs.backgroundColor)[3] > 0.05 || parseFloat(qs.borderTopWidth) > 0 || parseFloat(qs.borderLeftWidth) > 0) boxed = true;
+        if (q.querySelector("svg, img") && !q.querySelector("button")) icon = true;
+        if (q === p.parent) break;
+      }
+      if (cs.color === p.color && cs.fontWeight === p.weight && cs.fontSize === p.size && !boxed && !icon && !/^[✓✔]/.test(line)) return { prior: p.text, where: where(el) };
+    }
+    return null;
+  }
+  window.__bsf = { clean, vis, where, selector, labelOf, keyOf, numericKind, roleOf, fieldsOf, submitOf, kindOf, describe, looseNumeric, mark, fresh, errorsFor, outcome, messages, priorMark, likePrior, ERR, OK, BUSY, PAY, DESTRUCT };
   return true;
 }
 
@@ -272,6 +310,9 @@ export async function sandbox(page, mode = "ok") {
       try { const j = JSON.parse(e.body); if (j && typeof j === "object" && !Array.isArray(j)) echo = j; } catch { }
       return route.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify({ ...echo, ok: true, success: true, data: echo, user: echo }) }).catch(() => {});
     }
+    // 5.5.0 (Compass av0m5i): a failure answered as an HTML error page, the way a host answers a missing route — a
+    // client that res.json()s it shows "Unexpected token '<', "<!DOCTYPE "… is not valid JSON"
+    if (state.mode === "html") return route.fulfill({ status: 404, contentType: "text/html", body: "<!doctype html><html><head><title>404: This page could not be found</title></head><body><h1>404</h1></body></html>" }).catch(() => {});
     const status = typeof state.mode === "number" ? state.mode : 500;
     return route.fulfill({ status, contentType: e.nav ? "text/html" : "application/json", body: e.nav ? "<!doctype html><title>Error</title><h1>Server error</h1>" : JSON.stringify({ error: "Request failed", message: "Request failed" }) }).catch(() => {});
   };
@@ -404,6 +445,7 @@ export async function numericBounds(page, { maxFields = 8 } = {}) {
   try {
     for (const t of targets.slice(0, maxFields)) {
       const bad = [], quiet = [];
+      const said = []; // what the page says about this field while it is probed (hint, errors): the stated range
       // the clean state: errors are what appears after it (a message left standing by the previous value still counts)
       if (t.typeOnly) await page.evaluate(() => window.__bsf.mark());
       for (const v of t.field.numeric.values) {
@@ -421,6 +463,7 @@ export async function numericBounds(page, { maxFields = 8 } = {}) {
         const btnKey = t.form ? String(t.form.index) : t.field.id;
         const err0 = await page.evaluate((id) => window.__bsf.errorsFor(id), t.field.id).catch(() => ({ inline: [], elsewhere: [], invalid: false, native: false }));
         const btnOff = await page.locator(`[data-bsf-submit="${btnKey}"]`).first().evaluate((b) => b.disabled || b.getAttribute("aria-disabled") === "true", null, { timeout: 1000 }).catch(() => false);
+        said.push(err0.nearText || "", ...err0.inline);
         if (changed || err0.inline.length || err0.invalid) continue; // clamped / rejected / explained
         if (t.typeOnly) {
           if (err0.native || btnOff) { if (!err0.hint) quiet.push(v); } // blocked; quiet unless the range is printed next to it
@@ -432,11 +475,40 @@ export async function numericBounds(page, { maxFields = 8 } = {}) {
         const sent = how === "disabled" ? [] : await waitSent(page, sb, 2500);
         await page.waitForTimeout(400);
         const err = await page.evaluate((id) => window.__bsf.errorsFor(id), t.field.id).catch(() => ({ inline: [], elsewhere: [], native: false }));
+        said.push(err.nearText || "", ...(err.inline || []));
         if (sent.length) bad.push(v);
         else if (!err.inline.length && !err.native && !err.invalid && !err.hint) quiet.push(v);
       }
       const name = `"${t.field.label || t.field.kind}" (${t.field.numeric.kind})`;
       const place = t.form ? `${formName(t.form)} → ${t.field.where}` : `${t.field.where}${t.field.button ? ` (next to "${t.field.button}")` : ""}`;
+      // 5.5.0 (Praxis dejlep: "Your rate must be between 25 and 500" — and 25 was refused): the bounds the page states
+      // are accepted. Each stated end is typed (and, in a form, submitted in the sandbox); a refusal is a finding.
+      const range = statedRange(said.join(" \n "));
+      if (range && !["phone", "iban", "card"].includes(t.field.numeric.kind)) {
+        const refused = [];
+        for (const v of [range.min, range.max].filter((x) => x != null)) {
+          if (!t.typeOnly) { forms = await reopen(page, url); const f = forms[t.form.index]; if (!f) break; await fillForm(page, f, { [t.field.id]: String(v) }); }
+          await page.evaluate(() => window.__bsf.mark());
+          const loc = page.locator(`[data-bsf="${t.field.id}"]`).first();
+          if (!(await loc.isVisible().catch(() => false))) break;
+          await loc.fill("", { timeout: 3000 }).catch(() => {});
+          await loc.pressSequentially(String(v), { delay: 5, timeout: 8000 }).catch(() => {});
+          await loc.press("Tab", { timeout: 3000 }).catch(() => {});
+          await page.waitForTimeout(350);
+          let e = await page.evaluate((id) => window.__bsf.errorsFor(id), t.field.id).catch(() => ({ inline: [], invalid: false, native: false }));
+          let no = e.inline.length > 0 || e.invalid || e.native;
+          if (!no && !t.typeOnly) {
+            sb.mark();
+            const how = await clickSubmit(page, String(t.form.index));
+            const sent = how === "disabled" ? [] : await waitSent(page, sb, 2500);
+            await page.waitForTimeout(400);
+            e = await page.evaluate((id) => window.__bsf.errorsFor(id), t.field.id).catch(() => ({ inline: [], invalid: false, native: false }));
+            no = !sent.length && (e.inline.length > 0 || e.invalid || e.native);
+          }
+          if (no) refused.push(`${v}${e.inline[0] ? ` ("${e.inline[0].slice(0, 70)}")` : ""}`);
+        }
+        if (refused.length) out.push({ id: "FM1", what: `${name} refuses ${refused.join(" and ")} although the page says ${range.text} — the stated bounds are allowed values: compare with < / > (not <= / >=), or state the range the field really takes [FM1, numeric-input-validation]`, where: place, selector: t.field.selector });
+      }
       if (bad.length) out.push({ id: "FM1", what: `${name} accepts ${bad.map((v) => JSON.stringify(v)).join(", ")}${t.typeOnly ? " without a word" : " and sends it"} — give it bounds (min/max, a whole-number step, a length/pattern) and clamp or show the allowed range under the field [FM1, numeric-input-validation]`, where: place, selector: t.field.selector });
       else if (quiet.length) out.push({ id: "FM1", soft: true, what: `${name}: ${quiet.map((v) => JSON.stringify(v)).join(", ")} is blocked, but nothing next to the field says why — show the allowed range / the reason under the field [FM1]`, where: place, selector: t.field.selector });
     }
@@ -450,6 +522,18 @@ export async function numericBounds(page, { maxFields = 8 } = {}) {
     for (const r of ranges) out.push({ id: "FM1", soft: true, what: `"${r.label}" allows ${r.min}–${r.max}, but the range is not written next to it — print "from ${r.min} to ${r.max}" under the field [FM1, voicecraft]`, where: r.where, selector: r.selector });
   } finally { await sb.stop(); }
   return out;
+}
+
+/** The range a text states for a field: "between 25 and 500", "from 1 to 100", "15–34", "at least 5", "up to 500". */
+export function statedRange(text) {
+  const n = (x) => Number(String(x).replace(/[\s,  ]/g, ""));
+  const N = "(\\d[\\d,  ]*(?:\\.\\d+)?)";
+  let m = new RegExp(`between\\s+[^\\d\\n]{0,3}${N}\\s*[^\\d\\s]{0,12}\\s*and\\s+[^\\d\\n]{0,3}${N}`, "i").exec(text) || new RegExp(`from\\s+[^\\d\\n]{0,3}${N}\\s*[^\\d\\s]{0,12}\\s*to\\s+[^\\d\\n]{0,3}${N}`, "i").exec(text) || new RegExp(`(?:^|[\\s,(])[^\\d\\s]{0,2}${N}\\s*(?:to|–|—)\\s*[^\\d\\s]{0,2}${N}`, "i").exec(text);
+  if (m && n(m[1]) < n(m[2])) return { min: n(m[1]), max: n(m[2]), text: `"${m[0].trim()}"` };
+  const lo = new RegExp(`(?:at least|minimum(?: of)?|min\\.?|no less than)\\s+[^\\d\\n]{0,3}${N}`, "i").exec(text);
+  const hi = new RegExp(`(?:up to|at most|maximum(?: of)?|max\\.?|no more than)\\s+[^\\d\\n]{0,3}${N}`, "i").exec(text);
+  if (lo || hi) return { min: lo ? n(lo[1]) : null, max: hi ? n(hi[1]) : null, text: [lo, hi].filter(Boolean).map((x) => `"${x[0].trim()}"`).join(" and ") };
+  return null;
 }
 
 /* ───────────────────────── FM2 gibberish ───────────────────────── */
@@ -489,6 +573,16 @@ export async function gibberish(page) {
 
 /* ───────────────────────── FM3 / FM4 submit outcomes ───────────────────────── */
 
+// what a client prints when it parses an HTML error page as JSON, or shows the raw reply
+const RAW_REPLY = /Unexpected token|is not valid JSON|JSON\.parse|SyntaxError|<!DOCTYPE|<html|An unexpected response was received|Failed to fetch|\[object Object\]/i;
+/** 6.4 on what a submit shows (5.5.0, Compass b4jdlq: red error text on a maroon toast, green on dark green). */
+function lowContrast(f, msgs, kind) {
+  const out = [];
+  for (const m of msgs) if (m.ratio != null && m.ratio < 4.5)
+    out.push({ id: "FM4", what: `${formName(f)}: the ${kind} message "${m.text.slice(0, 70)}" is ${m.ratio}:1 on its ${m.toast ? "toast" : "box"} — it needs 4.5:1 (light text on a dark fill, or dark on a light one) [6.4, FM4]`, where: m.where, selector: m.selector || f.selector });
+  return out.slice(0, 2);
+}
+
 /**
  * FM3 — a failed submit (the sandbox answers 500) keeps every value the user typed and shows an error;
  *        a failed sign-in clears the password and keeps the email (soft).
@@ -514,7 +608,21 @@ export async function submitOutcomes(page, { failStatus = 500 } = {}) {
       sb.mark();
       const how = await clickSubmit(page, String(f.index));
       const sent = how === "disabled" ? [] : await waitSent(page, sb, 3000);
-      if (!sent.length) { na.push({ id: "FM3", na: true, what: `${formName(f)} sent nothing with sample values (${how === "disabled" ? "button stays disabled" : "client validation or a captcha stopped it"}) — not checked`, where: f.where }); continue; }
+      if (!sent.length) {
+        // 5.5.0 (Kindred vv08yz): the contact form said "Thanks, your message has been received" and sent nothing — a
+        // success message without a request is a form that is not connected
+        if (how !== "disabled") {
+          let o = null;
+          for (let t = 0; t < 10; t++) { await page.waitForTimeout(300); o = await page.evaluate((i) => window.__bsf.outcome(i), f.index).catch(() => null); if (o && o.success.length) break; }
+          const mailto = await page.evaluate(() => Array.from(document.querySelectorAll("form[action^='mailto:' i]")).length > 0).catch(() => false);
+          if (o && o.success.length && !o.errors.length && !o.invalid && !o.nativeInvalid && !mailto && !sb.sent().length) {
+            out.push({ id: "FM4", what: `${formName(f)} says "${o.success[0]}" but sent no request — it is not connected to anything, and the visitor believes the message arrived. Send it (an API route / e-mail provider), or show the support e-mail instead of the form [FM4, submit-feedback]`, where: f.where, selector: f.selector });
+            continue;
+          }
+        }
+        na.push({ id: "FM3", na: true, what: `${formName(f)} sent nothing with sample values (${how === "disabled" ? "button stays disabled" : "client validation or a captcha stopped it"}) — not checked`, where: f.where });
+        continue;
+      }
       const action = sent.some((x) => x.action), nav = sent.some((x) => x.nav);
       await page.waitForTimeout(2000);
       if (!nav) {
@@ -525,6 +633,7 @@ export async function submitOutcomes(page, { failStatus = 500 } = {}) {
         if (errs.some((m) => m.toast) && errs.some((m) => !m.toast))
           out.push({ id: "FM12", what: `${formName(f)}: one failed submit shows its error twice — "${errs.find((m) => m.toast).text}" in a toast and "${errs.find((m) => !m.toast).text}" in the form. Say it once, next to the form (drop the toast for form errors) [FM12, duplicate-error]`, where: f.where, selector: f.selector });
         failLook[f0.index] = errs.find((m) => !m.toast) || errs[0] || null;
+        out.push(...lowContrast(f, errs, "error"));
         const now = await page.evaluate((ids) => Object.fromEntries(ids.map((id) => { const el = document.querySelector(`[data-bsf="${id}"]`); return [id, el ? el.value : null]; })), Object.keys(entered)).catch(() => ({}));
         const lost = f.fields.filter((x) => entered[x.id] !== undefined && x.role !== "password" && now[x.id] !== entered[x.id]);
         if (lost.length) out.push({ id: "FM3", what: `${formName(f)}: after a failed submit ${lost.map((x) => `"${x.label || x.role}"`).join(", ")} ${lost.length > 1 ? "are" : "is"} emptied — keep what the user typed when the request fails${action ? " (Server Action: return the error as data instead of throwing, keep the form mounted)" : ""} [FM3, form-reset-on-error]`, where: f.where, selector: f.selector });
@@ -535,12 +644,31 @@ export async function submitOutcomes(page, { failStatus = 500 } = {}) {
           if (pw && now[pw.id]) out.push({ id: "FM3", soft: true, what: `${formName(f)}: after a failed sign-in the password is still filled — clear the password, keep the email [FM3, playfix/orbit/praxis]`, where: pw.where, selector: pw.selector });
         }
       }
+      // ── failure answered as an HTML page (5.5.0, Compass av0m5i): what the page then says must not be a raw error
+      if (!nav) {
+        sb.setMode("html");
+        const fh = (await reopen(page, url))[f0.index];
+        if (fh) {
+          await fillForm(page, fh);
+          await page.evaluate(() => window.__bsf.mark());
+          sb.mark();
+          await clickSubmit(page, String(fh.index));
+          if ((await waitSent(page, sb, 3000)).length) {
+            await page.waitForTimeout(1500);
+            const oh = await page.evaluate((i) => window.__bsf.outcome(i), fh.index).catch(() => null);
+            const raw = (oh?.lines || []).find((l) => RAW_REPLY.test(l));
+            if (raw) out.push({ id: "FM3", what: `${formName(fh)}: when the server answers with an HTML error page (a 404 / 500 from the host), the page shows "${raw.slice(0, 90)}" — check res.ok before res.json(), and say what went wrong in words ("We could not save your password. Try again.") [FM3, CT3]`, where: fh.where, selector: fh.selector });
+          }
+        }
+        sb.setMode(failStatus);
+      }
       // ── success (only where a reply can be imitated)
       if (action || nav || ["signin", "signup", "password-reset"].includes(f.kind)) { na.push({ id: "FM4", na: true, what: `${formName(f)}: success not imitated (${action ? "Server Action" : nav ? "full-page post" : "sign-in/up"}) — check its confirmation by hand`, where: f.where }); continue; }
       sb.setMode("ok");
       f = (await reopen(page, url))[f0.index];
       if (!f) continue;
       await fillForm(page, f);
+      await page.evaluate((i) => window.__bsf.priorMark(i), f.index).catch(() => 0);
       await page.evaluate(() => window.__bsf.mark());
       sb.mark();
       await clickSubmit(page, String(f.index));
@@ -550,6 +678,15 @@ export async function submitOutcomes(page, { failStatus = 500 } = {}) {
         await page.waitForTimeout(100);
         const o = await page.evaluate((i) => window.__bsf.outcome(i), f.index).catch(() => null);
         if (o && (o.urlChanged || o.formGone || o.lines.length || o.invalid)) seen = o;
+      }
+      if (seen) {
+        const oks = await page.evaluate((i) => window.__bsf.messages(i, window.__bsf.OK), f.index).catch(() => []);
+        out.push(...lowContrast(f, oks, "success"));
+        // FM13 (5.5.0, Parallel s6dz59): the success line took the place of the text that was there, in its look
+        for (const m of oks.filter((x) => !x.toast).slice(0, 2)) {
+          const like = await page.evaluate((t) => window.__bsf.likePrior(t), m.text).catch(() => null);
+          if (like) { out.push({ id: "FM13", what: `${formName(f)}: the success message "${m.text}" appears where "${like.prior}" was, in the same colour, weight and size, with no box or icon — it reads as the old text and the visitor does not see that it worked. Give success its own tone (the theme's success colour, a tick, a box; role="status") [FM13, submit-feedback]`, where: like.where, selector: f.selector }); break; }
+        }
       }
       if (!seen) out.push({ id: "FM4", what: `${formName(f)}: after a successful submit nothing visible happens for 2 s — show a toast / inline "Sent" message (aria-live) or move to the next page [FM4, submit-feedback]`, where: f.where, selector: f.selector });
       // FM13 (5.2.0) — success must not look like the error the same form shows on failure (same colour, fill, border)
@@ -898,3 +1035,96 @@ export const settingsEmail = async (page) => (await lib(page), page.evaluate(() 
   return out;
 }));
 export const DATA_EXPORT_RE = /export (my |your |all )?(data|account)|download (my |your |all )?(data|account|information)|data export|request (a copy of )?(my |your )?data|экспорт|выгруз/i;
+
+/* ───────────────────────── FM14 a phone field takes a real number (5.5.0) ───────────────────────── */
+
+const REAL_PHONES = ["+44 7700 900123", "+1 415 555 0134"];
+/**
+ * FM14 (Compass 1r8kpw: registration rejected a normal UK mobile; ay9r6a: "Up to 15 digits" under a "+1 555 000 0000"
+ * example; Country came after the phone it formats). (a) Real numbers in international format are typed (and, in a
+ * form that is not a payment, submitted in the sandbox): one the field refuses is hard. (b) A hint that says digits only
+ * next to an example with "+" or spaces is soft. (c) A Country field after the phone field it formats is soft.
+ */
+export async function phoneFields(page) {
+  const out = [];
+  const url = page.url();
+  let forms = await describeForms(page);
+  const targets = [];
+  for (const f of forms) if (!f.search && !f.destructive) for (const x of f.fields) if (x.role === "phone" && !x.readOnly) targets.push({ form: f, field: x });
+  if (!targets.length) return out;
+  const sb = await sandbox(page, "ok");
+  try {
+    for (const t of targets.slice(0, 3)) {
+      const name = `"${t.field.label || "phone"}"`;
+      const place = `${formName(t.form)} → ${t.field.where}`;
+      const refused = [];
+      for (const v of REAL_PHONES) {
+        forms = await reopen(page, url);
+        const f = forms[t.form.index];
+        if (!f) break;
+        await fillForm(page, f, { [t.field.id]: v });
+        await page.evaluate(() => window.__bsf.mark());
+        const loc = page.locator(`[data-bsf="${t.field.id}"]`).first();
+        await loc.press("Tab", { timeout: 3000 }).catch(() => {});
+        await page.waitForTimeout(300);
+        let e = await page.evaluate((id) => window.__bsf.errorsFor(id), t.field.id).catch(() => ({ inline: [], invalid: false, native: false }));
+        let no = e.inline.length > 0 || e.invalid || e.native;
+        if (!no && !f.payment && f.hasSubmit) {
+          sb.mark();
+          const how = await clickSubmit(page, String(f.index));
+          const sent = how === "disabled" ? [] : await waitSent(page, sb, 2500);
+          await page.waitForTimeout(400);
+          e = await page.evaluate((id) => window.__bsf.errorsFor(id), t.field.id).catch(() => ({ inline: [], invalid: false, native: false }));
+          no = !sent.length && (e.inline.length > 0 || e.invalid || e.native);
+        }
+        if (no) refused.push(`"${v}"${e.inline[0] ? ` ("${e.inline[0].slice(0, 60)}")` : ""}`);
+      }
+      if (refused.length) out.push({ id: "FM14", what: `${name} refuses ${refused.join(", ")} — a real phone number in international format. Accept "+", spaces, brackets and dashes (strip them before you check the digits; 7–15 digits) [FM14, phone-input]`, where: place, selector: t.field.selector });
+      // (b) + (c) read from the page as it is
+      forms = await reopen(page, url);
+      const look = await page.evaluate((id) => {
+        const el = document.querySelector(`[data-bsf="${id}"]`);
+        if (!el) return null;
+        const ph = el.getAttribute("placeholder") || "";
+        const err = window.__bsf.errorsFor(id);
+        const form = el.closest("form, [role=form], [data-bsf-form]");
+        const fields = form ? Array.from(form.querySelectorAll("input, select, [role=combobox]")).filter((x) => window.__bsf.vis(x)) : [];
+        const country = fields.find((x) => /country|страна|ölkə|ел\b/i.test(`${x.getAttribute("name") || ""} ${x.id} ${window.__bsf.labelOf(x)}`));
+        const after = country && (el.compareDocumentPosition(country) & Node.DOCUMENT_POSITION_FOLLOWING) && country.getBoundingClientRect().top >= el.getBoundingClientRect().top - 2;
+        return { ph, near: err.nearText || "", countryAfter: !!after, countryLabel: country ? window.__bsf.labelOf(country) : "" };
+      }, t.field.id).catch(() => null);
+      if (look && /[+\s()]/.test(look.ph.trim()) && /\bdigits?( only)?\b|only (digits|numbers)|numbers only|up to \d+ digits/i.test(look.near.replace(look.ph, "")) && !/\+|spaces?|plus/i.test(look.near.replace(look.ph, "")))
+        out.push({ id: "FM14", soft: true, what: `${name}: the hint says digits only, the example "${look.ph}" has "+" and spaces — say the format the field takes ("e.g. +44 7700 900123") [FM14]`, where: place, selector: t.field.selector });
+      if (look?.countryAfter) out.push({ id: "FM14", soft: true, what: `${name} comes before "${look.countryLabel}" — the country decides the number's format: put Country first [FM14]`, where: place, selector: t.field.selector });
+    }
+  } finally { await sb.stop(); }
+  return out;
+}
+
+/* ───────────────────────── FM15 a file field says what it takes (5.5.0) ───────────────────────── */
+
+/**
+ * FM15 (Compass af1p4q: "Passport or National ID *" with a bare file picker — no formats, no size). A file input (or
+ * the dropzone around a hidden one) with no `accept` and no visible hint in its field (PDF / JPG / PNG … or a size in
+ * MB / KB) is a finding.
+ */
+export const fileHints = async (page) => (await lib(page), page.evaluate(() => {
+  const B = window.__bsf;
+  const out = [];
+  const HINT = /\b(pdf|jpe?g|png|webp|heic|gif|svg|docx?|xlsx?|csv|txt|zip|mp4|mov|images?|photos?)\b|\b\d+(\.\d+)?\s?(mb|kb|gb|мб|кб)\b|max(imum)? (size|file)/i;
+  for (const el of Array.from(document.querySelectorAll("input[type=file]"))) {
+    // what the visitor sees of the field: the input, or the label / dropzone around a hidden one
+    let box = B.vis(el) ? el : (el.id && document.querySelector(`label[for="${CSS.escape(el.id)}"]`)) || el.closest("label") || el.parentElement;
+    if (!box || !B.vis(box)) continue;
+    let zone = box;
+    for (let d = 0; d < 3 && zone.parentElement && zone.parentElement !== document.body; d++) {
+      const p = zone.parentElement;
+      if (p.querySelectorAll("input:not([type=hidden]), textarea, select").length > 1) break;
+      zone = p;
+    }
+    const text = B.clean(zone.innerText || "");
+    if (el.getAttribute("accept") || HINT.test(text)) continue;
+    out.push({ id: "FM15", what: `the file field "${B.labelOf(el) || text.slice(0, 40)}" does not say which files it takes or how large — set accept=".pdf,.jpg,.png" and write the formats and the size limit next to it ("PDF, JPG or PNG, up to 10 MB") [FM15, file-input]`, where: B.where(box), selector: B.selector(box) });
+  }
+  return out;
+}).catch(() => []));
