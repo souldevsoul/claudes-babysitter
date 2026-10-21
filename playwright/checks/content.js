@@ -63,7 +63,10 @@ export const collectCopy = (page) => page.evaluate(() => {
     // a language set on the element or a section (<span lang="en">), not the page's own; translate=no keeps it as is
     const tagged = el.closest("[lang]");
     const ownLang = el.closest("[translate=no], .notranslate") ? "zxx" : tagged && tagged !== document.documentElement ? tagged.getAttribute("lang") || "" : "";
-    segs.push({ i, text, kind, collapsed: !pre, footer: !!el.closest("footer, [role=contentinfo]"), table: !!el.closest("table, [role=grid], [role=table], [role=row]"), ownLang });
+    // 5.5.0 (Compass, issue #5): what a user wrote (a brief, a chat message) is shown back as they wrote it — not copy
+    // to translate. [data-user-content] marks it; chat logs, quotes and text kept with its line breaks (pre-wrap) count.
+    const user = !!el.closest("[data-user-content], [data-ugc], [role=log], blockquote, q") || (pre && !/^h[1-6]$/.test(tag) && !btn && text.length > 20);
+    segs.push({ i, text, kind, user, collapsed: !pre, footer: !!el.closest("footer, [role=contentinfo]"), table: !!el.closest("table, [role=grid], [role=table], [role=row]"), ownLang });
   }
   // emails in text: linked by a mailto with the same address?
   const emails = [];
@@ -140,8 +143,9 @@ const finding = (x, loc, extra = "") => ({ id: x.id, what: `${x.what}${extra} �
  * CT1–CT8 + CT17 on one page, CT7 "one document, one date". @returns {Promise<{ hard: object[], copy: object }>}
  * `copy` is the collected page (reuse it for emailFindings / languageFindings).
  */
-export async function copyFindings(page, cfg = {}, copy = null, locale = null) {
+export async function copyFindings(page, cfg = {}, copy = null, locale = null, { own = [] } = {}) {
   const cc = contentConfig(cfg);
+  const mine = new Set(own.filter(Boolean).map((e) => String(e).toLowerCase()));
   copy = copy || (await collectCopy(page));
   const out = [];
   const segs = copy.segs;
@@ -154,7 +158,11 @@ export async function copyFindings(page, cfg = {}, copy = null, locale = null) {
   const pageLang = locale || copy.lang || "";
   for (const s of [...segs, ...titleSeg]) {
     const locale = s.ownLang && s.ownLang !== "zxx" ? s.ownLang : pageLang;
-    for (const x of lintSegment({ ...s, locale }, cc)) out.push({ x, i: s.i, seg: s });
+    for (const x of lintSegment({ ...s, locale }, cc)) {
+      // 5.5.0 (Compass, issue #5): the signed-in test account's own address on its own settings page is not test data
+      if (x.id === "CT2" && mine.size && [...mine].some((e) => String(x.match || "").toLowerCase() === e || (s.text.toLowerCase().includes(e) && e.includes(String(x.match || "").toLowerCase())))) continue;
+      out.push({ x, i: s.i, seg: s });
+    }
   }
   // one document, one date (updated vs effective compared separately)
   const lu = lastUpdatedDates(segs);
@@ -173,20 +181,41 @@ export async function copyFindings(page, cfg = {}, copy = null, locale = null) {
 }
 
 /**
+ * Every test account's e-mail address: LOGIN_EMAIL and each babysitter.config.json → roles[] LOGIN_EMAIL (its env
+ * name resolved), plus BABYSITTER_ROLES literals. On a signed-in page these are the user's own address.
+ */
+export function ownEmails(cfg = {}, env = process.env) {
+  const out = [];
+  if (env.LOGIN_EMAIL) out.push(env.LOGIN_EMAIL);
+  let extra = [];
+  try { extra = env.BABYSITTER_ROLES ? JSON.parse(env.BABYSITTER_ROLES) : []; } catch {}
+  for (const r of [...(cfg.roles || []), ...extra]) {
+    const ref = r?.env?.LOGIN_EMAIL ?? r?.LOGIN_EMAIL;
+    if (!ref) continue;
+    const v = /^[A-Z][A-Z0-9_]*$/.test(ref) ? env[ref] : /@/.test(ref) ? ref : undefined;
+    if (v) out.push(v);
+  }
+  return [...new Set(out)];
+}
+
+/**
  * CT9 every address can receive mail (preview / reserved hosts, then MX over DNS); CT10 every visible address is a
  * mailto link to that same address. `loginEmail` (the signed-in user's own address) is exempt from CT10.
  * @returns {Promise<{ hard: object[], info: string[] }>}
  */
-export async function emailFindings(page, { cfg = {}, copy = null, dns = true, cache = null, loginEmail = process.env.LOGIN_EMAIL, fetchImpl } = {}) {
+export async function emailFindings(page, { cfg = {}, copy = null, dns = true, cache = null, loginEmail = process.env.LOGIN_EMAIL, own = null, fetchImpl } = {}) {
   const cc = contentConfig(cfg);
   const skip = new Set(cc.skip || []);
   copy = copy || (await collectCopy(page));
   const out = [], info = [];
-  const me = (loginEmail || "").toLowerCase();
+  // 5.5.0 (Kindred / Compass, issues #4 #5): role-based projects sign in with roles[].env, not LOGIN_EMAIL — every
+  // configured account's address is the signed-in user's own (its settings page shows it as text)
+  const mineSet = new Set([loginEmail, ...(own ?? ownEmails(cfg))].filter(Boolean).map((e) => String(e).toLowerCase()));
+  const isMe = (e) => mineSet.has(String(e || "").toLowerCase());
   // CT10
   if (!skip.has("CT10")) {
     for (const e of copy.emails) {
-      if (e.email.toLowerCase() === me || e.table || e.form || e.example) continue;
+      if (isMe(e.email) || e.table || e.form || e.example) continue;
       if (!e.addr) out.push({ i: e.i, x: { id: "CT10", what: `${e.email} is shown as plain text${e.href ? ` inside a link to ${e.href}` : ""}`, fix: `wrap it in <a href="mailto:${e.email}">${e.email}</a> so it opens the mail app` } });
       else if (e.addr.toLowerCase() !== e.email.toLowerCase()) out.push({ i: e.i, x: { id: "CT10", what: `the link says ${e.email} but opens mailto:${e.addr}`, fix: "one address: the text and the mailto: must match" } });
     }
@@ -199,8 +228,8 @@ export async function emailFindings(page, { cfg = {}, copy = null, dns = true, c
   // CT9
   if (!skip.has("CT9")) {
     const all = new Map();
-    for (const e of copy.emails) if (e.email.toLowerCase() !== me && !e.example) all.set(e.email.toLowerCase(), all.get(e.email.toLowerCase()) ?? e.i);
-    for (const m of copy.mailto) if (m.addr && m.addr.toLowerCase() !== me && /@/.test(m.addr)) all.set(m.addr.toLowerCase(), all.get(m.addr.toLowerCase()) ?? m.i);
+    for (const e of copy.emails) if (!isMe(e.email) && !e.example) all.set(e.email.toLowerCase(), all.get(e.email.toLowerCase()) ?? e.i);
+    for (const m of copy.mailto) if (m.addr && !isMe(m.addr) && /@/.test(m.addr)) all.set(m.addr.toLowerCase(), all.get(m.addr.toLowerCase()) ?? m.i);
     const rest = [];
     for (const [email, i] of all) {
       const bad = emailDomainProblem(email);
@@ -279,6 +308,7 @@ export async function languageFindings(page, { cfg = {}, copy = null, locale = n
       def.locale = defaultLocale || defaults.lang || cc.defaultLocale || "";
     }
     for (const s of copy.segs) {
+      if (s.user) continue;
       const r = untranslatedReason(s.text, code, { brand, defaults: def, keep, ownLang: s.ownLang, legal: cc.legalIdentity });
       if (!r) continue;
       out.push({ i: s.i, x: { id: "CT11", what: untranslatedWhat(r, s.text, code), fix: `translate it (the ${code} messages file, or the CMS / database field; locales.keep / content.brandTerms for names that stay as they are)` } });

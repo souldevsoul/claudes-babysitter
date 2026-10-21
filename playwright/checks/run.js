@@ -574,8 +574,11 @@ export async function stateChecks(page, { reload, opts = {}, maxOpeners = 15, ma
         const picks = [...(cands?.picks || [])];
         const rank = (p) => (WALLET_RE.test(p.text) ? 0 : /haspopup|combobox|menu|dialog/i.test(p.sig + p.where) ? 1 : 2);
         picks.sort((x, y) => rank(x) - rank(y));
+        // 5.5.0 (Compass Add Credits, issue #5): states.wallet: false kept the top-up dialog shut, and its cut amount
+        // hint and mixed number formats were never seen. Opening it is safe (every non-GET request is aborted): with
+        // the wallet off it is opened and measured, and nothing inside it is pressed.
         if (!wallet)
-            for (let i = picks.length - 1; i >= 0; i--) if (WALLET_RE.test(picks[i].text)) { notTested.push(`top-up / checkout opener "${picks[i].text}" (states.wallet is off)`); picks.splice(i, 1); }
+            for (const p of picks) if (WALLET_RE.test(p.text)) { p.openOnly = true; notTested.push(`steps inside the top-up / checkout "${p.text}" (states.wallet is off: opened and measured, nothing pressed)`); }
         if (picks.length > maxOpeners)
             notTested.push(`${picks.length - maxOpeners} control(s) over the cap of ${maxOpeners} (babysitter.config.json → states.maxOpeners), e.g. ${picks.slice(maxOpeners, maxOpeners + 3).map((p) => `"${p.text}"`).join(", ")}`);
         let fresh = true;
@@ -614,7 +617,7 @@ export async function stateChecks(page, { reload, opts = {}, maxOpeners = 15, ma
                 findings.push({ ...f, what: `${label}${f.what}`, where: f.where });
             // a dialog with steps of its own (Add credits: amount → Continue → card): walk it, never pay
             const dialog = await page.evaluate(() => { const d = Array.from(document.querySelectorAll("[role=dialog], [role=alertdialog], dialog[open]")).filter((x) => window.__uiVisible(x)).pop(); if (!d) return null; d.setAttribute("data-bs-dialog", ""); return true; }).catch(() => null);
-            if (dialog && timeLeft() > 20_000) {
+            if (dialog && !pick.openOnly && timeLeft() > 20_000) {
                 const w = await walkWizard(page, { scope: "[data-bs-dialog]", base, opts, maxSteps, label });
                 findings.push(...w.findings);
                 if (w.steps)

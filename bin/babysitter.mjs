@@ -35,7 +35,8 @@
 //   doctor           → how the product is wired (hooks, CI, config) + the version check
 //   after-merge      → the git post-merge / post-rewrite re-check: static check of what the merge changed, then the
 //                      runtime checks on the routes it reached (when a dev server / preview answers)
-import { spawnSync } from "node:child_process";
+import { spawnSync, spawn } from "node:child_process";
+import { forward } from "../lib/forward.js";
 import { dirname, join, relative } from "node:path";
 import { existsSync } from "node:fs";
 import { fileURLToPath } from "node:url";
@@ -46,10 +47,15 @@ const [cmd, ...rest] = process.argv.slice(2);
 // the Playwright CLI next to Claude's Babysitter — the same @playwright/test copy the checks import
 // (a bare `npx playwright` from the project could fetch a different version)
 function playwright(args, env = process.env) {
+  // the viewports this run selects (--project=mobile-390 --project desktop-1440): the specs pick the narrowest and the
+  // widest of these, not of every configured viewport (5.5.0)
+  const sel = [];
+  for (let i = 0; i < args.length; i++) { const m = args[i].match(/^--project(?:=(.*))?$/); if (m) sel.push(...String(m[1] ?? args[i + 1] ?? "").split(",")); }
+  if (sel.filter(Boolean).length && !sel.includes("product")) env = { ...env, BABYSITTER_PROJECTS: sel.filter(Boolean).join(",") };
   let cli;
   try { cli = createRequire(join(root, "package.json")).resolve("@playwright/test/cli"); }
   catch { console.error("babysitter: @playwright/test is not installed next to Claude's Babysitter (npm install)"); return 2; }
-  return spawnSync(process.execPath, [cli, "test", "-c", join(root, "playwright/playwright.config.js"), ...args], { stdio: "inherit", cwd: process.cwd(), env }).status ?? 1;
+  return forward(process.execPath, [cli, "test", "-c", join(root, "playwright/playwright.config.js"), ...args], { stdio: "inherit", cwd: process.cwd(), env });
 }
 const node = (file, args) => process.exit(spawnSync(process.execPath, [join(root, file), ...args], { stdio: "inherit" }).status ?? 1);
 switch (cmd) {
@@ -152,7 +158,7 @@ switch (cmd) {
     const rep = join(process.env.BABYSITTER_ROOT || process.cwd(), ".babysitter/report.json");
     const mtime = () => { try { return statSync(rep).mtimeMs; } catch { return null; } };
     const before = mtime();
-    const st = playwright(rest);
+    const st = await playwright(rest);
     const fresh = mtime() !== null && mtime() !== before;
     if (!fresh) { console.error(`babysitter test-ui: Playwright stopped before it wrote a report (exit ${st}) — nothing was checked; the error is above.`); process.exit(st || 1); }
     process.exit(st);
@@ -188,7 +194,7 @@ switch (cmd) {
       console.error(`${"!".repeat(64)}\n!! PARTIAL RUN (--only ${only}). NOT RUN:\n${off.map((k) => `!!   ✗ ${skippedNames[k]}`).join("\n")}\n!! Defects those suites catch will not be found. Drop --only for a full check.\n${"!".repeat(64)}`);
     }
     if (!skipPrepare && !lastFailed) {
-      const st = spawnSync(process.execPath, [join(root, "playwright/prepare.mjs")], { stdio: "inherit", env }).status;
+      const st = await forward(process.execPath, [join(root, "playwright/prepare.mjs")], { stdio: "inherit", env });
       if (st !== 0) { console.error("babysitter e2e: prepare failed (set BASE_URL or baseURL in babysitter.config.json; LOGIN_EMAIL / LOGIN_PASSWORD for signed-in pages). --skip-prepare to run on the last crawl."); process.exit(st ?? 1); }
     }
     // a --reporter on the command line replaces the config's reporters: keep the JSON report the summary, findings.json,
@@ -208,7 +214,7 @@ switch (cmd) {
     const { statSync } = await import("node:fs");
     const mtime = () => { try { return statSync(reportFile).mtimeMs; } catch { return null; } };
     const before = mtime();
-    const status = playwright(args, env);
+    let status = await playwright(args, env);
     const fresh = mtime() !== null && mtime() !== before;
     if (!fresh) {
       console.error(`\n${"✗".repeat(3)} babysitter e2e: Playwright stopped before it wrote a report (exit ${status}) — nothing was checked.\n    The error is printed above. Common causes: a browser that is not installed (npx playwright install chrome), a\n    BASE_URL that does not answer, a Node version the installed @playwright/test does not support.`);
@@ -224,8 +230,9 @@ switch (cmd) {
       const vps = viewports(cfg, env).map((v) => v.name);
       const full = viewports(cfg, { ...env, BABYSITTER_PROFILE: "", VIEWPORTS: "" }).map((v) => v.name);
       const RUN = existsSync(join(ROOT, "node_modules/claudes-babysitter/bin/babysitter.mjs")) ? "npx --no babysitter" : `node ${relative(ROOT, join(root, "bin/babysitter.mjs")) || join(root, "bin/babysitter.mjs")}`;
-      const { text } = summarize({ root: ROOT, only, args, cfg, configured: { viewports: full }, lastFailed, rerun: `${RUN} e2e --skip-prepare --last-failed${only ? ` --only ${only}` : ""}${env.BABYSITTER_PROFILE === "quick" ? " --quick" : ""}` });
-      console.log(`\n${text}`);
+      const sum = summarize({ root: ROOT, only, args, cfg, configured: { viewports: full }, lastFailed, rerun: `${RUN} e2e --skip-prepare --last-failed${only ? ` --only ${only}` : ""}${env.BABYSITTER_PROFILE === "quick" ? " --quick" : ""}` });
+      console.log(`\n${sum.text}`);
+      if (!status && sum.rolesNotChecked?.length) status = 1;
       if (vps.length < full.length) console.log(`(--quick / VIEWPORTS: ${vps.join(", ")} of ${full.join(", ")})`);
     } catch (e) { console.error(`babysitter e2e: summary failed: ${e.message}`); }
     if (banner) console.error(banner);

@@ -29,7 +29,7 @@
     "node": ">=22.18"
   },
   "scripts": {
-    "test": "npm run test:eslint && npm run test:stylelint && npm run test:check && npm run test:tt && npm run test:team && npm run test:acceptance && npm run test:run && npm run test:content && npm run test:layout && npm run test:studio && npm run test:forms && npm run test:fp && npm run test:misses && npm run test:update && npm run test:package",
+    "test": "npm run test:eslint && npm run test:stylelint && npm run test:check && npm run test:tt && npm run test:team && npm run test:acceptance && npm run test:run && npm run test:content && npm run test:layout && npm run test:studio && npm run test:forms && npm run test:fp && npm run test:misses && npm run test:issues && npm run test:update && npm run test:package",
     "test:fp": "node test/fp-510.test.mjs",
     "test:update": "node test/update.test.mjs",
     "test:package": "node test/package-mode.test.mjs && node test/husky.test.mjs",
@@ -50,7 +50,8 @@
     "test:content": "node test/content-lint.test.mjs && node test/content-consistency.test.mjs && node test/content-runtime.test.mjs",
     "test:layout": "node test/layout.test.mjs",
     "test:forms": "node test/forms.test.mjs",
-    "test:misses": "node test/misses.test.mjs && node test/misses-520.test.mjs && node test/misses-521.test.mjs && node test/stage.test.mjs"
+    "test:misses": "node test/misses.test.mjs && node test/misses-520.test.mjs && node test/misses-521.test.mjs && node test/stage.test.mjs",
+    "test:issues": "node test/issues-550.test.mjs"
   },
   "dependencies": {
     "@clack/prompts": "^1.8.1",

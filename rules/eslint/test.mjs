@@ -329,9 +329,13 @@ tester.run("no-inline-style (3.3 strict)", R["no-inline-style"], {
       // a presence hook keeps it mounted while it leaves and it animates on data-state
       { code: '<div>{list.mounted && <ul data-state={list.state} className="wb-menu absolute z-50 shadow-lg">x</ul>}</div>', filename: join(noPlugin, "a.tsx") },
       { code: '<AnimatePresence>{open && (<div className="fixed inset-0 z-50"><motion.div exit={{ opacity: 0 }} /></div>)}</AnimatePresence>', filename: join(noPlugin, "a.tsx") },
+      // 5.5.0 (Kindred components/ui/dialog.tsx:135, issue #4): the enter / exit classes come from a lookup map by variant
+      { code: 'import * as DialogPrimitive from "@radix-ui/react-dialog";\nconst DIALOG_MOTION = { center: "data-[state=open]:animate-in data-[state=closed]:animate-out fade-in-0 fade-out-0 zoom-in-95", sheet: "data-[state=open]:slide-in-from-bottom data-[state=closed]:slide-out-to-bottom" };\nfunction C({ variant }) { return <DialogPrimitive.Content className={cn(DIALOG_MOTION[variant], "fixed z-50")} />; }', filename: join(withPlugin, "dialog.tsx") },
     ],
     invalid: [
       { code: imp + '<SelectPrimitive.Content className="relative z-50 rounded-lg border" />', filename: join(withPlugin, "s.tsx"), ...err("none") },
+      // the map's entries have no motion at all: still reported
+      { code: 'import * as DialogPrimitive from "@radix-ui/react-dialog";\nconst DIALOG_MOTION = { center: "fixed inset-0", sheet: "fixed bottom-0" };\n<DialogPrimitive.Content className={cn(DIALOG_MOTION[variant], "z-50")} />', filename: join(withPlugin, "dialog3.tsx"), ...err("none") },
       { code: 'import { Popover } from "radix-ui";\n<Popover.Content className="rounded border" />', filename: join(withPlugin, "p.tsx"), ...err("none") },
       { code: imp + '<SelectPrimitive.Content className="data-[state=open]:animate-in data-[state=open]:fade-in-0" />', filename: join(withPlugin, "s.tsx"), ...err("exit") },
       { code: 'import * as D from "@radix-ui/react-dialog";\n<D.Content className={cn("fixed", "data-[state=closed]:animate-out")} />', filename: join(withPlugin, "d.tsx"), ...err("enter") },
@@ -344,6 +348,20 @@ tester.run("no-inline-style (3.3 strict)", R["no-inline-style"], {
       { code: '<div>{showMenu ? <ul className="fixed inset-x-0 z-40 shadow-lg animate-in fade-in-0">x</ul> : null}</div>', filename: join(noPlugin, "c.tsx"), ...err("mount") },
     ],
   });
+  // 5.5.0: the same lookup map typed in TypeScript (as const / a Record annotation)
+  {
+    const tsParser = (await import("@typescript-eslint/parser")).default;
+    const tsTester = new RuleTester({ languageOptions: { parser: tsParser, ecmaVersion: 2022, sourceType: "module", parserOptions: { ecmaFeatures: { jsx: true } } } });
+    tsTester.run("overlay-motion (TS lookup map)", R["overlay-motion"], {
+      valid: [
+        { code: 'import * as DialogPrimitive from "@radix-ui/react-dialog";\nconst DIALOG_MOTION = { center: "data-[state=open]:animate-in data-[state=closed]:animate-out fade-in-0 fade-out-0" } as const;\nconst x = <DialogPrimitive.Content className={cn(DIALOG_MOTION[variant], "fixed")} />;', filename: join(withPlugin, "dialog.tsx") },
+        { code: 'import * as DialogPrimitive from "@radix-ui/react-dialog";\nconst MOTION: Record<string, string> = { a: "data-[state=open]:animate-in data-[state=closed]:animate-out" };\nconst x = <DialogPrimitive.Content className={MOTION[kind]} />;', filename: join(withPlugin, "dialog2.tsx") },
+      ],
+      invalid: [
+        { code: 'import * as DialogPrimitive from "@radix-ui/react-dialog";\nconst M = { a: "fixed" } satisfies Record<string, string>;\nconst x = <DialogPrimitive.Content className={M[kind]} />;', filename: join(withPlugin, "dialog3.tsx"), errors: [{ messageId: "none" }] },
+      ],
+    });
+  }
 }
 
 // 6.12 — dead utility classes: the tailwindcss-animate family without the plugin generates no CSS (truelogos.pro

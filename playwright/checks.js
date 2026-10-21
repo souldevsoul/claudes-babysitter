@@ -2193,12 +2193,26 @@ export const offPalette = (page, extra = [], tolerance = 0.045) => page.evaluate
 export const nativeSkin = (page) => page.evaluate(() => {
     const W = window;
     const out = [];
-    const bg = (() => { for (const el of [document.body, document.documentElement]) {
+    const rootBg = (() => { for (const el of [document.body, document.documentElement]) {
         const c = W.__uiRGBA(getComputedStyle(el).backgroundColor);
         if (c[3] > 0.5)
             return c;
     } return [255, 255, 255, 1]; })();
-    const lum = (0.2126 * bg[0] + 0.7152 * bg[1] + 0.0722 * bg[2]) / 255;
+    const L = (c) => (0.2126 * c[0] + 0.7152 * c[1] + 0.0722 * c[2]) / 255;
+    // 5.5.0 (Kindred, issue #4): what a person sees is the painted top-level surface, not <body> — a leftover dark root
+    // theme under a page wrapped edge to edge in a cream surface is a light page. At a few points of the screen, the
+    // first opaque box under the point that spans the width (a surface, not a card) decides; else body / html.
+    const surfaceAt = (x, y) => {
+        for (const el of document.elementsFromPoint(x, y)) {
+            if (el === document.documentElement || el === document.body) break;
+            const c = W.__uiRGBA(getComputedStyle(el).backgroundColor);
+            if (c[3] <= 0.5) continue;
+            if (el.getBoundingClientRect().width >= 0.8 * innerWidth) return c;
+        }
+        return rootBg;
+    };
+    const pts = [[0.5, 0.5], [0.5, 0.3], [0.25, 0.7], [0.75, 0.7], [0.5, 0.9]].map(([fx, fy]) => L(surfaceAt(innerWidth * fx, innerHeight * fy))).sort((a, b) => a - b);
+    const lum = pts[Math.floor(pts.length / 2)];
     const scheme = getComputedStyle(document.documentElement).colorScheme || "normal";
     if (lum < 0.35 && !/dark/.test(scheme))
         out.push({ what: `dark page but color-scheme is "${scheme}" — scrollbars, autofill and native pickers render light; set color-scheme: dark on :root [1.19]`, where: "html" });

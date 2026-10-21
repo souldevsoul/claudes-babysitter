@@ -17,8 +17,24 @@ export const STORAGE = resolve(STATE_DIR, "storage.json");
  * @param {string} [role]
  */
 export function storageFor(role) {
-  if (!role || role === "user") return STORAGE;
+  if (!role || role === "user") return defaultStorage();
   return resolve(STATE_DIR, `storage-${String(role).replace(/[^\w-]/g, "_")}.json`);
+}
+
+/**
+ * The default signed-in storage: storage.json, else (a project with roles only — no LOGIN_EMAIL) the first configured
+ * role's storage that exists. 5.5.0 (Compass, issue #5): M1 and A1/A3/A6 opened storage.json, which prepare never
+ * writes there, and crashed with ENOENT; A4 then looked for Sign out on a signed-out page.
+ */
+export function defaultStorage() {
+  if (existsSync(STORAGE)) return STORAGE;
+  let roles = [];
+  try { roles = (loadConfig().roles || []).map((r) => r?.name).filter(Boolean); } catch {}
+  for (const name of roles) {
+    const f = resolve(STATE_DIR, `storage-${String(name).replace(/[^\w-]/g, "_")}.json`);
+    if (existsSync(f)) return f;
+  }
+  return STORAGE;
 }
 
 /** babysitter.config.json of the product (env BABYSITTER_CONFIG overrides the path). */
@@ -71,6 +87,17 @@ export const VIEWPORTS = [
   { name: "desktop-1440", width: 1440, height: 900 },
 ];
 export function viewports(cfg = loadConfig(), env = process.env) {
+  const all = viewportsAll(cfg, env);
+  // 5.5.0 (Compass, issue #5): a run narrowed with --project (mobile-390 + desktop-1440, as the --quick profile and
+  // sharded runs do) still picked the "narrowest" viewport from the full list — 360, not in the run — so the states at
+  // phone width never ran. `babysitter e2e` / `test-ui` pass the selected projects in BABYSITTER_PROJECTS.
+  const sel = String(env.BABYSITTER_PROJECTS || "").split(",").map((x) => x.trim()).filter(Boolean);
+  if (!sel.length) return all;
+  const picked = all.filter((v) => sel.some((p) => p === v.name || p.startsWith(`${v.name}-`) || globMatch(p, v.name)));
+  return picked.length ? picked : all;
+}
+const globMatch = (pat, name) => /[*?]/.test(pat) && new RegExp(`^${pat.replace(/[.+^${}()|[\]\\]/g, "\\$&").replace(/\*/g, ".*").replace(/\?/g, ".")}$`, "i").test(name);
+function viewportsAll(cfg, env) {
   const named = (w) => VIEWPORTS.find((v) => v.width === Number(w)) || { name: `${Number(w) < 768 ? "mobile" : Number(w) < 1024 ? "tablet" : Number(w) < 1400 ? "laptop" : "desktop"}-${w}`, width: Number(w), height: Number(w) < 768 ? 800 : 900 };
   if (env.VIEWPORTS) return env.VIEWPORTS.split(",").map((s) => s.trim()).filter(Boolean).map(named);
   if ((env.BABYSITTER_PROFILE || cfg.profile) === "quick") return VIEWPORTS.filter((v) => v.width === 390 || v.width === 1440);

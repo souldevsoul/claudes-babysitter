@@ -19,10 +19,11 @@ const repo = resolve(args.find((a, i) => !a.startsWith("--") && !valued.has(args
 const dry = has("--dry-run");
 try {
   const r = update(repo, { to: opt("--to"), source: opt("--source") || REPO_URL, dry, install: !has("--no-install"), force: has("--force"), log: (m) => console.log(`  … ${m}`) });
-  if (r.upToDate) { console.log(`Claude's Babysitter ${fmt(r.from)} in ${repo} is already at ${fmt(r.to)} or newer — nothing to do.`); process.exit(0); }
+  if (r.upToDate) { console.log(`Claude's Babysitter ${fmt(r.from)} in ${repo} is already at ${fmt(r.to)} or newer — nothing to do.${r.latest ? ` (latest release tag on ${opt("--source") || "GitHub"}: v${fmt(r.latest)}, asked just now)` : ""}`); process.exit(0); }
   console.log(`\nClaude's Babysitter ${fmt(r.from)} → ${fmt(r.to)}${dry ? " (dry run: nothing written)" : ""} — ${r.mode === "vendored" ? `${VENDOR_DIR} replaced (${r.files} files)` : "the devDependency pin moved; run npm install"}`);
   console.log("Kept as they are: babysitter.config.json, .babysitter/ (findings, baseline, state), the product's e2e, hooks and CLAUDE.md.");
   if (r.workflows.length) console.log(`CI: the version check added to ${r.workflows.join(", ")}`);
+  for (const x of r.ignores || []) console.log(`${x.manual ? "⚠ " : ""}${x.what}`);
   console.log(`\nWhat changed since ${fmt(r.from)} (${r.notes.length} release${r.notes.length === 1 ? "" : "s"}):\n`);
   for (const n of r.notes) console.log(has("--brief") ? `  • ${n.title}` : `## ${n.title}${n.source === "README.md" ? "  (README)" : ""}\n\n${n.body}\n`);
   console.log(`\nNext: run the suite (babysitter check, babysitter e2e --quick), then commit ${r.mode === "vendored" ? VENDOR_DIR : "package.json and the lock file"}${r.workflows.length ? " and the workflows" : ""}.`);

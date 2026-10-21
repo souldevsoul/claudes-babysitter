@@ -26,6 +26,7 @@
  * instructions live between markers and are replaced, never appended twice.
  */
 import { vendorCopy } from "../lib/update.js";
+import { ignoreVendoredCopy } from "../lib/project-ignores.js";
 import { huskyScriptsDir } from "../lib/wiring.js";
 import { existsSync, readFileSync, writeFileSync, mkdirSync, rmSync } from "node:fs";
 import { join, relative, resolve, dirname, basename } from "node:path";
@@ -178,9 +179,16 @@ const cfg = {
   },
 };
 delete cfg.kitFiles; // replaced by the component heuristic (exported + used + no duplicate role)
+// 5.5.0 (Kindred, issue #4): the sign-in route found above is where prepare signs every role in — without login.url
+// every role was skipped ("no login.url") and the run measured 0 signed-in pages
+if (!cfg.login?.url && cfg.acceptance.auth.signIn) cfg.login = { ...(cfg.login || {}), url: cfg.acceptance.auth.signIn };
 if (opt("url")) cfg.baseURL = opt("url");
 write(cfgPath, JSON.stringify(cfg, null, 2) + "\n");
 say(prev ? "merged project config (your values kept)" : "created project config", cfgPath);
+if (cfg.login?.url && !prev?.login?.url) say(`login.url = ${cfg.login.url} (prepare signs LOGIN_EMAIL and every role in there)`, cfgPath);
+else if (!cfg.login?.url) say("no sign-in page found: set login.url in babysitter.config.json before adding roles / LOGIN_EMAIL");
+// 5.5.0 (Kindred, issue #4): the vendored copy is not the product's code — its tsc and eslint leave it out
+if (mode === "vendor") for (const x of ignoreVendoredCopy(repo, toolRel, { dry: DRY })) say(x.manual ? `⚠ ${x.what}` : x.what, x.file);
 
 /* ───────── 4. Claude Code hooks (merged, de-duplicated) ───────── */
 const setPath = join(repo, ".claude/settings.json");

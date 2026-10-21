@@ -66,12 +66,20 @@ export async function unmarkedTestEntities(page, opts = {}) {
   return (await testEntities(page, opts)).filter((e) => !e.marked).map((e) => ({ id: "ST2", what: `test entity "${e.text}" is presented as real — show a visible "Test" marker next to it (data-test-entity) so nobody takes it for a real person [ST2, stage test]`, where: e.where, selector: e.selector, human: e.human }));
 }
 
-export const HIRE_RE = /^(hire|hire (now|them|this specialist|specialist)|book|book (now|a call|a session)|request|request (a quote|this specialist|service)|send (a )?request|describe your task|order|start (a )?task|нанять|заказать|выбрать|işə götür|sifariş|жалдау|тапсырыс)\b/i;
+export const HIRE_RE = /^(hire|hire (now|them|this specialist|specialist)|book|book (now|a call|a session)|request|request (a quote|this specialist|service)|send (a )?request|describe your task|order|start (a )?task|open a case|start a (brief|case|project|request|job)( with)?|start (the |your )?brief|create a (brief|request|task|case)|post a (task|job|brief)|work with|нанять|заказать|выбрать|işə götür|sifariş|brif|жалдау|тапсырыс)\b/i;
+// 5.5.0 (Kindred "Open a case", Compass "Start a brief with this profile", issues #4 #5): a CTA that starts the request
+// flow is the hire step; a link into such a flow (…/request, /brief, /hire, /book, /order, /checkout, /cases/new) is
+// followed one step. stageGates.hireLabel (a regex source, or a list) adds a product's own wording.
+export const HIRE_FLOW_HREF = /\/(request|requests|brief|briefs|hire|book|booking|order|orders|checkout|cases?\/new|tasks?\/new|new-(task|request|brief|case))(\/|\?|$)/i;
+export function hireRe(cfg = {}) {
+  const extra = [].concat(cfg.stageGates?.hireLabel || []).filter(Boolean).map(String);
+  return extra.length ? new RegExp(`${HIRE_RE.source}|^(${extra.join("|")})`, "i") : HIRE_RE;
+}
 /**
  * ST3 — test: the catalog at this page lists entities and one can be hired. Returns { items, hireable, detail } —
  * items: links to the entity pages under the catalog path; hireable: an enabled control matching HIRE_RE here.
  */
-export const catalogState = (page, path) => page.evaluate(({ path, HIRE }) => {
+export const catalogState = (page, path, { hire: hireLabel = HIRE_RE } = {}) => page.evaluate(({ path, HIRE, FLOW }) => {
   const W = window;
   const base = path.replace(/\/+$/, "");
   const items = [...new Set(Array.from(document.querySelectorAll("a[href]")).filter((a) => W.__uiVisible(a) && !a.closest("header, footer, nav")).map((a) => { try { return new URL(a.href).pathname; } catch { return ""; } }).filter((p) => p.startsWith(`${base}/`) && p.length > base.length + 1))];
@@ -82,5 +90,8 @@ export const catalogState = (page, path) => page.evaluate(({ path, HIRE }) => {
   const H = new RegExp(HIRE, "i");
   const hire = Array.from(document.querySelectorAll("button, a[href], [role=button]")).find((b) => W.__uiVisible(b) && !b.closest("header, footer, nav") && !b.disabled && b.getAttribute("aria-disabled") !== "true" && H.test((b.innerText || b.getAttribute("aria-label") || "").trim()));
   const empty = /no (specialists|experts|results|items|profiles|listings)|nothing (here|found|yet)|ничего не найдено|пока нет/i.test(document.body.innerText || "");
-  return { items, buttons: ebtn.length, hireable: hire ? (hire.innerText || hire.getAttribute("aria-label") || "").trim().slice(0, 40) : null, empty };
-}, { path, HIRE: HIRE_RE.source });
+  // a link into the request flow whose label is not one of the hire words: followed one step by the spec
+  const F = new RegExp(FLOW, "i");
+  const flow = hire ? null : Array.from(document.querySelectorAll("main a[href]")).find((a) => { if (!W.__uiVisible(a) || a.closest("header, footer, nav")) return false; try { return F.test(new URL(a.href).pathname + new URL(a.href).search); } catch { return false; } });
+  return { items, buttons: ebtn.length, hireable: hire ? (hire.innerText || hire.getAttribute("aria-label") || "").trim().slice(0, 40) : null, flow: flow ? flow.href : null, empty };
+}, { path, HIRE: hireLabel.source, FLOW: HIRE_FLOW_HREF.source });

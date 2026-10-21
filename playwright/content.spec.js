@@ -77,7 +77,7 @@ for (const route of ROUTES) {
         const r = route.path;
         test("CT1–CT8 copy: nothing unfinished, no test data or raw errors, no trailing periods or em dashes, one date format, plurals agree", async ({ page }) => {
             await open(page, r);
-            const cf = await k.copyFindings(page, cfg);
+            const cf = await k.copyFindings(page, cfg, null, null, { own: route.auth ? k.ownEmails(cfg) : [] });
             note(cf.soft, "copy to look at (French spacing)");
             hard(cf.hard);
         });
@@ -120,7 +120,7 @@ for (const loc of LOCALES) {
                 const warnOnly = !Array.isArray(cfg.locales) && cfg.locales?.untranslated === "warn";
                 if (warnOnly)
                     note(untranslated, `untranslated text in ${loc.code}`);
-                const cf = await k.copyFindings(page, cfg, copy, loc.code);
+                const cf = await k.copyFindings(page, cfg, copy, loc.code, { own: route.auth ? k.ownEmails(cfg) : [] });
                 note(cf.soft, `copy to look at in ${loc.code} (French spacing)`);
                 hard([...(warnOnly ? lang.filter((o) => o.id !== "CT11") : lang), ...cf.hard]);
             });

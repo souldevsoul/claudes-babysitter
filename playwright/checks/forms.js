@@ -183,7 +183,11 @@ export function pageLib() {
     const region = f && (f.closest("form, [role=form], [data-bsf-form]") || (() => { let b = f.parentElement; for (let d = 0; d < 4 && b?.parentElement; d++) b = b.parentElement; return b; })());
     // the allowed range printed next to the field all along ("Min $5 · Max $10,000") explains a blocked value
     let near = f && f.parentElement; for (let d = 0; d < 2 && near?.parentElement; d++) near = near.parentElement;
-    const hint = !!near && /(min(imum)?|max(imum)?|up to|from|between|limit|range)\D{0,25}\d/i.test(near.innerText || "");
+    // 5.5.0 (Kindred IBAN, issue #4): "15 to 34 letters and digits" is a range too (the static ui/numeric-input-bounds
+    // accepts "1 to {max}"), and the hint the field names with aria-describedby counts wherever it sits
+    const described = f ? (f.getAttribute("aria-describedby") || "").split(/\s+/).filter(Boolean).map((id) => document.getElementById(id)?.innerText || "").join(" ") : "";
+    const RANGE = /(min(imum)?|max(imum)?|up to|from|between|limit|range|at (least|most))\D{0,25}\d|\d[\d.,\s]*\s*(to|–|—|-|…|\.\.)\s*[^\d\s]{0,3}\s*\d|(от|до|не (менее|более)|ən (az|çox)|кемінде|ең көп)\D{0,15}\d/i;
+    const hint = (!!near && RANGE.test(near.innerText || "")) || RANGE.test(described);
     const out = { hint, inline: [], elsewhere: [], invalid: !!f && f.getAttribute("aria-invalid") === "true", native: !!f && f.validity && !f.validity.valid, value: f ? f.value : null };
     for (const line of fresh()) {
       if (!ERR.test(line)) continue;

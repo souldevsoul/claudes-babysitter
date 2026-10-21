@@ -194,9 +194,17 @@ export const PALETTE_LEGACY = /^(bg|text|border(-[trblxy])?|ring|outline|fill|st
 /** styles.card where `const styles = { card: … }` → the property value node, or null. */
 export function resolveMember(context, mem) {
   if (mem.type !== "MemberExpression" || mem.object.type !== "Identifier") return null;
-  const obj = resolveConst(context, mem.object);
+  let obj = resolveConst(context, mem.object);
+  // const MAP = { … } as const / satisfies Record<…>
+  while (obj && /^(TSAsExpression|TSSatisfiesExpression|TSTypeAssertion|TSNonNullExpression)$/.test(obj.type)) obj = obj.expression;
   if (!obj || obj.type !== "ObjectExpression") return null;
   const name = mem.computed ? (mem.property.type === "Literal" ? String(mem.property.value) : null) : mem.property.name;
+  // 5.5.0 (Kindred dialog.tsx, issue #4): a lookup by a variable — DIALOG_MOTION[variant] — can be any entry of the
+  // map: every value counts (the classes of all variants)
+  if (name === null) {
+    const values = obj.properties.filter((p) => p.type === "Property").map((p) => p.value);
+    return values.length ? { type: "ArrayExpression", elements: values } : null;
+  }
   const prop = obj.properties.find((p) => p.type === "Property" && (p.key.name ?? String(p.key.value)) === name);
   return prop ? prop.value : null;
 }

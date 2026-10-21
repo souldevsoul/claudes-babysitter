@@ -359,15 +359,48 @@ export const footer = (page, acc = DEFAULTS) => page.evaluate((acc) => {
 /* ─────────────── cookies ─────────────── */
 
 /** C1 — first visit: Accept, Reject / Necessary only and Manage; Manage shows real per-category toggles. C4 — closing the panel closes everything. */
-export async function cookieConsent(page) {
+// the banner's accept: "Accept", and (5.5.0, Kindred / Compass, issues #4 #5) "OK" / "Got it" / "I understand" —
+// the one button of a notice; whether that is enough depends on what the site stores (cookieConsent)
+export const ACCEPT_BTN = /^\s*(accept( all)?( cookies)?|allow( all)?( cookies)?|(i )?agree|ok(ay)?|got it|understood|i understand|принять( все)?|понятно|хорошо|qəbul et|razıyam|başa düşdüm|қабылдау|келісемін|түсінікті)\s*[.!]?\s*$/i;
+const OK_ONLY = /^\s*(ok(ay)?|got it|understood|i understand|понятно|хорошо|başa düşdüm|түсінікті)\s*[.!]?\s*$/i;
+/** Stored items that are not strictly necessary (names against ESSENTIAL_STORAGE + acceptance.essentialStorage; any cookie of an analytics host). */
+export function nonEssentialOf(list, acc = DEFAULTS) {
+    const essential = [ESSENTIAL_STORAGE, ...(acc.essentialStorage || []).map((x) => new RegExp(x, "i"))];
+    const hosts = acc.analyticsHosts || [];
+    return list.filter((x) => (x.kind === "cookie" && hosts.some((h) => String(x.domain || "").replace(/^\./, "").endsWith(h))) || !essential.some((re) => re.test(x.name)));
+}
+export async function cookieConsent(page, { acc = DEFAULTS } = {}) {
     const out = [];
-    const accept = page.locator("button, a, [role=button]").filter({ hasText: /^\s*(accept( all)?|allow all|agree|принять( все)?)\s*$/i }).filter({ visible: true }).first();
+    const accept = page.locator("button, a, [role=button]").filter({ hasText: ACCEPT_BTN }).filter({ visible: true }).first();
     if (!(await accept.isVisible().catch(() => false)))
         return [{ id: "C1", what: "no cookie banner with an Accept button on a first visit [C1, BQA 7]", where: "page" }];
     // the banner's own buttons (a footer "Manage cookies" link is a different control)
-    await accept.evaluate((b) => (b.closest('[class*=cookie i], [id*=cookie i], [class*=consent i], [id*=consent i], [role=dialog], [role=alertdialog], [role=region]') || b.parentElement).setAttribute("data-bs-cookie-banner", ""));
+    const inBanner = await accept.evaluate((b) => { const box = b.closest('[class*=cookie i], [id*=cookie i], [class*=consent i], [id*=consent i], [role=dialog], [role=alertdialog], [role=region], [aria-label*=cookie i]'); (box || b.parentElement).setAttribute("data-bs-cookie-banner", ""); return !!box || /cookie|consent|kuki|куки|cookies/i.test(b.parentElement?.textContent || ""); }).catch(() => false);
+    const label = ((await accept.textContent().catch(() => "")) || "").trim();
+    // an "OK" that is not part of a cookie notice (a dialog's OK) is not a banner
+    if (OK_ONLY.test(label) && !inBanner)
+        return [{ id: "C1", what: "no cookie banner with an Accept button on a first visit [C1, BQA 7]", where: "page" }];
     const btn = (re) => page.locator("[data-bs-cookie-banner] :is(button, a, [role=button])").filter({ hasText: re }).filter({ visible: true }).first();
-    if (!(await btn(/reject|decline|necessary only|only necessary|essential only|отклон/i).isVisible().catch(() => false)))
+    const hasReject = await btn(/reject|decline|necessary only|only necessary|essential only|отклон/i).isVisible().catch(() => false);
+    // 5.5.0 (Kindred, issue #4): a notice with one "OK" on a site that sets only strictly necessary cookies offers no
+    // choice because there is none — compliant. It is measured: nothing non-essential stored before or after OK, no
+    // analytics host asked. If the site does store more, the notice needs Reject like any banner.
+    if (!hasReject && OK_ONLY.test(label)) {
+        const hosts = acc.analyticsHosts || [];
+        const tracked = [];
+        const onReq = (req) => { try { const h = new URL(req.url()).hostname; if (hosts.some((x) => h === x || h.endsWith("." + x))) tracked.push(h); } catch { } };
+        page.on("request", onReq);
+        const before = nonEssentialOf(await storageNow(page), acc);
+        await accept.click({ timeout: 3000 }).catch(() => { });
+        await page.waitForTimeout(1200);
+        const after = nonEssentialOf(await storageNow(page), acc);
+        page.off("request", onReq);
+        const extra = [...before, ...after].filter((x, i, l) => l.findIndex((y) => y.kind === x.kind && y.name === x.name) === i);
+        if (!extra.length && !tracked.length) return out; // essential-only notice: nothing to choose
+        out.push({ id: "C1", what: `the cookie notice offers only "${label}", but the site stores ${extra.slice(0, 5).map((x) => `${x.kind} "${x.name}"`).join(", ")}${tracked.length ? `${extra.length ? " and " : ""}asks ${[...new Set(tracked)].join(", ")}` : ""} — that is not strictly necessary, so the visitor needs a "Reject" / "Necessary only" choice (or name it in acceptance.essentialStorage with the reason) [C1, BQA]`, where: "cookie banner" });
+        return out;
+    }
+    if (!hasReject)
         out.push({ id: "C1", what: 'cookie banner offers no "Reject" / "Necessary only" choice [C1, BQA]', where: "cookie banner" });
     const manage = btn(/manage|settings|preferences|customi[sz]e|options|настро/i);
     if (!(await manage.isVisible().catch(() => false))) {
@@ -443,7 +476,7 @@ export async function cookieDecline(page, { acc = DEFAULTS, next = null } = {}) 
     const stays = await page.evaluate((re) => { const b = document.querySelector("[data-bs-decline-banner]"); if (!b || !window.__uiVisible(b)) return false; return Array.from(b.querySelectorAll("button, [role=button], a")).some((x) => window.__uiVisible(x) && new RegExp(re, "i").test((x.textContent || "").trim())); }, REJECT_BTN.source).catch(() => false);
     if (stays)
         out.push({ id: "C6", what: `"${label}" does nothing: the cookie banner stays on screen after it is pressed — Decline must record the choice and close the banner, the same way Accept does [C6, BQA 7]`, where: box });
-    const nonEssential = (list) => list.filter((x) => (x.kind === "cookie" && hosts.some((h) => String(x.domain || "").replace(/^\./, "").endsWith(h))) || !essential.some((re) => re.test(x.name)));
+    const nonEssential = (list) => nonEssentialOf(list, acc);
     const after = nonEssential(await storageNow(page));
     if (after.length)
         out.push({ id: "C6", what: `after "${label}" the site still stores ${after.slice(0, 6).map((x) => `${x.kind} "${x.name}"`).join(", ")}${after.length > 6 ? ` and ${after.length - 6} more` : ""} — nothing beyond what is strictly necessary may be stored once the visitor declines (or name it in acceptance.essentialStorage with the reason) [C6, BQA 7]`, where: box });
@@ -712,9 +745,21 @@ export async function clickControl(page, re) {
         await find().click();
         return true;
     }
-    const menus = page.locator('header button[aria-haspopup], header [aria-expanded], header button[aria-label*=account i], header button[aria-label*=menu i], header button[aria-label*=user i]').filter({ visible: true });
-    for (let i = 0; i < Math.min(await menus.count(), 4); i++) {
-        await menus.nth(i).click().catch(() => { });
+    // 5.5.0 (Compass, issue #5): the avatar menu (Radix DropdownMenu, aria-label="Account menu") came after the language
+    // and currency switchers and past the first 4 triggers. Account-like triggers first (header, sidebar, nav), then
+    // the rest, up to 8.
+    const SCOPE = "header, nav, aside, [role=navigation], [role=banner]";
+    const accountFirst = page.locator([":is(button, [role=button])[aria-label*=account i]", ":is(button, [role=button])[aria-label*=user i]", ":is(button, [role=button])[aria-label*=profile i]", ":is(button, [role=button])[aria-label*=avatar i]", "button:has(img[alt*=avatar i], [class*=avatar i])"].map((x) => `:is(${SCOPE}) ${x}`).join(", ")).filter({ visible: true });
+    const rest = page.locator([`:is(${SCOPE}) button[aria-haspopup]`, `:is(${SCOPE}) [aria-expanded]`, "header button[aria-label*=menu i]"].join(", ")).filter({ visible: true });
+    const triggers = [];
+    for (const loc of [accountFirst, rest]) for (let i = 0; i < Math.min(await loc.count(), 8); i++) triggers.push(loc.nth(i));
+    const tried = new Set();
+    for (const t of triggers) {
+        if (tried.size >= 8) break;
+        const key = await t.evaluate((el) => { el.__bsTry ||= Math.random().toString(36).slice(2); return el.__bsTry; }, null, { timeout: 2000 }).catch(() => null);
+        if (!key || tried.has(key)) continue;
+        tried.add(key);
+        await t.click({ timeout: 2000 }).catch(() => { });
         await page.waitForTimeout(400);
         if (await find().isVisible().catch(() => false)) {
             await find().click();

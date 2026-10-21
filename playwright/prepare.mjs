@@ -25,6 +25,9 @@ import { templateOf } from "../lib/route-map.js";
 const root = process.env.BABYSITTER_ROOT || process.cwd();
 const cfgPath = process.env.BABYSITTER_CONFIG || resolve(root, "babysitter.config.json");
 const cfg = existsSync(cfgPath) ? JSON.parse(readFileSync(cfgPath, "utf8")) : {};
+// 5.5.0 (Kindred, issue #4): init wrote acceptance.auth.signIn but no login.url, and every role was skipped with
+// "no login.url" while the run still summed up as normal — the sign-in route init found is the login page too
+if (!cfg.login?.url && cfg.acceptance?.auth?.signIn) cfg.login = { ...(cfg.login || {}), url: cfg.acceptance.auth.signIn };
 let base = process.env.BASE_URL || cfg.baseURL;
 if (!base) { console.error("BASE_URL (or baseURL in babysitter.config.json) is required"); process.exit(2); }
 // vertex.boutique → 308 → www.vertex.boutique: every crawled link was "another origin" and the crawl found 0 pages,
@@ -257,3 +260,10 @@ if (crawlReport.locales) log(`languages: ${crawlReport.locales.codes.join(", ")}
 if (crawlReport.missingDynamic.length) log(`⚠ no page found for ${crawlReport.missingDynamic.length} dynamic route(s): ${crawlReport.missingDynamic.join(", ")} — link them from a list, or set sampleParams in babysitter.config.json`);
 for (const c of crawlReport.capped) log(`⚠ crawl cap: ${c}`);
 for (const r of crawlReport.roles.filter((x) => !x.ok)) log(`⚠ role "${r.name}" not checked: ${r.why}`);
+// 5.5.0: sign-in was asked for (roles, LOGIN_EMAIL or SESSION_COOKIES) and not one signed-in page was reached — the
+// run would check the public pages only and still look normal. That is a failure, loudly (BABYSITTER_SIGNED_OUT=1
+// says a signed-out run is meant).
+if (crawlReport.roles.length && !crawlReport.roles.some((r) => r.ok && r.pages > 0) && !/^(1|true|yes)$/i.test(process.env.BABYSITTER_SIGNED_OUT || "")) {
+  console.error(`${"!".repeat(64)}\n!! claudes-babysitter: NO SIGNED-IN PAGE WAS REACHED — ${crawlReport.roles.length} role(s) configured, none signed in:\n${crawlReport.roles.map((r) => `!!   ✗ ${r.name}: ${r.ok ? "signed in, but no page beyond the public ones was found (set authRoutes)" : r.why}`).join("\n")}\n!! Dashboards, settings and wallets would not be checked. Fix the credentials / login.url, or set\n!! BABYSITTER_SIGNED_OUT=1 for a run that is meant to stay signed out.\n${"!".repeat(64)}`);
+  process.exit(1);
+}

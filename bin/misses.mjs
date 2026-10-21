@@ -9,7 +9,7 @@
 import { existsSync, readFileSync } from "node:fs";
 import { join, dirname, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
-import { runMisses } from "../lib/misses.js";
+import { runMisses, missesDir } from "../lib/misses.js";
 
 const TOOL = join(dirname(fileURLToPath(import.meta.url)), "..");
 const args = process.argv.slice(2);
@@ -21,7 +21,7 @@ if (has("--help") || has("-h")) {
   process.exit(0);
 }
 const version = JSON.parse(readFileSync(join(TOOL, "package.json"), "utf8")).version;
-const outDir = resolve(one("--out") || join(TOOL, "misses"));
+const outDir = resolve(one("--out") || missesDir(TOOL, process.env.BABYSITTER_ROOT || process.cwd()));
 const stateFile = resolve(one("--state") || join(outDir, "state.json"));
 const registry = (() => { try { return JSON.parse(readFileSync(join(TOOL, "misses/projects.json"), "utf8")).projects || []; } catch { return []; } })();
 const slugs = many("--project");

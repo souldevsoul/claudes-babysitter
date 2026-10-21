@@ -6,12 +6,14 @@ import { test as base, expect } from "@playwright/test";
 import { existsSync } from "node:fs";
 import * as checks from "./checks.js";
 import * as acceptance from "./acceptance.js";
-import { loadConfig, loadRoutes, STORAGE } from "./project.js";
+import { loadConfig, loadRoutes, STORAGE, defaultStorage } from "./project.js";
 
 export const cfg = loadConfig();
 export const acc = acceptance.acceptanceConfig(cfg);
 export const routes = loadRoutes(cfg);
-export const signedIn = existsSync(STORAGE);
+// a roles-only project (no LOGIN_EMAIL) signs `user` in as its first role (5.5.0)
+const SIGNED = defaultStorage();
+export const signedIn = existsSync(SIGNED);
 export { expect, checks, acceptance, STORAGE };
 
 /** Open a route the way every check does: helpers installed, network idle, fonts and lazy sections settled. */
@@ -31,7 +33,7 @@ export async function open(page, route) {
 export const test = base.extend({
     user: async ({ browser }, use, info) => {
         info.skip(!signedIn, "no signed-in storage — run `babysitter prepare` with LOGIN_EMAIL / LOGIN_PASSWORD");
-        const ctx = await browser.newContext({ ...info.project.use, storageState: STORAGE });
+        const ctx = await browser.newContext({ ...info.project.use, storageState: SIGNED });
         const page = await ctx.newPage();
         await checks.install(page);
         await use(page);

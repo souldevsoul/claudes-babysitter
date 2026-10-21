@@ -176,7 +176,7 @@ test.describe("acceptance site-wide", () => {
         const ctx = await ctxFor(browser, false);
         const page = await ctx.newPage();
         await open(page, PUBLIC[0]?.path || "/");
-        hard((await a.cookieConsent(page)).filter((o) => on(o.id)));
+        hard((await a.cookieConsent(page, { acc })).filter((o) => on(o.id)));
         await ctx.close();
     });
     test("ST3 stage test: the main flows can be walked — the catalog lists entities, one can be hired, every role has a test account [stage]", async ({ browser }) => {
@@ -189,24 +189,32 @@ test.describe("acceptance site-wide", () => {
                 out.push({ what: `role "${r.name}" has no test account here (env ${Object.values(r.env || {}).join(" / ")} not set) — its flows cannot be walked [ST3, stage test]`, where: `roles.${r.name}` });
         if (!CATALOG.length)
             test.info().annotations.push({ type: "not tested", description: "no catalog page (babysitter.config.json → catalog: [\"/specialists\"])" });
+        // 5.5.0 (Kindred, issue #4): test entities may be visible to QA viewers only (owner decision) — the catalog is
+        // walked as stageGates.catalogRole when it is set, signed out otherwise
+        const catRole = cfg.stageGates?.catalogRole || null;
+        const HIRE = stg.hireRe(cfg);
         for (const path of CATALOG) {
-            const ctx = await ctxFor(browser, false);
+            const ctx = catRole ? await ctxFor(browser, true, catRole) : await ctxFor(browser, false);
             const page = await ctx.newPage();
             await open(page, path);
-            const cs = await stg.catalogState(page, path);
+            const cs = await stg.catalogState(page, path, { hire: HIRE });
             let hire = cs.hireable;
             const any = cs.items.length + cs.buttons;
             if (!any)
-                out.push({ what: `the catalog ${path} lists no entity${cs.empty ? " (it says it is empty)" : ""} — in testing it needs at least one approved (test) entity, so hire → messages → completion can be walked [ST3, stage test]`, where: path });
+                out.push({ what: `the catalog ${path}${catRole ? ` (as ${catRole})` : ""} lists no entity${cs.empty ? " (it says it is empty)" : ""} — in testing it needs at least one approved (test) entity, so hire → messages → completion can be walked${catRole ? "" : " (test entities shown to QA viewers only: set stageGates.catalogRole)"} [ST3, stage test]`, where: path });
             else if (!hire && cs.items.length) {
                 await open(page, cs.items[0]);
-                hire = (await stg.catalogState(page, cs.items[0])).hireable;
+                const st = await stg.catalogState(page, cs.items[0], { hire: HIRE });
+                hire = st.hireable;
+                // a CTA into the request flow ("Start a brief with this profile" → /request?specialist=…): one step on
+                if (!hire && st.flow) { await open(page, st.flow); hire = (await stg.catalogState(page, new URL(st.flow).pathname, { hire: HIRE })).hireable; }
             }
             else if (!hire) {
                 await page.locator("[data-bs-entity]").first().click({ timeout: 3000 }).catch(() => { });
                 await page.waitForTimeout(1200);
-                hire = (await stg.catalogState(page, path)).hireable;
+                hire = (await stg.catalogState(page, path, { hire: HIRE })).hireable;
             }
+            if (any && !hire && cs.flow) { await open(page, cs.flow); hire = (await stg.catalogState(page, new URL(cs.flow).pathname, { hire: HIRE })).hireable; }
             if (any && !hire)
                 out.push({ what: `nothing on ${path}${cs.items[0] ? ` or ${cs.items[0]}` : " or the first entity it opens"} can be hired (no enabled Hire / Request / Book control) — approve at least one test entity that can be hired [ST3, stage test]`, where: cs.items[0] || path });
             await ctx.close();
