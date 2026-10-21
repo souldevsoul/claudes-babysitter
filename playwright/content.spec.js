@@ -217,11 +217,14 @@ test.describe("content site-wide", () => {
                     const u = new URL(loc, "http://x" + p);
                     const to = u.pathname.replace(/\/$/, "") || "/";
                     if (to !== p && !/^\/(en|fr|de|es|az|kk|ru)(\/|$)/.test(to.replace(p, "")) && !/(sign-?in|log-?in|signin|login|auth)(\/|$)/i.test(to))
-                        redirects.set(p, to); // a locale prefix or the sign-in gate is not a moved page } catch {}
+                        redirects.set(p, to); // a locale prefix or the sign-in gate is not a moved page
                 }
-                finally {
-                }
+                catch { }
             }
+        }
+        // 5.5.0: CT19 / CT20 / CT7 ran only inside the redirect block above (a comment swallowed its closing brace):
+        // with CT21 and CT22 switched off, their findings were never reported
+        {
             const consistency = ["CT19", "CT20", "CT21", "CT22"].some(on) ? k.consistencyRendered(byLocale, cfg, { defaultLocale: DEFAULT_LOCALE, deadLinks: dead, redirects }) : [];
             note(consistency.filter((x) => x.soft), "one list in two orders (CT31) — check which order is meant");
             hard([...(on("CT7") ? k.localeDateFindings(byLocale) : []), ...consistency.filter((x) => !x.soft)]);
