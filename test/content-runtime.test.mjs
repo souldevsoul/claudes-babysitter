@@ -164,7 +164,7 @@ try {
   });
 
   await test("CT19–CT22 on rendered pages: terms, policy facts, link names and named pages across the crawl; look-alikes and French copy stay quiet; CT8 French spacing", async (page) => {
-    const foot = `<footer><a href="/help">Help Centre</a> <a href="/cookies">Cookie notice</a> <a href="/terms">Terms</a> <a href="/refunds">Refund Policy</a><p>© 2026 Acme Ltd</p></footer>`;
+    const foot = `<footer><a href="/help">Help Centre</a> <a href="/docs">Docs</a> <a href="/cookies">Cookie notice</a> <a href="/terms">Terms</a> <a href="/refunds">Refund Policy</a><p>© 2026 Acme Ltd</p></footer>`;
     const site = {
       "/": `<html lang="en"><head><title>Acme</title></head><body><header><nav><a href="/help">Support</a> <a href="/pricing">Pricing</a></nav></header><main><h1>Hire a specialist</h1><p>Every specialist is vetted.</p><p>Your specialist replies within a day.</p><p>Read the Specialist Service Terms before you start.</p><p>Get an expert review of your brief. The Pro plan adds support.</p><p>See the <a href="/pricing">price list</a> for what each task costs.</p><button>Buy credits</button></main>${foot}</body></html>`,
       "/help": `<html lang="en"><head><title>Help Center | Acme</title></head><body><main><h1>Help Center</h1><p>Hire an expert today.</p><p>We may suspend or close your account if you break the rules.</p><p>You can delete your account in settings.</p><p>To close your account, write to us.</p></main>${foot}</body></html>`,
@@ -183,17 +183,19 @@ try {
       recs.push(k.pageRecord(path, copy, path === "/fr" ? "fr" : null));
     }
     assert.ok(recs[0].links.some((l) => l.path === "/pricing" && l.region === "inline"), `a link in a sentence is inline: ${JSON.stringify(recs[0].links)}`);
-    const out = k.consistencyRendered(new Map([["en", recs.filter((r) => r.route !== "/fr")], ["fr", recs.filter((r) => r.route === "/fr")]]), {}, { defaultLocale: "en", deadLinks: [{ path: "/specialist-terms", label: "Specialist terms", where: "/ body", status: 404 }] });
+    const out = k.consistencyRendered(new Map([["en", recs.filter((r) => r.route !== "/fr")], ["fr", recs.filter((r) => r.route === "/fr")]]), {}, { defaultLocale: "en", deadLinks: [{ path: "/specialist-terms", label: "Specialist terms", where: "/ body", status: 404 }], redirects: new Map([["/docs", "/help"]]) });
     const w = out.map((o) => o.what).join("\n");
     assert.match(w, /role \(the person who does the work\) is named 2 ways: "specialist" \d+×, "expert" 1×.*\[CT19\]/);
     assert.match(w, /account deletion .*"close" .*\[CT19\]/);
     assert.match(w, /refund window: .*"14 days".*"30 days".*\[CT20\]/);
     assert.match(w, /accepted payment methods: .*\[CT20\]/);
-    assert.match(w, /links to \/help have 2 names: "Help Centre" .*"Support".*\[CT21\]/);
+    assert.match(w, /links to \/help have 3 names: "Help Centre" .*"Docs".*"Support".*\[CT21\]/);
     assert.match(w, /the footer calls \/cookies "Cookie notice", the page itself says "Cookie Policy".*\[CT21\]/);
     assert.match(w, /buying credits is labelled 2 ways.*\[CT21\]/);
     assert.match(w, /names "Specialist Service Terms" but no page.*\[CT22\]/);
     assert.match(w, /go to \/specialist-terms, which is not a page on this site \(answers 404\)/);
+    assert.match(w, /the footer links to the same page twice under different names: "Help Centre" \(\/help\) and "Docs" \(\/docs → \/help\).*\[CT21\]/);
+    assert.match(w, /go to \/docs, which redirects to \/help.*\[CT22\]/);
     assert.ok(!/suspend|chargeback|withdrawal|price list|expert review|Pro plan|Terms of Service"|Refund Policy" but|spécialiste|\[fr\]/.test(w), `look-alikes and French copy:\n${w}`);
     // CT8: the French page's "recharger ?" is French typography, the rule follows <html lang>
     await page.goto("http://site.test/fr");

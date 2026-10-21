@@ -24,5 +24,5 @@ jobs:
       # PREVIEW_URL: set by your deploy step (e.g. Vercel preview URL)
       - run: node tools/claudes-babysitter/playwright/prepare.mjs
         env: { BASE_URL: "${{ vars.PREVIEW_URL }}", LOGIN_EMAIL: "${{ secrets.UI_TEST_EMAIL }}", LOGIN_PASSWORD: "${{ secrets.UI_TEST_PASSWORD }}", PW_CHANNEL: chromium }
-      - run: npx --prefix tools/claudes-babysitter playwright test -c tools/claudes-babysitter/playwright/playwright.config.ts
+      - run: npx --prefix tools/claudes-babysitter playwright test -c tools/claudes-babysitter/playwright/playwright.config.js
         env: { BASE_URL: "${{ vars.PREVIEW_URL }}", PW_CHANNEL: chromium }

@@ -2,6 +2,56 @@
 
 Earlier releases (4.11.1 and before) are described in the README under "What changed in …".
 
+## 5.4.1 — page names the copy uses, redirects, package mode on Node 26, husky (2026-10-21)
+
+Two copy problems 5.4.0 missed on a product, and two problems of products that install the tool as a package.
+
+**CT21: a page's name in the copy.** A dashboard page called itself "Video Library" (sidebar label, layout title,
+`<title>`) while 15 places in the copy, the emails and the user menu sent readers to "My videos" ("download it from
+My videos"). 5.4.0 compared only labels of one href, and the menu item pointed at the wrong href (/dashboard), so no
+two labels met. New:
+- each route's own names (its `<h1>`, layout title, `<title>` without the brand part, the nav / sidebar label of the
+  links that open it) against the names prose, locale strings and **email templates** give it as a destination
+  ("from My videos", "in your Video Library", "open Settings"): a name that is not the page's is reported at every place,
+  with "write the page's name there, or rename the page everywhere". Codes ("in USD"), a contract's defined terms ("the
+  Service"), extra words ("your Account Settings" for "Settings") and names that go on in lowercase ("Back to Sign up")
+  pass;
+- a menu label whose words name another page better than the one it opens ("My videos" → /dashboard while
+  /dashboard/videos exists) says which href to use;
+- email templates are copy now: `*email*` modules (also under services/), `emails/`, `mail/`, `notifications/`, and
+  `.html` / `.mjml` / `.hbs` files; an HTML string is split into its texts (for every content check).
+
+**CT21 / CT22: redirects.** `next.config.(js|mjs|cjs|ts)` `redirects()` / `rewrites()` and `vercel.json` are read
+(path-to-regexp sources such as `/:locale(en|fr)?/docs`, `:path*`, hops; conditional `has` / `missing` rules and
+`headers()` are not redirects). New: **CT22** a page file whose route a redirect always catches is reported as dead
+(never rendered), and a link to a redirected path ("link /help directly"); **CT21** links are grouped by where they land
+(a /docs link that redirects to /help is one of the names of /help), and two links in one nav / footer group that land
+on the same page are reported ("Docs" /docs → /help next to "Help centre" /help). On rendered pages the run asks each
+linked path once (`maxRedirects: 0`); a locale prefix or the sign-in gate is not a moved page.
+
+**Package mode on Node 26 (blocker).** Installed as a dependency, `babysitter e2e` / `test-ui` never ran on Node ≥ 23.6:
+Playwright loaded `node_modules/claudes-babysitter/playwright/playwright.config.ts`, Node refused to strip types under
+node_modules (ERR_UNSUPPORTED_NODE_MODULES_TYPE_STRIPPING), and the summary only said "No report". The Playwright config
+and every spec are plain ES modules now (`playwright/*.spec.js`, `playwright.config.js`; nothing the package ships is
+TypeScript but a `.d.ts`). A run that stops before Playwright writes its report (the report file did not change) exits
+non-zero with "Playwright stopped before it wrote a report — nothing was checked" instead of summarising nothing, or
+the previous run. `prepare` and `micro-check` (the Stop hook's rendered check) load no TypeScript and were not
+affected. `test/package-mode.test.mjs` copies what `npm pack` ships under a project's node_modules and runs `e2e` there
+against a local site.
+
+**Typed fixtures.** `playwright/fixtures.d.ts`: a strict TypeScript project compiles `e2e/babysitter.ts` (which
+re-exports `fixtures.js`) and its specs — no TS7016, `test` knows the `user` fixture.
+
+**husky.** With `core.hooksPath` on husky's stubs (v9 `.husky/_`, v4–8 `.husky`), the wiring check (doctor, init,
+the e2e banner) read the stubs and reported the git gate, post-merge and post-rewrite as missing although the lines
+were in `.husky/<name>`. It now reads the script husky runs, and `install-hooks` / `init` append the babysitter lines to
+`.husky/<name>` once (the team's commands stay, a husky stub is never edited). `test/husky.test.mjs` (v9 and v8, a real
+commit through the stub).
+
+Verified read-only on three products: on the product the feedback came from (copy fixed since), three page files
+that redirects make dead are left (real); on two others the new checks add one finding (a page named in a "Back to …"
+label that differs from the page's own heading and menu label, real) and no false alarm.
+
 ## 5.4.0 — one name per concept, one set of facts per policy, one label per destination, no page named that does not exist (2026-10-21)
 
 Business QA feedback on a product: texts had no common denominator — the same thing was described differently between

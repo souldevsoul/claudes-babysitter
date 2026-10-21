@@ -1,6 +1,6 @@
 {
   "name": "claudes-babysitter",
-  "version": "5.4.0",
+  "version": "5.4.1",
   "private": true,
   "description": "Claude's Babysitter — keeps AI code generators inside a product's UI system: AST lint rules, static WCAG contrast of theme tokens, component-reuse audit, Claude Code + git hooks and Playwright micro-checks. Enforces the UI Architecture & Consistency Guidelines (58 recurring UI bug patterns).",
   "type": "module",
@@ -29,9 +29,10 @@
     "node": ">=22.18"
   },
   "scripts": {
-    "test": "npm run test:eslint && npm run test:stylelint && npm run test:check && npm run test:tt && npm run test:team && npm run test:acceptance && npm run test:run && npm run test:content && npm run test:layout && npm run test:studio && npm run test:forms && npm run test:fp && npm run test:misses && npm run test:update",
+    "test": "npm run test:eslint && npm run test:stylelint && npm run test:check && npm run test:tt && npm run test:team && npm run test:acceptance && npm run test:run && npm run test:content && npm run test:layout && npm run test:studio && npm run test:forms && npm run test:fp && npm run test:misses && npm run test:update && npm run test:package",
     "test:fp": "node test/fp-510.test.mjs",
     "test:update": "node test/update.test.mjs",
+    "test:package": "node test/package-mode.test.mjs && node test/husky.test.mjs",
     "test:eslint": "node rules/eslint/test.mjs && node rules/eslint/test-forms.mjs",
     "test:stylelint": "node rules/stylelint/test.mjs",
     "check": "node bin/ui-check.mjs",

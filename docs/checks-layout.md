@@ -1,6 +1,6 @@
 # Layout, navigation and money checks
 
-Runtime checks in `playwright/checks/layout.js`, run by `playwright/layout.spec.ts` on every route at the
+Runtime checks in `playwright/checks/layout.js`, run by `playwright/layout.spec.js` on every route at the
 same widths as the main suite. Fixture tests (one true positive and one look-alike false positive per check)
 are in `test/layout.test.mjs` (`npm run test:layout`).
 

@@ -12,9 +12,9 @@ cannot happen quietly.
 
 | Suite | File | What |
 |---|---|---|
-| UI checks | `playwright/babysitter.spec.ts` | the guideline checks on every page |
-| States, languages, scroll | `playwright/run.spec.ts` | see below |
-| Business acceptance | `playwright/acceptance.spec.ts` | copy leaks, money, footer, cookies, sign-in, … |
+| UI checks | `playwright/babysitter.spec.js` | the guideline checks on every page |
+| States, languages, scroll | `playwright/run.spec.js` | see below |
+| Business acceptance | `playwright/acceptance.spec.js` | copy leaks, money, footer, cookies, sign-in, … |
 | Product journeys | `e2e/*.spec.ts` | the product's own tests |
 
 - **Viewports:** 360, 390, 768, 1280, 1440 (`project.js → viewports`). `--quick` (or `BABYSITTER_PROFILE=quick`) is
@@ -54,7 +54,7 @@ cannot happen quietly.
 - `.babysitter/crawl.json` — what was not reached: dynamic templates without an instance, roles that could not sign in,
   links over the cap, rows followed by click.
 
-## run.spec.ts
+## run.spec.js
 
 | Test | Where | What |
 |---|---|---|

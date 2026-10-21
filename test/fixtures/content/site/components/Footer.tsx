@@ -2,6 +2,7 @@ import { useTranslations } from "next-intl";
 import Link from "next/link";
 const LINKS = [
   { key: "help", href: "/help" },
+  { key: "docs", href: "/docs" },
   { key: "cookies", href: "/cookies" },
   { key: "terms", href: "/terms" },
   { key: "refunds", href: "/refunds" },

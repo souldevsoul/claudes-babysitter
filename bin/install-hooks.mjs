@@ -6,10 +6,12 @@
 //   - does nothing in CI or outside a git work tree (CI runs `babysitter audit --diff` instead)
 //   - idempotent; the hook calls the project's own node_modules copy, so it follows upgrades
 //   - never clobbers a foreign pre-commit: it is kept as pre-commit.local and runs first
-//   - respects core.hooksPath (husky etc.): writes there only if no pre-commit exists, else says what to add
+//   - respects core.hooksPath: with husky the lines are appended (once) to .husky/<name>, the script husky's stubs run;
+//     another tool's hooks directory is written only where no hook exists, else it says what to add
 import { execFileSync } from "node:child_process";
 import { existsSync, readFileSync, writeFileSync, renameSync, mkdirSync, chmodSync } from "node:fs";
 import { join, resolve, isAbsolute } from "node:path";
+import { huskyScriptsDir, appendHookBlock } from "../lib/wiring.js";
 
 const args = process.argv.slice(2);
 const verbose = args.includes("--verbose");
@@ -29,6 +31,22 @@ try {
   const custom = (() => { try { return execFileSync("git", ["config", "core.hooksPath"], { cwd: top, encoding: "utf8", stdio: ["ignore", "pipe", "ignore"] }).trim(); } catch { return ""; } })();
   const hooksDir = custom ? (isAbsolute(custom) ? custom : join(top, custom)) : join(isAbsolute(gitDir) ? gitDir : join(top, gitDir), "hooks");
   const hook = join(hooksDir, "pre-commit");
+
+  // husky (core.hooksPath = .husky/_ in v9, .husky in v4–8): its stubs run .husky/<name>, so the babysitter lines go
+  // there, appended once (a husky stub is regenerated on every install and must not be edited)
+  const husky = huskyScriptsDir(top, hooksDir);
+  if (husky) {
+    const lines = {
+      "pre-commit": `${MARK} (bypass deliberately: git commit --no-verify)\nif [ -f node_modules/claudes-babysitter/bin/hook-pre-commit.mjs ]; then node node_modules/claudes-babysitter/bin/hook-pre-commit.mjs "$@" || exit 1; fi`,
+      "post-merge": `${AFTER_MARK}\nif [ -f node_modules/claudes-babysitter/bin/after-merge.mjs ]; then node node_modules/claudes-babysitter/bin/after-merge.mjs || true; fi`,
+      "post-rewrite": `${AFTER_MARK}\nif [ -f node_modules/claudes-babysitter/bin/after-merge.mjs ]; then node node_modules/claudes-babysitter/bin/after-merge.mjs || true; fi`,
+    };
+    for (const [name, block] of Object.entries(lines)) {
+      const added = appendHookBlock(join(husky, name), block, /claudes-babysitter|hook-pre-commit\.mjs|after-merge\.mjs/);
+      say(added ? `added the babysitter line to ${join(husky, name)} (husky)` : `${join(husky, name)} already runs it (husky)`);
+    }
+    process.exit(0);
+  }
 
   // the gate runs the copy in the project's node_modules (follows `npm update`); if it is gone, it says so and lets the commit through — CI is the hard gate
   const body = `#!/bin/sh

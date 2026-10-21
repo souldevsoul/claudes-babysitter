@@ -407,10 +407,13 @@ export function siteOf(records, defaultLocale = null) {
  * (CT20), labels (CT21) and named pages (CT22) on the English pages (the default language when it is English).
  * `deadLinks`: [{ path, label, where, status }] the run found (CT22 a). Hard findings, one per concept / variant.
  */
-export function consistencyRendered(byLocale, cfg = {}, { defaultLocale = null, deadLinks = [] } = {}) {
+export function consistencyRendered(byLocale, cfg = {}, { defaultLocale = null, deadLinks = [], redirects = null } = {}) {
   const cc = contentConfig(cfg);
   const all = [...byLocale.values()].flat();
   const site = siteOf(all, defaultLocale);
+  // `redirects`: Map(path → final path) the run measured (a 3xx answer): a link there counts where it lands (CT21) and
+  // is a link to a redirected path (CT22)
+  if (redirects) for (const l of site.links) { const to = redirects.get(l.path); if (to && to !== l.path) { l.dest = to; l.redirect = { to, kind: "redirect", rules: [] }; } }
   const en = (x) => !x.locale || /^en\b/i.test(x.locale);
   const brand = [...new Set(all.flatMap((r) => r.brand || []))];
   const groups = [

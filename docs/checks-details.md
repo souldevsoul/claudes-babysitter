@@ -1,7 +1,7 @@
 # Details checks (5.3.0): shadows, pinned scroll boxes, links in sentences
 
 Three page checks from the cards that became visible once Nexus listed every card of the 16–20 October round
-(souldevsoul/nexus#1). They run on every route and viewport (`babysitter.spec.ts`); code in
+(souldevsoul/nexus#1). They run on every route and viewport (`babysitter.spec.js`); code in
 `playwright/checks/details.js`, fixtures in `test/misses-521.test.mjs`.
 
 | id | test | reports | stays quiet on |

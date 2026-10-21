@@ -26,6 +26,7 @@
  * instructions live between markers and are replaced, never appended twice.
  */
 import { vendorCopy } from "../lib/update.js";
+import { huskyScriptsDir } from "../lib/wiring.js";
 import { existsSync, readFileSync, writeFileSync, mkdirSync, rmSync } from "node:fs";
 import { join, relative, resolve, dirname, basename } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -168,7 +169,7 @@ const cfg = {
   themeFirst: installMode === "adoption" ? false : prev?.mode === "adoption" ? true : prev?.themeFirst ?? true,
   contrast: prev?.contrast ?? true,
   registry: opt("registry") || prev?.registry || "",
-  // business acceptance (playwright/acceptance.spec.ts): owner decisions, and where sign-in / sign-up / settings are
+  // business acceptance (playwright/acceptance.spec.js): owner decisions, and where sign-in / sign-up / settings are
   acceptance: {
     ...ACCEPTANCE_DEFAULTS,
     ...(prev?.acceptance || {}),
@@ -208,7 +209,7 @@ const agentFile = ["CLAUDE.md", "AGENTS.md", ".claude/CLAUDE.md"].map((f) => joi
 const checkCmd = mode === "package" ? "npx --no babysitter check" : mode === "vendor" ? `node ${toolRel}/bin/ui-check.mjs` : `node ${TOOL}/bin/ui-check.mjs`;
 const uiTestCmd = mode === "package" ? "npx --no babysitter prepare && npx --no babysitter test-ui" : null;
 let block = readFileSync(join(TOOL, "templates/AGENTS.babysitter.md"), "utf8").replace(/node tools\/claudes-babysitter\/bin\/ui-check\.mjs/g, checkCmd);
-if (uiTestCmd) block = block.replace(/node tools\/claudes-babysitter\/playwright\/prepare\.mjs && npx playwright test -c tools\/claudes-babysitter\/playwright\/playwright\.config\.ts/g, uiTestCmd);
+if (uiTestCmd) block = block.replace(/node tools\/claudes-babysitter\/playwright\/prepare\.mjs && npx playwright test -c tools\/claudes-babysitter\/playwright\/playwright\.config\.js/g, uiTestCmd);
 // {{RUN}}: how a person or the agent runs any babysitter command in this project
 const RUN = mode === "package" ? "npx --no babysitter" : mode === "vendor" ? `node ${toolRel}/bin/babysitter.mjs` : `node ${TOOL}/bin/babysitter.mjs`;
 block = block.replace(/\{\{RUN\}\}/g, RUN).replace(/tools\/claudes-babysitter/g, mode === "link" ? TOOL : toolRel);
@@ -235,7 +236,8 @@ if (!has("no-git-hook") && mode === "package") {
   const gitDir = (() => { try { return execSync("git rev-parse --git-dir", { cwd: repo, encoding: "utf8" }).trim(); } catch { return null; } })();
   if (gitDir) {
     const hooksPath = (() => { try { return execSync("git config core.hooksPath", { cwd: repo, encoding: "utf8" }).trim(); } catch { return ""; } })();
-    const dir = hooksPath ? join(repo, hooksPath) : join(repo, gitDir, "hooks");
+    // husky: its stubs in core.hooksPath run .husky/<name> — the lines go there (a stub is regenerated on install)
+    const dir = huskyScriptsDir(repo, hooksPath ? join(repo, hooksPath) : null) || (hooksPath ? join(repo, hooksPath) : join(repo, gitDir, "hooks"));
     const file = join(dir, "pre-commit");
     const line = mode === "vendor" ? `node "$(git rev-parse --show-toplevel)/${toolRel}/bin/hook-pre-commit.mjs" || exit 1` : `node "${TOOL}/bin/hook-pre-commit.mjs" || exit 1`;
     const MARK = "# claudes-babysitter";

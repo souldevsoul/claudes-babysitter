@@ -71,6 +71,15 @@ Or install it as a dev dependency: `npm i -D github:souldevsoul/claudes-babysitt
 | `docs/` | The guidelines the rules enforce |
 | `test/`, `fixtures/` | `npm test`: RuleTester, Stylelint fixtures, end-to-end cases |
 
+## What changed in 5.4.1 (page names in the copy, redirects, package mode on Node 26, husky)
+
+CT21 compares the names the copy and the emails give a page ("download it from My videos") with the page's own name
+("Video Library"), says when a menu item opens the wrong page, and groups links by where they land after
+`next.config` / `vercel.json` redirects; CT22 reports pages a redirect makes dead and links to redirected paths.
+Installed as a package, `e2e` runs again on Node ≥ 23.6 (the Playwright config and specs are plain JavaScript), and a
+run that crashes before its report exits non-zero. The wiring check and `install-hooks` understand husky, and
+`fixtures.d.ts` types the e2e helpers. Details: [`CHANGELOG.md`](CHANGELOG.md).
+
 ## What changed in 5.4.0 (one name per concept, one set of facts per policy, no page named that does not exist)
 
 Business QA on a product: the same thing was described differently between pages and inside one page (card payment,

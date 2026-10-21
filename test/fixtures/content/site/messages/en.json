@@ -8,7 +8,8 @@
     "help": "Help Centre",
     "cookies": "Cookie notice",
     "terms": "Terms",
-    "refunds": "Refund Policy"
+    "refunds": "Refund Policy",
+    "docs": "Docs"
   },
   "Home": {
     "title": "Hire a specialist for your task",
@@ -31,7 +32,8 @@
     "usdProse2": "Payouts are sent in dollars to your bank.",
     "usdCode": "Invoices show the amount in USD for your accountant.",
     "usdProse3": "Refunds are paid back in dollars too.",
-    "codes": "Switch between USD, EUR or GBP in the header."
+    "codes": "Switch between USD, EUR or GBP in the header.",
+    "ready": "Your dubbed video is ready: download it from My videos."
   },
   "Pricing": {
     "methods": "We accept Visa, Mastercard and Apple Pay.",

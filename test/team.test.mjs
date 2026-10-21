@@ -56,14 +56,26 @@ try {
   assert.notEqual(r.status, 0); assert.match(r.stderr, /foreign-ran/);
   ok("a foreign pre-commit is kept as pre-commit.local and runs first (its failure still blocks)");
 
-  // core.hooksPath owned by another tool (husky): untouched, with a hint
+  // core.hooksPath on husky (5.4.1): the babysitter line is appended to .husky/pre-commit once, the team's line stays
   d = project();
   mkdirSync(join(d, ".husky"), { recursive: true }); writeFileSync(join(d, ".husky/pre-commit"), "npx lint-staged\n");
   git(d, "config", "core.hooksPath", ".husky");
   r = bs(d, ["install-hooks"]);
-  assert.equal(r.status, 0); assert.equal(readFileSync(join(d, ".husky/pre-commit"), "utf8"), "npx lint-staged\n");
+  assert.equal(r.status, 0);
+  const husky = readFileSync(join(d, ".husky/pre-commit"), "utf8");
+  assert.match(husky, /^npx lint-staged\n\n# claudes-babysitter pre-commit gate[\s\S]*hook-pre-commit\.mjs/);
+  bs(d, ["install-hooks"]);
+  assert.equal(readFileSync(join(d, ".husky/pre-commit"), "utf8"), husky, "idempotent");
+  ok("husky (core.hooksPath .husky): the line is appended to .husky/pre-commit once, the team's command stays");
+
+  // core.hooksPath owned by another tool (not husky): untouched, with a hint
+  d = project();
+  mkdirSync(join(d, ".githooks"), { recursive: true }); writeFileSync(join(d, ".githooks/pre-commit"), "npx lint-staged\n");
+  git(d, "config", "core.hooksPath", ".githooks");
+  r = bs(d, ["install-hooks"]);
+  assert.equal(r.status, 0); assert.equal(readFileSync(join(d, ".githooks/pre-commit"), "utf8"), "npx lint-staged\n");
   assert.match(r.stderr, /Add this line to it: node node_modules\/claudes-babysitter\/bin\/hook-pre-commit\.mjs/);
-  ok("respects core.hooksPath (husky): never rewrites another tool's hook, says what to add");
+  ok("respects another tool's core.hooksPath: never rewrites its hook, says what to add");
 
   // the hook runs the project's node_modules copy; without it, the commit passes with a note (CI is the gate)
   d = project({ "babysitter.config.json": '{"mode":"strict","themeFirst":false}' });

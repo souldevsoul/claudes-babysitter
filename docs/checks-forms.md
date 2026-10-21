@@ -8,7 +8,7 @@ pages that flash before a redirect, and email fields you can edit with no verifi
 | Where | File |
 |---|---|
 | Runtime checks | `playwright/checks/forms.js` |
-| Playwright tests | `playwright/forms.spec.ts`, run once at `desktop-1440` |
+| Playwright tests | `playwright/forms.spec.js`, run once at `desktop-1440` |
 | ESLint rules | `rules/eslint/rules/numeric-input-bounds.js`, `rules/eslint/rules/mutation-refreshes-ui.js` |
 | Fixture tests | `test/forms.test.mjs` with pages in `test/fixtures/forms/`, plus `rules/eslint/test-forms.mjs` |
 
@@ -51,7 +51,7 @@ A check is either hard, soft or "not checked". A **hard** check fails the test. 
 | FM12 | One failed submit, one error message. (5.2.0) | After a failed submit (the sandbox answers 500) the error is not shown both in a toast and in the form. | Hard. |
 | FM13 | Success does not look like an error. (5.2.0) | Where a success can be imitated, the success message must not share the error message's styled look (the same box fill and border, or the same error-red text). | Hard. |
 
-`forms.spec.ts` runs FM1 to FM4 and FM7c on every route. On signed-in routes it also runs FM5, FM6 and FM10. FM7a,
+`forms.spec.js` runs FM1 to FM4 and FM7c on every route. On signed-in routes it also runs FM5, FM6 and FM10. FM7a,
 FM7b, FM8, FM9 and data export run once for the whole site.
 
 ## Acceptance A6 and FM8

@@ -138,8 +138,8 @@ try {
     const r = spawnSync(process.execPath, [BIN, "e2e", "--skip-prepare", "--quick", "forms.spec", "--list"], { cwd: d, encoding: "utf8", env: { ...env, BABYSITTER_ROOT: d } });
     const o = r.stdout + r.stderr;
     assert.match(o, /Total: \d+ tests? in 1 file/, o.slice(-1500));
-    assert.match(o, /forms\.spec\.ts/);
-    assert.ok(!/layout\.spec\.ts|content\.spec\.ts/.test(o), "only the named spec");
+    assert.match(o, /forms\.spec\.js/);
+    assert.ok(!/layout\.spec\.js|content\.spec\.js/.test(o), "only the named spec");
     const listed = o.split("\n").filter((l) => /^\s+\[[\w-]+\] › /.test(l));
     assert.ok(listed.length && listed.every((l) => /\[(mobile-390|desktop-1440)\]/.test(l)), `--quick still applies: ${listed.slice(0, 3).join(" | ")}`);
   });

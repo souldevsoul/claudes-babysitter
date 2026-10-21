@@ -209,6 +209,58 @@ await t("CT22 missing pages: unknown names reported once with every place; names
   assert.ok(dead.length === 1 && /answers 404/.test(dead[0].what) && /\/terms/.test(dead[0].fix), JSON.stringify(dead));
 });
 
+/* ───────── 5.4.1: redirects, page names in the copy, wrong hrefs, duplicate destinations ───────── */
+await t("redirects: next.config redirects() / rewrites() and vercel.json; path-to-regexp sources; conditional rules; hops", async () => {
+  const { parseRedirects, redirectResolver } = await import("../lib/content-site.js");
+  const rules = parseRedirects("next.config.mjs", `const nextConfig = {
+  async headers() { return [{ source: "/(.*)", headers: [{ key: "x", value: "y" }] }]; },
+  async redirects() {
+    return [
+      { source: '/:locale(en|fr)?/docs', destination: '/help', permanent: true },
+      { source: "/old/:path*", destination: "/new/:path*", permanent: false },
+      { source: "/a", destination: "/b", permanent: true }, { source: "/b", destination: "/c", permanent: true },
+      { source: "/beta", has: [{ type: "cookie", key: "beta" }], destination: "/", permanent: false },
+    ];
+  },
+  async rewrites() { return [{ source: "/blog/:slug", destination: "https://blog.acme.com/:slug" }]; },
+};
+export default nextConfig;`);
+  assert.deepEqual(rules.map((r) => [r.source, r.kind, r.conditional]), [["/:locale(en|fr)?/docs", "redirect", false], ["/old/:path*", "redirect", false], ["/a", "redirect", false], ["/b", "redirect", false], ["/beta", "redirect", true], ["/blog/:slug", "rewrite", false]], "headers() are not redirects");
+  const go = redirectResolver(rules);
+  assert.equal(go("/docs").to, "/help"); assert.equal(go("/fr/docs").to, "/help"); assert.equal(go("/de/docs"), null);
+  assert.equal(go("/old/x/y").to, "/new/x/y"); assert.equal(go("/a").to, "/c", "two hops"); assert.equal(go("/beta"), null, "conditional");
+  assert.equal(go("/blog/hi").kind, "rewrite");
+  const v = parseRedirects("vercel.json", JSON.stringify({ redirects: [{ source: "/faq", destination: "/help" }], rewrites: [{ source: "/x", destination: "/y" }] }));
+  assert.deepEqual(v.map((r) => [r.source, r.kind]), [["/faq", "redirect"], ["/x", "rewrite"]]);
+});
+await t("CT21 page names in the copy: \"from My videos\" vs the page's \"Video Library\"; own names, extra words, codes, defined terms and labels pass", () => {
+  const pages = [{ path: "/dashboard", names: ["Dashboard"], title: "Dashboard | Acme", where: "" }, { path: "/dashboard/videos", names: ["Video Library"], title: "Video Library | Acme", where: "v" },
+    { path: "/dashboard/settings", names: ["Settings"], title: "Settings | Acme", where: "" }, { path: "/terms", names: ["Terms of Service"], title: "Terms of Service | Acme", where: "" }, { path: "/sign-up", names: ["Sign up"], title: "", where: "" }];
+  const links = [{ path: "/dashboard/videos", label: "Video Library", region: "nav", where: "side" }, { path: "/dashboard", label: "My videos", region: "nav", where: "menu" }];
+  const texts = [T("Download it from My videos.", "en", "a"), T("Your file is in My videos now.", "en", "b"), T("Open Settings to change it.", "en", "c"), T("Change it in your Account Settings.", "en", "d"),
+    T("Pay in USD.", "en", "e"), T("Access to the Service is personal.", "en", "f"), T("Back to Sign up", "en", "g"), T("Find it in your Video Library.", "en", "h"), T("Captions in English.", "en", "i"),
+    { text: "Go to My videos", kind: "button", locale: "en", where: "j" }, T("Téléchargez-la depuis Mes vidéos.", "fr", "k")];
+  const g = C.pageNameDrift({ texts, links, pages }, {});
+  assert.equal(g.length, 1, JSON.stringify(g.map((x) => x.what)));
+  assert.equal(g[0].variant, "My videos"); assert.equal(g[0].dominant, "Video Library");
+  assert.deepEqual(g[0].report.map((x) => x.where), ["a", "b"]);
+  assert.match(g[0].fix, /write "Video Library" in those 2 place\(s\) — or rename the page/);
+  assert.equal(C.pageNameDrift({ texts, links, pages }, { termAllow: [{ term: "My videos", reason: "the menu name" }] }).length, 0);
+});
+await t("CT21 a menu item whose words name another page; two links in one footer that land on one page", () => {
+  const pages = [{ path: "/dashboard", names: ["Dashboard"], title: "", where: "" }, { path: "/dashboard/videos", names: ["Video Library"], title: "", where: "" }, { path: "/help", names: ["Help Center"], title: "", where: "" }, { path: "/pricing", names: ["Pricing"], title: "", where: "" }];
+  const g = C.labelDrift({ links: [{ path: "/dashboard", label: "My videos", region: "nav", where: "m" }, { path: "/pricing", label: "Pricing", region: "nav", where: "p" }], pages }, {});
+  assert.ok(g.length === 1 && /opens \/dashboard \("Dashboard"\), but its words name \/dashboard\/videos/.test(g[0].what) && /point it at \/dashboard\/videos/.test(g[0].fix), JSON.stringify(g.map((x) => x.what)));
+  const L = (path, label, dest, file = "Footer.tsx") => ({ path, label, region: "footer", where: `${file}:${label}`, file, line: 1, ...(dest ? { dest, redirect: { to: dest, kind: "redirect", rules: [] } } : {}) });
+  const d = C.labelDrift({ links: [L("/help", "Help Centre"), L("/docs", "Docs", "/help"), L("/help", "Help Centre", null, "Other.tsx")], pages }, {});
+  const dup = d.filter((x) => /^two footer links/.test(x.concept));
+  assert.equal(dup.length, 1, JSON.stringify(d.map((x) => x.what)));
+  assert.deepEqual(dup[0].report.map((x) => x.label), ["Docs"]);
+  assert.ok(d.some((x) => x.concept === "links to /help" && x.variant === "Docs"), "the redirected link is grouped where it lands");
+  const m = C.missingPages({ links: [L("/docs", "Docs", "/help")], deadPages: [{ path: "/docs", file: "app/docs/page.tsx", line: 1, where: "app/docs/page.tsx:1", to: "/help", rule: { file: "next.config.mjs", line: 3, source: "/docs" } }] }, {});
+  assert.deepEqual(m.map((x) => x.concept), ["dead page /docs", "link to redirected /docs"]);
+});
+
 /* ───────── cross-rule: one pattern, one report ───────── */
 await t("cross-rule: a refund sentence is a CT20 fact, not a CT19 drift; a legal heading is not a CT22 reference; a CT21 label is not a CT19 term in French", () => {
   const texts = [T("You can ask for a refund within 14 days.", "en", "/a"), T("Refunds within 30 days.", "en", "/b"), { text: "Refund Policy", kind: "heading", locale: "en", where: "/refunds" }];
@@ -245,12 +297,23 @@ await t("fixture site: every planted problem is found at its file:line, the look
     ["CT21", "components/Wallet.tsx", /the action components\/Wallet\.tsx setBuyOpen\(true\): "Add credits" here/],
     ["CT22", "app/[locale]/page.tsx", /go to \/specialist-terms, which is not a page/],
     ["CT22", "app/[locale]/page.tsx", /names "Specialist Service Terms" but no page/],
+    // 5.4.1: page names in the copy, a menu item with the wrong href, redirects
+    ["CT21", "messages/en.json", /"My videos" here names \/dashboard\/videos, which calls itself "Video Library"/],
+    ["CT21", "emails/video-ready.html", /"My videos" here names \/dashboard\/videos/],
+    ["CT21", "lib/services/email.service.ts", /"My videos" here names \/dashboard\/videos/],
+    ["CT21", "components/UserMenu.tsx", /"My videos" here — other links to \/dashboard say "Dashboard".*reads as \/dashboard\/videos \("Video Library"\)/],
+    ["CT21", "components/Footer.tsx", /"Docs" here — other links to \/help say "Help Centre".*\/docs redirects to \/help/],
+    ["CT21", "components/Footer.tsx", /the footer links to the same page twice under different names: "Help Centre" \(\/help\) and "Docs" \(\/docs → \/help\)/],
+    ["CT21", "app/[locale]/page.tsx", /"Old prices" here — other links to \/pricing say "Pricing"/],
+    ["CT22", "app/[locale]/docs/page.tsx", /is never shown: next\.config\.mjs:5 redirects "\/:locale\(en\|fr\)\?\/docs" to \/help/],
+    ["CT22", "components/Footer.tsx", /go to \/docs, which redirects to \/help \(next\.config\.mjs:5\)/],
+    ["CT22", "app/[locale]/page.tsx", /go to \/old-pricing, which redirects to \/pricing/],
   ];
   for (const [id, file, re] of expect) assert.ok(has(id, file, re), `missing ${id} ${file} ${re}\n${mine.map((p) => `${p.id} ${p.file}:${p.line} ${p.message}`).join("\n")}`);
   assert.equal(mine.length, expect.length, `exactly the planted problems:\n${mine.map((p) => `${p.id} ${p.file}:${p.line} ${p.message.slice(0, 140)}`).join("\n")}`);
   // look-alikes the fixture plants
   const all = mine.map((p) => p.message).join("\n");
-  for (const re of [/expert review|Pro plan|pros and cons|contractors|“experts”|expert@|Professional and friendly/, /suspend or close/, /chargeback/i, /guide\.pdf|old-pricing|pricing#faq|\/fr\/pricing/, /price list/, /Stripe|This Agreement|Help Center|Refund Policy" but/, /Terms of Service/, /Professionals|admin/, /withdrawal|5 years|business days/, /Become a specialist/])
+  for (const re of [/expert review|Pro plan|pros and cons|contractors|“experts”|expert@|Professional and friendly/, /suspend or close/, /chargeback/i, /guide\.pdf|pricing#faq|\/fr\/pricing|\/blog|dashboard\/settings.*never shown/, /"(Settings|English|Sign)" here names/, /price list/, /Stripe|This Agreement|Help Center|Refund Policy" but/, /Terms of Service/, /Professionals|admin/, /withdrawal|5 years|business days/, /Become a specialist/])
     assert.ok(!re.test(all), `false positive ${re}:\n${all}`);
   assert.ok(!mine.some((p) => p.file === "messages/fr.json"), "French copy is checked against French only");
   assert.ok(!problems.some((p) => p.id === "CT8" && p.file === "messages/fr.json"), `French spacing is right: ${JSON.stringify(problems.filter((p) => p.id === "CT8"))}`);
@@ -281,7 +344,13 @@ await t("the site model: t() keys followed to the default language, link objects
   assert.ok(site.links.some((l) => l.path === "/pricing" && l.region === "inline"), "a link inside a sentence is inline");
   assert.ok(site.links.some((l) => l.path === "/sign-up" && l.label === "Become a specialist"), "a card link is named by its heading");
   assert.ok(site.pages.find((p) => p.path === "/terms").names.includes("Terms of Service"), "<PolicyLayout title> names the page");
-  for (const p of ["/", "/help", "/terms", "/guide.pdf", "/old-pricing", "/pricing"]) assert.ok(site.routes.exists(p), p);
+  for (const p of ["/", "/help", "/terms", "/guide.pdf", "/old-pricing", "/pricing", "/blog/hello"]) assert.ok(site.routes.exists(p), p);
+  assert.deepEqual(site.deadPages.map((d) => d.path), ["/docs"], "a conditional redirect (has: cookie) does not kill /dashboard/settings");
+  assert.equal(site.links.find((l) => l.path === "/docs")?.dest, "/help");
+  assert.equal(site.links.find((l) => l.path === "/blog/hello"), undefined);
+  assert.ok(site.texts.some((x) => x.email && x.file === "emails/video-ready.html" && /from My videos/.test(x.text)), "HTML email templates are copy");
+  assert.ok(site.texts.some((x) => x.email && x.file === "lib/services/email.service.ts" && /^Your translation is done/.test(x.text)), "an HTML string in an email service is split into its texts");
+  assert.ok(site.links.some((l) => l.path === "/dashboard/videos" && l.region === "nav" && l.label === "Video Library"), "a sidebar in a layout is navigation");
   assert.ok(!site.routes.exists("/specialist-terms"));
   assert.ok(site.texts.filter((x) => x.admin).length > 0 && site.pages.some((p) => p.admin), "the admin area is marked (and left out by default)");
   rmSync(dir, { recursive: true, force: true });

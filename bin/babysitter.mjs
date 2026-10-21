@@ -21,7 +21,7 @@
 //   content [repo] [--offline] → static copy lint: i18n files of every locale, JSX copy, email addresses (MX)
 //   e2e [--skip-prepare] [--quick] [--only ui|acceptance|content|product] [--last-failed] [...playwright args]
 //                    → prepare (login per role + crawl + languages) + the UI checks + states / languages / scroll
-//                      (run.spec.ts) + business acceptance (acceptance.spec.ts) + the product's own e2e/*.spec.ts, in one
+//                      (run.spec.js) + business acceptance (acceptance.spec.js) + the product's own e2e/*.spec.ts, in one
 //                      Playwright run at 360/390/768/1280/1440 (--quick: 390 + 1440). --only is a partial run and says so.
 //                      Ends with a summary of what did not run and the command that re-checks only the failures.
 //   fix-plan [--format md|agent|json]  → the last run's findings grouped into a fix list with the files to change
@@ -49,7 +49,7 @@ function playwright(args, env = process.env) {
   let cli;
   try { cli = createRequire(join(root, "package.json")).resolve("@playwright/test/cli"); }
   catch { console.error("babysitter: @playwright/test is not installed next to Claude's Babysitter (npm install)"); return 2; }
-  return spawnSync(process.execPath, [cli, "test", "-c", join(root, "playwright/playwright.config.ts"), ...args], { stdio: "inherit", cwd: process.cwd(), env }).status ?? 1;
+  return spawnSync(process.execPath, [cli, "test", "-c", join(root, "playwright/playwright.config.js"), ...args], { stdio: "inherit", cwd: process.cwd(), env }).status ?? 1;
 }
 const node = (file, args) => process.exit(spawnSync(process.execPath, [join(root, file), ...args], { stdio: "inherit" }).status ?? 1);
 switch (cmd) {
@@ -147,7 +147,17 @@ switch (cmd) {
   }
   case "micro-check": node("bin/micro-check.mjs", rest); break;
   case "prepare": node("playwright/prepare.mjs", rest); break;
-  case "test-ui": process.exit(playwright(rest)); break;
+  case "test-ui": {
+    const { statSync } = await import("node:fs");
+    const rep = join(process.env.BABYSITTER_ROOT || process.cwd(), ".babysitter/report.json");
+    const mtime = () => { try { return statSync(rep).mtimeMs; } catch { return null; } };
+    const before = mtime();
+    const st = playwright(rest);
+    const fresh = mtime() !== null && mtime() !== before;
+    if (!fresh) { console.error(`babysitter test-ui: Playwright stopped before it wrote a report (exit ${st}) — nothing was checked; the error is above.`); process.exit(st || 1); }
+    process.exit(st);
+    break;
+  }
   case "e2e": {
     const env = { ...process.env, BABYSITTER_ROOT: process.env.BABYSITTER_ROOT || process.cwd() };
     const ROOT = env.BABYSITTER_ROOT;
@@ -192,7 +202,19 @@ switch (cmd) {
     }
     if (only === "product") args.unshift("--project=product");
     else if (only) args.unshift(...SUITES[only]);
+    // a run that crashed before Playwright wrote its report (a config that does not load, a missing browser) is a
+    // failure, loudly — never a quiet summary of nothing, or of the previous run's report
+    const reportFile = env.PLAYWRIGHT_JSON_OUTPUT_NAME || join(ROOT, ".babysitter/report.json");
+    const { statSync } = await import("node:fs");
+    const mtime = () => { try { return statSync(reportFile).mtimeMs; } catch { return null; } };
+    const before = mtime();
     const status = playwright(args, env);
+    const fresh = mtime() !== null && mtime() !== before;
+    if (!fresh) {
+      console.error(`\n${"✗".repeat(3)} babysitter e2e: Playwright stopped before it wrote a report (exit ${status}) — nothing was checked.\n    The error is printed above. Common causes: a browser that is not installed (npx playwright install chrome), a\n    BASE_URL that does not answer, a Node version the installed @playwright/test does not support.`);
+      if (banner) console.error(banner);
+      process.exit(status || 1);
+    }
     // the summary: what ran, what did not, failures by page, and the command that re-checks only the failures
     try {
       const { summarize } = await import("../lib/run-summary.js");
