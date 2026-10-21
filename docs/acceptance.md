@@ -119,6 +119,10 @@ with `"stage": "live" | "test"` in `babysitter.config.json`. With no stage known
 | P1 | Policy text spans its column. | 3 products |
 | P2 | Long policies have a sticky "On this page" that fits the screen. | 3 products |
 | P3 | Pages a policy names are links. | 4 products |
+| CT19 | One concept, one name: the role (specialist / expert / executor …), closing the account, refunds, card payment and currency names are not described with competing words, across pages or inside one page. Reported by `babysitter content` and content.spec (docs/checks-content.md). (5.4.0) | business QA |
+| CT20 | One policy, one set of facts: refund window and processing time, account deletion, retention, accepted payment methods and currencies say the same everywhere; prices are in a currency the site offers. (5.4.0) | business QA |
+| CT21 | One destination, one name: links to one page carry one label, a nav / footer label matches the page's own name, one action (buying credits, contacting the team) has one label. (5.4.0) | business QA |
+| CT22 | No page named that does not exist: links go to real routes, and a document named in the copy ("Specialist Service Terms") is a page, heading or link of the site. With D1 (links that answer 4xx) and P3 (a named page is a link). (5.4.0) | business QA |
 
 ## Not automated (needs a person)
 

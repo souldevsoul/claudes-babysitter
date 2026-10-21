@@ -284,6 +284,8 @@ await t("fixture repo: every planted problem is found, nothing else", async () =
     ["app/legal/page.tsx", "content/last-updated", /2 different "last updated" dates/], ["app/legal/page.tsx", "content/dash", /—/],
     ["app/legal/page.tsx", "content/grammar", /1 PROFILES/], ["app/legal/page.tsx", "content/raw-error", /NaN/], ["app/legal/page.tsx", "content/unfinished", /Lorem/],
     ["emails/welcome.tsx", "content/email-domain", /acme\.test/], ["lib/site.ts", "content/email-domain", /netlify\.app/],
+    // CT22: the fixture's legal page links to /privacy and /about, and the repo has no such routes
+    ["app/legal/page.tsx", "content/missing-page", /go to \/privacy, which is not a page/], ["app/legal/page.tsx", "content/missing-page", /go to \/about, which is not a page/],
   ];
   for (const [file, rule, re] of expect) assert.ok(has(file, rule, re), `missing ${file} ${rule} ${re}\n${problems.map((p) => `${p.file}:${p.line} ${p.rule} ${p.message}`).join("\n")}`);
   // false positives the fixture also plants

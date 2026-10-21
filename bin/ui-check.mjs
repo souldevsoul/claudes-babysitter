@@ -115,7 +115,8 @@ const problems = [];
 // line does not own the debt that was already on that line.
 const baseCounts = new Map(); // file -> Map(key -> count)
 // the identity of a finding: an override is about the component, not about which of its classes the message quotes
-const findingKey = (p) => `${p.rule}\u0000${String(p.message).replace(/className="… [^"]*? …"/g, 'className="…"')}`;
+// a site-wide copy finding (CT19–CT22) carries a stable key: its message lists the other places, which move
+const findingKey = (p) => (p.baseKey ? `${p.rule}\u0000${p.baseKey}` : `${p.rule}\u0000${String(p.message).replace(/className="… [^"]*? …"/g, 'className="…"')}`);
 const atBase = (f) => { if (!lineFilter || !baseRef) return null; const r = spawnSync("git", ["show", `${baseRef}:${f}`], { cwd: repo, encoding: "utf8", maxBuffer: 64 * 1024 * 1024 }); return r.status === 0 ? r.stdout : null; };
 const countAtBase = (f, p) => { const m = baseCounts.get(f) || baseCounts.set(f, new Map()).get(f); const k = findingKey(p); m.set(k, (m.get(k) || 0) + 1); };
 
@@ -232,10 +233,15 @@ if (cfg.content !== false) {
   else if (changed) scope = (changedAll || []).filter((f) => !ign(f));
   if (!scope || scope.length) {
     const res = await lintContent(repo, { files: scope, dns: false, cfg });
-    for (const p of res.problems) if (!ign(p.file)) problems.push({ file: p.file, line: p.line, rule: p.rule, message: p.message });
+    for (const p of res.problems) if (!ign(p.file)) problems.push({ file: p.file, line: p.line, rule: p.rule, message: p.message, ...(p.baseKey ? { baseKey: p.baseKey } : {}) });
+    const { siteMarksOfText } = await import("../lib/content-site.js");
     for (const f of lineFilter && scope ? scope : []) {
       const text = atBase(f);
-      if (text !== null) for (const p of lintFileText(f, text, cfg)) countAtBase(f, { rule: p.rule, message: p.message });
+      if (text !== null) {
+        for (const p of lintFileText(f, text, cfg)) countAtBase(f, { rule: p.rule, message: p.message });
+        // the same term / fact / link already in this file at the base: older drift, not this change's
+        for (const m of siteMarksOfText(f, text, cfg)) countAtBase(f, m);
+      }
     }
   }
 }

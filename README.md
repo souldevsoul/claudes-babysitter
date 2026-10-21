@@ -71,6 +71,23 @@ Or install it as a dev dependency: `npm i -D github:souldevsoul/claudes-babysitt
 | `docs/` | The guidelines the rules enforce |
 | `test/`, `fixtures/` | `npm test`: RuleTester, Stylelint fixtures, end-to-end cases |
 
+## What changed in 5.4.0 (one name per concept, one set of facts per policy, no page named that does not exist)
+
+Business QA on a product: the same thing was described differently between pages and inside one page (card payment,
+refunds, account deletion, prices in different currencies, "Specialist / Expert / executor"), buttons and pages were
+named differently in different places, and the copy named pages that did not exist ("Specialist Service Terms").
+Four site-wide copy checks catch these classes, in `babysitter content` (the source: every locale's messages, JSX,
+copy in code, link objects with their translation keys, the app routes) and in `e2e --only content` (the crawl):
+**CT19** competing names for one concept (role, account deletion, refunds, card, currency names; per language;
+`content.glossary` / `termGroups` / `termAllow`), **CT20** one policy stated with different facts (refund window,
+processing time, deletion, retention, accepted methods, currencies offered, prices in a currency the site does not
+offer), **CT21** one destination or action with several names (links to one page, a nav / footer label that is not the
+page's name, Buy credits / Top up; `content.labelAllow`), **CT22** links to paths that are not routes and documents
+named in the copy that no page, heading or link carries (`content.knownDocuments`). Each finding names the dominant
+variant, every place of the others and the fix; `babysitter content` ends with the list grouped by concept. CT8 now
+follows French typography (a space before ? ! : ; is right in `fr`). Details: [`CHANGELOG.md`](CHANGELOG.md),
+[`docs/checks-content.md`](docs/checks-content.md).
+
 ## What changed in 5.3.1 (the upgrade runs on deskhand, proxy and tandem)
 
 Three false alarms the first 5.3.0 runs on deskhand, proxy and tandem showed (3.6 on a minimal auth header, 1.11 on a

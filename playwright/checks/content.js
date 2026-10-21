@@ -1,4 +1,4 @@
-// Copy checks on rendered pages (CT1–CT18, docs/checks-content.md). The browser only collects the copy — one
+// Copy checks on rendered pages (CT1–CT22, docs/checks-content.md). The browser only collects the copy — one
 // segment per block of text, with what it is (heading, button, nav item, body) — and the rules of
 // lib/content-rules.js run here in Node, the same rules `babysitter content` runs over the source.
 // Plain JavaScript on purpose (see ../checks.js). Needs checks.install(page) first (__uiVisible, __uiDescribe …).
@@ -9,6 +9,7 @@ import {
   looksLikeKey, isRtl, LEGAL_FAMILIES, legalFamily, normName, AUTO_VARIANTS, numericFacts, factConflicts, ruleId,
 } from "../../lib/content-rules.js";
 import { checkEmails } from "../../lib/email-dns.js";
+import { consistencyFindings, normLabel } from "../../lib/content-consistency.js";
 
 export { contentConfig };
 
@@ -105,7 +106,25 @@ export const collectCopy = (page) => page.evaluate(() => {
   const h1 = Array.from(document.querySelectorAll("h1")).filter((x) => visible(x)).map((x) => (x.innerText || "").replace(/\s+/g, " ").trim());
   const brand = [document.querySelector('meta[property="og:site_name"]')?.getAttribute("content"), ...Array.from(document.querySelectorAll('header a[href="/"] img[alt], header [aria-label*=home i], header a[href="/"]')).map((x) => x.getAttribute("alt") || x.getAttribute("aria-label") || (x.innerText || "").trim())].filter(Boolean);
   const alternates = Array.from(document.querySelectorAll('link[rel="alternate"][hreflang]')).map((l) => ({ code: l.getAttribute("hreflang"), href: l.href }));
-  return { segs, emails, mailto, legal, copyright, h1, title: document.title || "", lang: document.documentElement.getAttribute("lang") || "", dir: document.documentElement.getAttribute("dir") || "", brand, alternates, path: location.pathname };
+  // every internal link with the name a reader sees (CT21 / CT22): a card link is named by its heading, a link inside a
+  // sentence is "inline" (a word of the sentence, not the page's name)
+  const links = [];
+  for (const a of Array.from(document.querySelectorAll("a[href]"))) {
+    if (links.length >= 400 || !visible(a)) continue;
+    let u; try { u = new URL(a.href, location.href); } catch { continue; }
+    if (u.origin !== location.origin || /^(mailto|tel|javascript):/i.test(a.getAttribute("href") || "")) continue;
+    const raw = (a.getAttribute("href") || "").trim();
+    if (!raw || raw.startsWith("#")) continue;
+    const block = a.querySelector("h1, h2, h3, h4, p, div, li, ul, img, figure");
+    let label = block ? ((a.querySelector("h1, h2, h3, h4, strong, [class*=title i]")?.innerText) || "") : (a.innerText || "");
+    label = label.replace(/\s+/g, " ").trim() || (block ? "" : a.getAttribute("aria-label") || "");
+    const par = a.parentElement;
+    const inline = !!par && !par.matches("nav, li, header, footer, [role=navigation], [role=menu]") && (par.innerText || "").replace(/\s+/g, " ").trim().length > (a.innerText || "").trim().length + 12 && getComputedStyle(a).display === "inline";
+    const region = a.closest("footer, [role=contentinfo]") ? "footer" : a.closest("nav, header, [role=navigation], [role=menu]") ? "nav" : inline ? "inline" : "body";
+    const kind = /\b(btn|button)\b/i.test(a.className || "") || a.getAttribute("role") === "button" ? "button" : "link";
+    links.push({ i: els.push(a) - 1, path: u.pathname.replace(/\/$/, "") || "/", label, region, kind });
+  }
+  return { segs, emails, mailto, legal, copyright, h1, title: document.title || "", lang: document.documentElement.getAttribute("lang") || "", dir: document.documentElement.getAttribute("dir") || "", brand, alternates, path: location.pathname, links };
 });
 
 /** Where each element sits, for the report (one round-trip for all findings of a page). */
@@ -121,7 +140,7 @@ const finding = (x, loc, extra = "") => ({ id: x.id, what: `${x.what}${extra} �
  * CT1–CT8 + CT17 on one page, CT7 "one document, one date". @returns {Promise<{ hard: object[], copy: object }>}
  * `copy` is the collected page (reuse it for emailFindings / languageFindings).
  */
-export async function copyFindings(page, cfg = {}, copy = null) {
+export async function copyFindings(page, cfg = {}, copy = null, locale = null) {
   const cc = contentConfig(cfg);
   copy = copy || (await collectCopy(page));
   const out = [];
@@ -131,8 +150,11 @@ export async function copyFindings(page, cfg = {}, copy = null) {
     s.followedByDate = !!(next && next.text.length < 60 && findDates(next.text).length);
   });
   const titleSeg = copy.title ? [{ i: null, text: copy.title, kind: "title", collapsed: true }] : [];
+  // the language decides some rules (French puts a space before ? ! : ;): the element's own lang, else the page's
+  const pageLang = locale || copy.lang || "";
   for (const s of [...segs, ...titleSeg]) {
-    for (const x of lintSegment(s, cc)) out.push({ x, i: s.i, seg: s });
+    const locale = s.ownLang && s.ownLang !== "zxx" ? s.ownLang : pageLang;
+    for (const x of lintSegment({ ...s, locale }, cc)) out.push({ x, i: s.i, seg: s });
   }
   // one document, one date (updated vs effective compared separately)
   const lu = lastUpdatedDates(segs);
@@ -145,7 +167,9 @@ export async function copyFindings(page, cfg = {}, copy = null) {
   const seen = new Set();
   const uniq = out.filter((o) => { const k = `${o.i}|${o.x.what}`; if (seen.has(k)) return false; seen.add(k); return true; });
   const loc = await locate(page, uniq.map((o) => o.i));
-  return { hard: uniq.map((o) => finding(o.x, o.i == null ? { where: "<title>" } : loc.get(o.i))), copy };
+  const all = uniq.map((o) => ({ soft: !!o.x.soft, f: finding(o.x, o.i == null ? { where: "<title>" } : loc.get(o.i)) }));
+  // soft: listed for a human (French spacing slips), never failing
+  return { hard: all.filter((x) => !x.soft).map((x) => x.f), soft: all.filter((x) => x.soft).map((x) => x.f), copy };
 }
 
 /**
@@ -270,6 +294,7 @@ export function pageRecord(route, copy, locale = null) {
     route, locale, title: copy.title, h1: copy.h1, legal: copy.legal.map((l) => ({ ...l, text: l.text.replace(/[\s\u2190-\u21FF\u2794-\u27BF›»↗]+$/u, "") })).filter((l) => l.internal && legalFamily(l.text)).map((l) => ({ text: l.text, path: l.path, family: legalFamily(l.text) })),
     copyright: copy.copyright?.text || null, lastUpdated: lastUpdatedDates(copy.segs).map((d) => ({ kind: d.kind, iso: d.iso, text: d.text })),
     segs: copy.segs.filter((s) => !s.footer).map((s) => ({ text: s.text, kind: s.kind })), footerSegs: copy.segs.filter((s) => s.footer).map((s) => s.text),
+    lang: copy.lang || "", brand: copy.brand || [], links: (copy.links || []).map(({ path, label, region, kind }) => ({ path, label, region, kind })),
   };
 }
 
@@ -352,11 +377,54 @@ export function variantFindings(records) {
   return out;
 }
 
-/** CT18 the same fact with different numbers on different pages (soft: both quotes for a human). */
-export function factFindings(records) {
+/** CT18 the same fact with different numbers on different pages (soft: both quotes for a human). `exclude`: fact keys
+ *  another rule reports (CT20 owns refund windows and retention when it runs). */
+export function factFindings(records, { exclude = [] } = {}) {
   const facts = [];
-  for (const r of records) for (const s of [...r.segs.map((x) => x.text), ...r.footerSegs]) for (const f of numericFacts(s)) facts.push({ ...f, where: r.route });
+  for (const r of records) for (const s of [...r.segs.map((x) => x.text), ...r.footerSegs]) for (const f of numericFacts(s)) if (!exclude.includes(f.key)) facts.push({ ...f, where: r.route });
   return factConflicts(facts).map((x) => ({ id: "CT18", what: `${x.what} — ${x.fix} [CT18]`, where: "site-wide" }));
+}
+
+/**
+ * The crawl as one site for CT19–CT22 (lib/content-consistency.js): texts with their language and page, the links
+ * with the names a reader sees, the pages with their <h1> / <title>. @param records pageRecord[] of one or more languages
+ */
+export function siteOf(records, defaultLocale = null) {
+  const texts = [], links = [], pages = [], seen = new Set();
+  for (const r of records) {
+    const locale = r.locale || r.lang || defaultLocale || "en";
+    const route = r.route.replace(/\/$/, "") || "/";
+    for (const s of [...r.segs, ...r.footerSegs.map((t) => ({ text: t, kind: "body" }))]) texts.push({ text: s.text, kind: s.kind, locale, where: `${route} "${String(s.text).replace(/\s+/g, " ").slice(0, 60)}"`, route });
+    if (r.title) texts.push({ text: r.title, kind: "title", locale, where: `${route} <title>`, route });
+    for (const l of r.links || []) links.push({ ...l, label: normLabel(l.label), locale, where: `${route} ${l.region}`, route });
+    if (!seen.has(`${locale}|${route}`)) { seen.add(`${locale}|${route}`); pages.push({ path: route, names: r.h1 || [], title: r.title || "", where: `${route} <h1>`, locale }); }
+  }
+  return { texts, links, pages };
+}
+
+/**
+ * CT19–CT22 on the rendered site. `byLocale`: Map(locale → records). Terms (CT19) are compared per language; facts
+ * (CT20), labels (CT21) and named pages (CT22) on the English pages (the default language when it is English).
+ * `deadLinks`: [{ path, label, where, status }] the run found (CT22 a). Hard findings, one per concept / variant.
+ */
+export function consistencyRendered(byLocale, cfg = {}, { defaultLocale = null, deadLinks = [] } = {}) {
+  const cc = contentConfig(cfg);
+  const all = [...byLocale.values()].flat();
+  const site = siteOf(all, defaultLocale);
+  const en = (x) => !x.locale || /^en\b/i.test(x.locale);
+  const brand = [...new Set(all.flatMap((r) => r.brand || []))];
+  const groups = [
+    ...consistencyFindings({ texts: site.texts, links: [], pages: [] }, { ...cc, skip: [...(cc.skip || []), "CT20", "CT21", "CT22"] }, cfg),
+    ...consistencyFindings({ texts: site.texts.filter(en), links: site.links.filter(en), pages: site.pages.filter(en), deadLinks }, { ...cc, skip: [...(cc.skip || []), "CT19"] }, cfg, { brand, skipLegal: true }),
+  ];
+  // one finding per concept (fix-plan's unit: one cause, every page): the variants' fixes side by side
+  const by = new Map();
+  for (const g of groups) {
+    const k = `${g.id}|${g.locale || ""}|${g.concept}`;
+    const e = by.get(k);
+    if (e) { if (!e.fixes.includes(g.fix)) e.fixes.push(g.fix); } else by.set(k, { g, fixes: [g.fix] });
+  }
+  return [...by.values()].map(({ g, fixes }) => ({ id: g.id, what: `${g.what} — fix: ${fixes.join("; ")} [${g.id}]`, where: "site-wide", concept: g.concept }));
 }
 
 /** CT7 the same document shows the same "last updated" date in every language. @param byLocale Map(locale → records) */

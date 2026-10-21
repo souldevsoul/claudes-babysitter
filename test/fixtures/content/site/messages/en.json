@@ -1,0 +1,42 @@
+{
+  "Nav": {
+    "help": "Support",
+    "pricing": "Pricing",
+    "signup": "Sign up"
+  },
+  "Footer": {
+    "help": "Help Centre",
+    "cookies": "Cookie notice",
+    "terms": "Terms",
+    "refunds": "Refund Policy"
+  },
+  "Home": {
+    "title": "Hire a specialist for your task",
+    "lede": "Every specialist is vetted. Your specialist replies within a day.",
+    "match": "We match you with a specialist in minutes.",
+    "expertBad": "Hire an expert today and pay only when the work is accepted.",
+    "expertOk": "Get an expert review of your brief before you hire.",
+    "proPlan": "The Pro plan adds priority support.",
+    "prosCons": "Weigh the pros and cons of each offer.",
+    "contractors": "Specialists are independent contractors, not employees.",
+    "quote": "Never call them “experts” in a contract.",
+    "mail": "Write to expert@acme.com for press questions.",
+    "tone": "Professional and friendly, always.",
+    "money": "Changed your mind? Get your money back on unused credits.",
+    "cardA": "Pay with a credit card in two clicks.",
+    "cardB": "Pay with a credit card or Apple Pay.",
+    "cardC": "Pay with a credit card, it takes a minute.",
+    "cardBad": "Any bank card works.",
+    "usdProse1": "Your balance is kept in dollars.",
+    "usdProse2": "Payouts are sent in dollars to your bank.",
+    "usdCode": "Invoices show the amount in USD for your accountant.",
+    "usdProse3": "Refunds are paid back in dollars too.",
+    "codes": "Switch between USD, EUR or GBP in the header."
+  },
+  "Pricing": {
+    "methods": "We accept Visa, Mastercard and Apple Pay.",
+    "currencies": "You can pay in GBP, EUR or USD.",
+    "open": "Prices show in euros, pounds and other currencies.",
+    "credits": "100 credits for £10."
+  }
+}

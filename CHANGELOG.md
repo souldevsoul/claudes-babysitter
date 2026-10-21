@@ -2,6 +2,86 @@
 
 Earlier releases (4.11.1 and before) are described in the README under "What changed in …".
 
+## 5.4.0 — one name per concept, one set of facts per policy, one label per destination, no page named that does not exist (2026-10-21)
+
+Business QA feedback on a product: texts had no common denominator — the same thing was described differently between
+pages and inside one page (card payment, refunds, account deletion, prices in different currencies, the role
+"Specialist / Expert / executor"), buttons and pages were named differently in different places, and the copy referred
+to pages that did not exist ("Specialist Service Terms").
+
+**What existed before, per class:** CT17 enforced a configured `content.glossary` per string and listed mixed
+Sign in / Log in, Sign up / Register, email / e-mail (buttons and links, rendered only, a note); nothing found competing
+words for one concept on its own. CT18 compared numbers next to a keyword across rendered pages (refund days, fees …)
+as a note: no payment methods, no currencies, no clocks told apart, nothing in the source. CT15 kept one name per
+*legal* document (footer = `<h1>` = `<title>` = mentions, rendered only); acceptance N4 flagged two labels for one page
+inside one header or footer; nothing compared labels across pages or a nav label with an ordinary page's heading, or
+labels of one action. D1 found links that answer 4xx (rendered, acceptance) and P3 named pages that are not links;
+nothing found a link to a path that is not a route in the source, nor a document named in the copy that the site does
+not have.
+
+**New checks** (hard; `babysitter content` over the source — every locale's messages, JSX, copy kept in code, link
+objects followed through their translation keys, the app routes — and the site-wide test of `e2e --only content` over
+the crawl; lib/content-consistency.js holds the rules both use, lib/content-site.js reads the source):
+- **CT19 `content/term-drift`** — one concept, one name, per language: the role (specialist / expert / executor /
+  freelancer / professional / contractor / pro; translator / reviewer where hired or assigned), closing the account,
+  refunds (money back, reimbursement, return of funds; a chargeback only where the shop says it issues one), the card
+  (credit / debit / credit or debit / bank / payment card), currency names in prose (USD / dollars, EUR / euros,
+  GBP / pounds / sterling); French groups for the role and closing the account. The dominant name (the glossary's
+  preferred term, else the most used), every place of the others, "replace X with Y". Config: `content.termGroups`,
+  `content.termAllow`; glossary-banned variants stay CT17's.
+- **CT20 `content/policy-conflict`** — one policy, one set of facts: refund window, refund processing time and the
+  statutory withdrawal period told apart, account deletion time, retention per kind of data, accepted payment methods,
+  currencies offered, billing currency, prices in a currency the site does not offer (`content.currencies` /
+  `acceptance.currencies`). "At least 5 years" agrees with 7; an open list ("euros, pounds and other currencies")
+  disagrees only by naming one the full list lacks; two values in one statement are qualified. `content.policyAllow`.
+  On rendered pages CT18 leaves refund and retention numbers to CT20.
+- **CT21 `content/label-drift`** — one destination, one name (links to one page with different names across the site;
+  `content.labelAllow`), a nav / footer label that is a near miss of the page's own name ("Cookie notice" → "Cookie
+  Policy") or names a page what another link calls a different one, one action with one label (Buy credits / Top up /
+  Add credits …, Contact us / Contact support …, and statically buttons whose onClick opens the same thing).
+- **CT22 `content/missing-page`** — links to a path no route, route handler, `public/` file or redirect serves
+  (statically; on rendered pages D1 reports 4xx in a full run, CT22 with `--only content`), and documents named in
+  Title Case ("Specialist Service Terms", "Acceptable Use Policy", "the Help Centre", "our FAQ", also in quotes) that
+  no page heading, title, layout title or link label carries. `content.knownDocuments`.
+
+Output: each place to change is a file:line problem; `babysitter content` ends with "Site-wide copy (CT19–CT22)", one
+entry per concept with the dominant variant, every variant's places and the fix; `--format json` carries the groups
+(`consistency`); on rendered pages one finding per concept, so `fix-plan` keeps one item per cause.
+`babysitter check --changed` reports a new minority term / value / label on a changed line only (the base version's
+marks are counted, so old drift on a line touched for another reason is not new). The admin area is left out
+(`content.consistencyAdmin: true` checks it), `content.consistencyIgnore` leaves files out.
+
+**CT8 French typography:** a space, U+00A0 or U+202F before ? ! : ; is right in `fr` / `fr-*` (message files, `<html
+lang="fr">`, an element's `lang`) and no longer fails; a missing one in a French sentence is a soft note (`(check)` in
+`babysitter content`, "check by eye" in the run). The rendered rule follows the page's language now (it used none).
+
+**Measured on three real products (read-only; the source, and one product's rendered pages on its dev server):**
+every hit was inspected by hand and the rules tuned until the remaining ones were real.
+- A Next 14 + next-intl product (en, fr): 3 static findings, all real — a "Closing Your Account" heading in one
+  policy while every other place says delete (CT19); a user-menu item named "My videos" that opens /dashboard, which
+  the button and the page call "Dashboard" (CT21); "Contact us" vs "Contact support" for one action (CT21). The
+  rendered pass also found a footer "Docs" link opening a page headed "Help Center" while another footer link of that
+  name opens /help (CT21). CT8: its French "Combien puis-je recharger ?" strings no longer fail (6 false failures in
+  5.3.1), and no French spacing notes remain.
+- A marketplace (en, az, kk): 16 findings — "expert" 6× against "specialist" 157×, "money back" next to "refund",
+  EUR / USD named both ways in prose, currency lists that disagree (one adds two currencies the main list lacks), a
+  refund window of 14 days in one place and 30 in six, three names for one dashboard page, Sign In vs Log In, a nav
+  call to action vs "Create an account", AML Policy vs Anti-Money Laundering Policy, Add credits vs Top up, and a
+  "Specialist Agreement" the onboarding asks people to accept that no page carries (the feedback's exact class).
+- A second marketplace: 11 findings — "executor" 5× and "expert" 7× against "specialist" 73× (the feedback's exact
+  case), close vs delete account, prices in € and in $ for the same credits, several pages reached under two names.
+
+**Known false positives / limits (left as they are):** a call to action in the nav or footer ("Get started", "Browse") counts as a name for its page — accept it with `content.labelAllow`; currency naming
+(USD vs dollars) also fires on developer-facing copy that lives in the message files; the role group cannot tell two
+real roles that share a word apart (a reviewer who is staff vs a reviewer who is hired) — `content.termAllow`; static
+labels built from values (`{count} credits`) and dynamic hrefs are skipped, so drift there is found only on rendered
+pages; CT20 reads English sentences only and does not compare a month with 30 days; CT21 and CT22 compare English
+labels and names only (other languages: CT19 and the French spacing rule).
+
+Tests: `test/content-consistency.test.mjs` (15 cases: every rule's catches and look-alikes, cross-rule cases, the
+fixture Next.js app `test/fixtures/content/site`, `check --changed`), a routed fixture site in
+`test/content-runtime.test.mjs`, the content-lint fixture's two dead links.
+
 ## 5.3.1 — the upgrade runs on deskhand, proxy and tandem: three false alarms fixed, the closed password reset named (2026-10-21)
 
 deskhand, proxy and tandem moved from 4.11.1 to 5.3.0 with `babysitter update` (their 4.11.1 copies' lock file was out

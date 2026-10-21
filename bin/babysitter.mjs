@@ -173,7 +173,7 @@ switch (cmd) {
     // the specs know which suites share the run (B1 defers to content's CT1 unless content is left out)
     if (only) env.BABYSITTER_ONLY = only;
     if (only) {
-      const skippedNames = { ui: `UI checks + states/languages/scroll (${uiSpecs.join(", ")})`, acceptance: "business acceptance (acceptance.spec: B1 copy leaks, B2–B4 money, H1/H2 hover and cursor, N1/N4/N6, F0–F5 footer, P1–P3 policies, D1–D3, C1/C2 cookies, M1 currency, A1–A9 sign-in)", content: "copy (content.spec: CT1–CT18 unfinished copy, test data, raw errors, punctuation, dates, plurals, email MX + mailto, translations, legal names, © line)", product: "the product's own e2e/*.spec.ts" };
+      const skippedNames = { ui: `UI checks + states/languages/scroll (${uiSpecs.join(", ")})`, acceptance: "business acceptance (acceptance.spec: B1 copy leaks, B2–B4 money, H1/H2 hover and cursor, N1/N4/N6, F0–F5 footer, P1–P3 policies, D1–D3, C1/C2 cookies, M1 currency, A1–A9 sign-in)", content: "copy (content.spec: CT1–CT22 unfinished copy, test data, raw errors, punctuation, dates, plurals, email MX + mailto, translations, legal names, © line, one name per concept, conflicting policy facts, link / action label drift, named pages that do not exist)", product: "the product's own e2e/*.spec.ts" };
       const off = Object.keys(SUITES).filter((k) => k !== only);
       console.error(`${"!".repeat(64)}\n!! PARTIAL RUN (--only ${only}). NOT RUN:\n${off.map((k) => `!!   ✗ ${skippedNames[k]}`).join("\n")}\n!! Defects those suites catch will not be found. Drop --only for a full check.\n${"!".repeat(64)}`);
     }

@@ -1,6 +1,8 @@
-// Copy on rendered pages (CT1–CT18, docs/checks-content.md): unfinished / defensive copy, test data, raw errors,
+// Copy on rendered pages (CT1–CT22, docs/checks-content.md): unfinished / defensive copy, test data, raw errors,
 // punctuation, dates, grammar, email deliverability + mailto, untranslated text, keys printed as text,
-// <html lang>, legal document names, the © line, one term per concept, numbers that contradict each other.
+// <html lang>, legal document names, the © line, one term per concept, numbers that contradict each other;
+// site-wide: one name per concept (CT19), one set of facts per policy (CT20), one label per destination (CT21), no page
+// named that does not exist (CT22).
 // Copy is the same at every width, so it runs once, at desktop width. Locales: babysitter.config.json →
 // content.locales (prefix / cookie / localStorage), or the page's <link rel=alternate hreflang> when none are set.
 //   npm run babysitter -- e2e --only content
@@ -64,7 +66,9 @@ for (const route of ROUTES) {
 
     test("CT1–CT8 copy: nothing unfinished, no test data or raw errors, no trailing periods or em dashes, one date format, plurals agree", async ({ page }) => {
       await open(page, r);
-      hard((await k.copyFindings(page, cfg)).hard);
+      const cf = await k.copyFindings(page, cfg);
+      note(cf.soft, "copy to look at (French spacing)");
+      hard(cf.hard);
     });
     test("CT9/CT10 every email address receives mail and is a mailto link", async ({ page }) => {
       test.skip(!on("CT9") && !on("CT10"), why("CT9"));
@@ -103,7 +107,9 @@ for (const loc of LOCALES) {
         // babysitter.config.json → locales.untranslated: "warn" lists untranslated text without failing
         const warnOnly = !Array.isArray(cfg.locales) && cfg.locales?.untranslated === "warn";
         if (warnOnly) note(untranslated, `untranslated text in ${loc.code}`);
-        hard([...(warnOnly ? lang.filter((o: any) => o.id !== "CT11") : lang), ...(await k.copyFindings(page, cfg, copy)).hard]);
+        const cf = await k.copyFindings(page, cfg, copy, loc.code);
+        note(cf.soft, `copy to look at in ${loc.code} (French spacing)`);
+        hard([...(warnOnly ? lang.filter((o: any) => o.id !== "CT11") : lang), ...cf.hard]);
       });
     });
   }
@@ -145,14 +151,27 @@ test.describe("content site-wide", () => {
     hard(out);
   });
 
-  test("CT17 one term per concept (content.glossary is enforced per page; mixed Sign in / Log in listed here) · CT18 numbers agree across pages · CT7 one date per document in every language", async ({ browser }) => {
+  test("CT17 one term per concept (content.glossary is enforced per page; mixed Sign in / Log in listed here) · CT18 numbers agree across pages · CT19–CT22 one name per concept, one set of facts per policy, one label per destination, no page named that does not exist · CT7 one date per document in every language", async ({ browser, request }) => {
     test.setTimeout(120_000 + ROUTES.length * 20_000 * (1 + LOCALES.length));
     const base = await crawl(browser);
     const byLocale = new Map([[DEFAULT_LOCALE || "default", base]]);
     for (const loc of LOCALES) byLocale.set(loc.code, await crawl(browser, loc));
     if (on("CT17")) note(k.variantFindings(base), "the same thing named two ways");
-    if (on("CT18")) note(k.factFindings(base), "numbers that disagree between pages — check which one is true");
-    hard(on("CT7") ? k.localeDateFindings(byLocale) : []);
+    // CT20 owns refund windows and retention periods when it runs (one report per conflict)
+    if (on("CT18")) note(k.factFindings(base, { exclude: on("CT20") ? ["refund", "storage"] : [] }), "numbers that disagree between pages — check which one is true");
+    // CT22 (a) dead links: D1 (acceptance.spec) reports them in a full run; with --only content this run does
+    const dead: any[] = [];
+    if (on("CT22") && process.env.BABYSITTER_ONLY === "content") {
+      const crawled = new Set([...byLocale.values()].flat().map((r: any) => r.route.replace(/\/$/, "") || "/"));
+      const targets = new Map<string, any>();
+      for (const r of base) for (const l of r.links || []) if (!crawled.has(l.path) && !targets.has(l.path) && !/log-?out|sign-?out|\/api\//i.test(l.path)) targets.set(l.path, { path: l.path, label: l.label, where: `${r.route} ${l.region}` });
+      for (const t of [...targets.values()].slice(0, 80)) {
+        const res = await request.get(t.path, { maxRedirects: 5, failOnStatusCode: false }).catch(() => null);
+        if (!res || res.status() >= 400) dead.push({ ...t, status: res ? res.status() : "no response" });
+      }
+    }
+    const consistency = ["CT19", "CT20", "CT21", "CT22"].some(on) ? k.consistencyRendered(byLocale, cfg, { defaultLocale: DEFAULT_LOCALE, deadLinks: dead }) : [];
+    hard([...(on("CT7") ? k.localeDateFindings(byLocale) : []), ...consistency]);
   });
 
   test("CT11 other languages the site offers (hreflang) are translated", async ({ browser }) => {

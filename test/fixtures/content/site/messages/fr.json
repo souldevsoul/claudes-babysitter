@@ -1,0 +1,33 @@
+{
+  "Nav": { "help": "Assistance", "pricing": "Tarifs", "signup": "Créer un compte" },
+  "Footer": { "help": "Centre d’aide", "cookies": "Politique de cookies", "terms": "Conditions", "refunds": "Politique de remboursement" },
+  "Home": {
+    "title": "Engagez un expert pour votre tâche",
+    "lede": "Chaque expert est vérifié. Votre expert répond en un jour.",
+    "match": "Nous vous trouvons un expert en quelques minutes.",
+    "expertBad": "Engagez un expert aujourd’hui.",
+    "expertOk": "Un avis d’expert sur votre brief.",
+    "proPlan": "Le forfait Pro ajoute une assistance prioritaire.",
+    "prosCons": "Pesez le pour et le contre.",
+    "contractors": "Les experts sont indépendants.",
+    "quote": "Combien puis-je recharger ?",
+    "mail": "Nouveau ? Vos 500 premiers crédits sont offerts.",
+    "tone": "Professionnel et aimable.",
+    "money": "Remboursement des crédits non utilisés.",
+    "cardA": "Payez par carte.",
+    "cardB": "Payez par carte ou Apple Pay.",
+    "cardC": "Payez par carte, en une minute.",
+    "cardBad": "Toute carte bancaire convient.",
+    "usdProse1": "Votre solde est en dollars.",
+    "usdProse2": "Les paiements sont envoyés en dollars.",
+    "usdCode": "Les factures indiquent le montant en USD.",
+    "usdProse3": "Les remboursements sont aussi versés en dollars.",
+    "codes": "Passez de USD à EUR ou GBP dans l’en-tête."
+  },
+  "Pricing": {
+    "methods": "Nous acceptons Visa, Mastercard et Apple Pay.",
+    "currencies": "Vous pouvez payer en GBP, EUR ou USD.",
+    "open": "Les prix s’affichent en euros, livres et autres devises.",
+    "credits": "100 crédits pour 10 £."
+  }
+}
