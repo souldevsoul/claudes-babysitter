@@ -147,7 +147,7 @@ for (const route of ROUTES) {
             test("P1/P2 policy text spans its column, 'On this page' is sticky [BQA 8]", async ({ page }) => {
                 test.skip(!on("P1"), why("P1"));
                 await open(page, r);
-                hard(await a.policyLayout(page));
+                hard(await a.policyLayout(page, { tocMobile: cfg.layout?.tocMobile || "auto" }));
             });
             test("P3 pages a policy names are links [BQA 8]", async ({ page }) => {
                 test.skip(!on("P3"), why("P3"));
@@ -210,7 +210,7 @@ test.describe("acceptance site-wide", () => {
             const ctx = await ctxFor(browser, false);
             const page = await ctx.newPage();
             await open(page, r.path);
-            const res = await a.policyLayout(page);
+            const res = await a.policyLayout(page, { tocMobile: cfg.layout?.tocMobile || "auto" });
             seen.push({ path: r.path, ...(res.meta || {}) });
             await ctx.close();
         }

@@ -595,7 +595,7 @@ export const cookieCategories = (page) => page.evaluate(() => {
 /* ─────────────── policies ─────────────── */
 
 /** P1 — policy body spans its column; P2 — "On this page" is sticky and fits; P5 — no repeated company block per policy. */
-export async function policyLayout(page) {
+export async function policyLayout(page, { tocMobile = "auto" } = {}) {
     const out = await page.evaluate(() => {
         const out = [];
         const main = document.querySelector("main, article, [role=main]") || document.body;
@@ -623,7 +623,13 @@ export async function policyLayout(page) {
             || (e.matches("summary") && e.parentElement.querySelectorAll("a[href^='#']").length >= 3)))[0];
         if (ctrl)
             ctrl.setAttribute("data-bs-toc-ctrl", "");
-        return { out, toc: toc ? window.__uiSelector(toc) : null, ctrl: ctrl ? "[data-bs-toc-ctrl]" : null, ctrlWhere: ctrl ? window.__uiDescribe(ctrl) : null, h2: main.querySelectorAll("h2").length };
+        // 5.5.0 (Kindred, issue #4 item 16; owner decision 21.10): on phones the contents may be a collapsible list at the
+        // top (an accordion / <details> before the first section) instead of a sticky bar
+        const firstH2 = main.querySelector("h2");
+        const before = (e) => !!e && !!firstH2 && !!(e.compareDocumentPosition(firstH2) & Node.DOCUMENT_POSITION_FOLLOWING);
+        const collapsible = (e) => !!e && (e.matches("details") || !!e.querySelector("summary, [aria-expanded], [data-state]"));
+        const collapsibleTop = (before(ctrl)) || (collapsible(toc) && before(toc));
+        return { out, toc: toc ? window.__uiSelector(toc) : null, ctrl: ctrl ? "[data-bs-toc-ctrl]" : null, ctrlWhere: ctrl ? window.__uiDescribe(ctrl) : null, h2: main.querySelectorAll("h2").length, collapsibleTop, phone: innerWidth < 768 };
     });
     const list = out.out;
     if (out.toc || out.ctrl) {
@@ -647,7 +653,8 @@ export async function policyLayout(page) {
         const sc = out.ctrl ? await probe(out.ctrl) : null;
         const stays = (x) => x && x.sticky && x.inView;
         // the open list or the collapsed bar stays on screen: either is the sticky "On this page"
-        if ((st || sc) && !stays(st) && !stays(sc))
+        const collapsibleOk = out.phone && tocMobile !== "sticky" && (out.collapsibleTop || tocMobile === "collapsible");
+        if ((st || sc) && !stays(st) && !stays(sc) && !collapsibleOk)
             list.push({ id: "P2", what: '"On this page" scrolls away — make it sticky [P2, BQA 8]', where: out.toc || out.ctrlWhere });
         if (stays(st) && st.tooTall)
             list.push({ id: "P2", what: '"On this page" is taller than the screen and does not scroll [P2, BQA]', where: out.toc });

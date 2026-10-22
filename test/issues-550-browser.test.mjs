@@ -178,6 +178,17 @@ document.getElementById("mc").onclick = () => {
     const r = await L.activeNavStyle(page);
     assert.ok(![...r.hard, ...r.soft].some((f) => /Overview|Members/.test(f.what)), JSON.stringify([...r.hard, ...r.soft].map((f) => f.what)));
   });
+
+  /* ═════ #4.16 P2: a collapsible contents list at the top on phones ═════ */
+  await test("#4.16 P2 (Kindred, owner 21.10): on a phone a collapsible contents list (accordion) before the first section is the contents; one after the sections, or at desktop, still has to stay on screen", async (page) => {
+    const sections = Array.from({ length: 8 }, (_, i) => `<h2 id="s${i}">Section ${i + 1}</h2>${"<p>" + "The specialist keeps the work private and delivers it on time. ".repeat(6) + "</p>"}`.repeat(1)).join("");
+    const acc = `<div><button aria-expanded="false" aria-controls="toc" id="tb">On this page</button><nav id="toc" hidden>${Array.from({ length: 8 }, (_, i) => `<a href="#s${i}">Section ${i + 1}</a>`).join("")}</nav></div>`;
+    await load(page, doc(`<main><h1>Terms</h1>${acc}${sections}</main>`));
+    assert.ok(!(await a.policyLayout(page)).some((f) => /scrolls away/.test(f.what)), "collapsible at the top on a phone");
+    assert.ok((await a.policyLayout(page, { tocMobile: "sticky" })).some((f) => /scrolls away/.test(f.what)), "layout.tocMobile: sticky asks for the sticky bar");
+    await load(page, doc(`<main><h1>Terms</h1>${sections}${acc}</main>`));
+    assert.ok((await a.policyLayout(page)).some((f) => /scrolls away/.test(f.what)), "a list after the sections is not the contents at the top");
+  }, { width: 390, height: 800 });
   /* ═════ #4.1 prepare: login.url from acceptance.auth.signIn; no signed-in page reached → exit 1, loudly ═════ */
   const fx = await start();
   const repo = mkdtempSync(join(tmpdir(), "bs-550-prep-"));
