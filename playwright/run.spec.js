@@ -103,12 +103,36 @@ for (const route of ROUTES) {
                 const pageBudget = Number(st.pageBudget ?? 240_000);
                 test.setTimeout(pageBudget + 60_000);
                 const { ctx, page, reload } = await openIn(browser, route, loc);
-                const res = await run.stateChecks(page, { reload, opts, maxOpeners: Number(st.maxOpeners ?? 15), maxForms: Number(st.maxForms ?? 3), maxSteps: Number(st.maxSteps ?? 6), wallet: st.wallet !== false, deadline: Date.now() + pageBudget });
+                const res = await run.stateChecks(page, { reload, opts, maxOpeners: Number(st.maxOpeners ?? 15), maxForms: Number(st.maxForms ?? 3), maxSteps: Number(st.maxSteps ?? 6), wallet: st.wallet !== false, deadline: Date.now() + pageBudget, allowPost: st.allowPost || [], selections: st.selections !== false, deadButtons: st.deadButtons !== false, auth: !!route.auth });
                 await ctx.close();
                 test.info().annotations.push({ type: "states", description: res.states.join("; ") || "no state reached" });
                 if (res.notTested.length)
                     test.info().annotations.push({ type: "not tested", description: res.notTested.map((x) => `${route.path}${tag(loc)}: ${x}`).join("\n") });
                 hard(res.findings.map((f) => ({ ...f, what: `${tag(loc).trim()} ${f.what}`.trim() })));
+            });
+        }
+        /* 5.5.0: what a page's links and data promise (once, at desktop width) */
+        test("4.5/J1/D4 a card's action carries its card; a CTA carries its choice to the next page; no data error on load [4.5 J1 D4]", async ({ browser }) => {
+            test.skip(!/desktop-1440/.test(test.info().project.name), "runs once, at desktop width");
+            test.setTimeout(150_000);
+            const { ctx, page } = await openIn(browser, route, DEFAULT);
+            const list = [...(await run.cardActions(page, route.path))];
+            // an instance of a dynamic route (/specialists/[id]) is an entity page
+            list.push(...(await run.ctaContext(page, { entity: !!route.template && /\[/.test(route.template), signUp: acc.auth.signUp || null })));
+            list.push(...(await run.dataErrorOnLoad(page, page.url(), { auth: !!route.auth })));
+            await ctx.close();
+            hard(list);
+        });
+        if (!route.auth) {
+            test("J2 a guest's choice survives sign-in (\"Sign in to …\" from a page with a choice) [J2]", async ({ browser }) => {
+                test.skip(!/desktop-1440/.test(test.info().project.name), "runs once, at desktop width");
+                const creds = a.credentials(cfg);
+                test.skip(!creds || !cfg.login?.url && !acc.auth.signIn, "needs a test account (LOGIN_EMAIL / a role's env) and login.url");
+                test.setTimeout(120_000);
+                const { ctx, page } = await openIn(browser, route, DEFAULT);
+                const list = await run.guestChoice(page, { creds, login: cfg.login || {} });
+                await ctx.close();
+                hard(list);
             });
         }
         /* 3.8 — in-app navigation and #anchors */
