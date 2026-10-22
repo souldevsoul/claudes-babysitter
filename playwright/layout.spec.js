@@ -6,6 +6,8 @@ import * as c from "./checks.js";
 import * as L from "./checks/layout.js";
 import * as boxes from "./checks/boxes.js";
 import * as Rh from "./checks/rhythm.js";
+import * as M from "./checks/money.js";
+import { WALLET_RE } from "./checks/run.js";
 import { existsSync, readFileSync } from "node:fs";
 import { resolve } from "node:path";
 import { loadConfig, loadRoutes, ROOT, authTag, storageFor } from "./project.js";
@@ -238,6 +240,46 @@ test.describe("site-wide layout", () => {
             expect.soft(marks.map((m) => `${m.side}: ${m.where} on ${m.page}`), "the selected-option tick sits on different sides in different dropdowns — one side everywhere [1.2 / 1.18]").toEqual([]);
         const f1 = L.headingVariants(heads, "h1", "face");
         expect(f1.length, `h1 comes in ${f1.length} faces (family / weight / tracking / case) at this width (allowed ${max}) — page titles should use one text style token [6.5]\n${show(f1)}`).toBeLessThanOrEqual(max);
+    });
+    // 5.5.0 (Compass 5nel9b, 84u591, xivil1, zcg5fp): one credits count, one price per currency on every page and in the
+    // top-up dialog; one unit and basis for one entity's rate
+    test("B4 one conversion everywhere: the same credits cost the same in each currency on every page and in the top-up dialog; one unit per rate", async ({ browser }, info) => {
+        test.skip(!/desktop-1440/.test(info.project.name), "once per run");
+        const list = ROUTES.slice(0, Number(lay.moneyRoutes ?? 20));
+        test.setTimeout(60_000 + list.length * 45_000);
+        const records = [], prices = [], notTested = [], dialogFindings = [];
+        for (const route of list) {
+            const ctx = await browser.newContext({ ...info.project.use, storageState: route.auth ? storageFor(route.role) : undefined, baseURL: info.project.use.baseURL });
+            const page = await ctx.newPage();
+            try {
+                if ((await open(page, route.path)) >= 400) { await ctx.close(); continue; }
+                prices.push({ place: route.path, prices: await M.entityPrices(page) });
+                // a signed-in page with a top-up opener: the dialog's packs, in the same currency, never submitted
+                const wallet = route.auth ? page.locator("main button, header button, [role=button]").filter({ hasText: WALLET_RE }).filter({ visible: true }).first() : null;
+                const onEach = async (code, rec) => {
+                    records.push({ place: `${route.path}${code ? ` (${code})` : ""}`, pairs: rec?.pairs || [] });
+                    if (!wallet || !(await wallet.isVisible().catch(() => false))) return;
+                    await wallet.click({ timeout: 2500 });
+                    await page.waitForTimeout(800);
+                    const d = await M.moneyPairs(page, { scope: "[role=dialog], dialog[open]" });
+                    records.push({ place: `${route.path} top-up dialog${code ? ` (${code})` : ""}`, pairs: d.pairs });
+                    // the dialog as a reader sees it in this currency (Compass 7bouc8 / kdn5xf / 6lyos0: EUR placeholder cut,
+                    // "6 000 credits" next to "1,000")
+                    const lbl = `top-up dialog${code ? ` in ${code}` : ""}`;
+                    for (const f of [...(await M.placeholderCut(page)), ...(await M.numberGrouping(page))]) if (!dialogFindings.some((x) => x.what.endsWith(f.what))) dialogFindings.push({ ...f, what: `${route.path} ${lbl}: ${f.what}` });
+                    await page.keyboard.press("Escape").catch(() => { });
+                    await page.waitForTimeout(400);
+                };
+                await page.route("**/*", (r) => (r.request().method() === "GET" ? r.continue() : r.abort()));
+                await L.moneyFormat(page, 3, { onEach });
+            }
+            catch (e) {
+                notTested.push(`${route.path}: ${String(e.message).split("\n")[0]}`);
+            }
+            await ctx.close();
+        }
+        notes("money site-wide", notTested);
+        hard([...M.conversionConflicts(records), ...M.entityPriceConflicts(prices), ...dialogFindings]);
     });
     test("6.11 favicon: present, served, the product's own (not a framework default, not another product's) [favicon]", async ({ browser }, info) => {
         test.skip(!/desktop-1440/.test(info.project.name), "once per run");

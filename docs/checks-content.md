@@ -102,3 +102,37 @@ Tests: `test/content-lint.test.mjs` (rules, parsers, fixture repo `test/fixtures
 `test/content-consistency.test.mjs` (CT19–CT22 and CT8 in French: every rule's catches and look-alikes, cross-rule
 cases, the fixture Next.js app `test/fixtures/content/site`, `check --changed`), `test/content-runtime.test.mjs`
 (fixture pages `test/fixtures/content/pages` and a routed fixture site for CT19–CT22, DNS mocked).
+
+## 5.5.0 — every missed card a check (Praxis, Parallel, Kindred, Compass)
+
+Static (`babysitter content`) and rendered (content.spec, and `measure()` in every state). Fixtures:
+`test/misses-550-content-a.test.mjs`, `test/misses-550-content-b.test.mjs`, `test/issues-550.test.mjs`.
+
+| ID | What | Cards |
+|---|---|---|
+| CT1 | English not-yet copy: "not switched on yet", "not yet enabled / connected", "once / until (card) payment(s) / checkout / payouts … is live / switched on" (ru / az / kk too); **the same message in every language** — unfinished copy at a key in one locale is reported at that key in the others | Compass dqdasz evwgc7 4670bf chqsch yvewhx (issue #5 A) |
+| CT2 | a message is an input hint by its use (`placeholder={t("…")}`); the signed-in accounts' own addresses (`LOGIN_EMAIL`, `roles[].env`) are not test data | issues #4, #5 |
+| CT3 | raw scores (0.7029) in prose; the browsers' fetch / JSON errors ("Failed to fetch", "is not valid JSON", "<!DOCTYPE") | Compass 41j7mo; Kindred x6wx1s |
+| CT8 | a sentence starts with a capital; `{n} minutes` outside an ICU plural (static, English) | Compass zrb0pz q0qz7n |
+| CT11 | what a user wrote (`[data-user-content]`, chat logs, quotes, `pre-wrap` text) is not untranslated copy | issue #5 |
+| CT12 | a link / button labelled with its own path ("/pricing") or `<Link href={x}>{x}</Link>` | Parallel 49kc72 |
+| CT15 | a document named with and without the brand in front; a lower-case mention of a footer document; one "Specialist …" document under two names | Praxis tpp8au; Compass k7ue1f qcq5fq u23b9o |
+| CT19 | one spelling of a loanword per language (cookie / kuki / куки); one verb for handing over the work (delivered vs complete) | Praxis 2ixn7g 69ukru |
+| CT20 | what to do after acceptance; who sets the task list; what the site stores (closed lists, count words); minimum age; a closed list of payment methods vs what the checkout offers; a refused country offered in a list | Praxis lzldsx q26219 9slhlk; Kindred 3h4bom ff5psx; Compass msds2g vgs44j |
+| CT21 | the page's own name is the suggested label | Parallel 9a8qvx |
+| CT23 | a promise (escrow, guarantees, SLA, certifications …) no legal page describes; "no questions asked" while a policy sets conditions | Kindred ancvgr ql7sv4 |
+| CT24 | an h1 within one stemmed word of a sibling product's h1 (registry `~/.claudes-babysitter/copy.json`, `BABYSITTER_COPY_REGISTRY`) | Kindred brypwi |
+| CT25 | a URL on a host carrying the brand that is not the site's (`content.ownDomains`) | Kindred 2b9nt9 |
+| CT26 | a slug shown as a name (kebab-case text; `{x.slug}` in JSX) | Compass r7i2dc ebev0t |
+| CT27 | a worked example that adds up in credits but not in money | Compass wy8h00 |
+| CT28 | one letter case per heading (English); acronyms (AI, ML, API) keep their capitals | Compass 33jce3 8t3qh1 |
+| CT29 | an e-mail address drawn uppercase / capitalised / small caps | Compass wee3g3 |
+| CT30 | 4+ like items that all show 0 for the same unit (an empty state instead) | Compass 4bw126 3eikk6 |
+| CT31 | (soft) the same 4+ names in two orders on two pages | Compass ey1511 |
+| 6.15 | every page has its own `<title>`, never only the brand on a non-home page | Compass bymtup 853l4n |
+| P4 | a policy's section numbers run 1, 2, 3 and its contents list matches | Compass 2hxrol |
+| F5 | "the marks shown in X" — page X shows them | Praxis 992bgb |
+| M3 | (static) the payment API accepts every currency the switcher offers | Kindred 2895jy |
+
+Fixed in 5.5.0: the site-wide CT19 / CT20 / CT7 findings were reported only when CT21 or CT22 was on (a comment had
+swallowed a closing brace in content.spec).

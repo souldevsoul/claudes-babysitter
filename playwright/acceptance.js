@@ -17,6 +17,13 @@ export const DEFAULTS = {
   // the currency switcher lives in the header; a second one in the footer is a duplicate
   footerCurrencySelector: false,
   paymentLogos: true,
+  // 5.5.0 (Compass cnfovs): the studio's Visa / Mastercard files (sha256 of the canonical 600×384 PNGs every product
+  // ships); a mark served from another file is not the standard one. false turns it off; a list adds files.
+  paymentLogoSet: ["0cb89be9b267a61ccca341c20dec316a3c223372ba553a54396fef8c559e4597", "b1de274c303fadf36c796392b55f87441b907d6cb2e0d0021a78dd3e25657016"],
+  // 5.5.0 (Compass 3v77n0): where Sign out lands ("/" — the home page, or its locale root)
+  afterSignOut: "/",
+  // 5.5.0 (Compass gcrh4v): a product that sells credits shows the balance in the signed-in header (null: when it sells credits)
+  headerBalance: null,
   currencies: [],
   company: {},
   forbiddenPages: ["/gdpr", "/press", "/currency"],
@@ -33,7 +40,8 @@ export function acceptanceConfig(cfg = {}) {
   return { ...DEFAULTS, ...a, company: { ...DEFAULTS.company, ...(a.company || {}) }, auth: { ...DEFAULTS.auth, ...(a.auth || {}), signIn: a.auth?.signIn ?? cfg.login?.url ?? null } };
 }
 
-const POLICY_RE = /\/(terms|privacy|cookie|cookies|refund|refunds|aml|kyc|legal|policy|policies|gdpr|disclaimer|payments?-policy|cancellation|acceptable-use)(\/|-|$)/i;
+// 5.5.0 (Parallel gjfjnc): /delivery-policy, /shipping-policy, /returns-policy, /specialist-agreement never got P1–P3
+const POLICY_RE = /\/(terms|privacy|cookie|cookies|refund|refunds|aml|kyc|legal|policy|policies|gdpr|disclaimer|payments?-policy|cancellation|acceptable-use|[a-z]+(-[a-z]+)*-(policy|terms|agreement|notice))(\/|-|$)/i;
 export const isPolicyPath = (path, acc = DEFAULTS) => (acc.policyPaths || []).includes(path) || POLICY_RE.test(path);
 export const isAuthPath = (path, acc = DEFAULTS) => [acc.auth.signIn, acc.auth.signUp].filter(Boolean).includes(path) || /^\/(login|log-in|signin|sign-in|register|signup|sign-up|auth)(\/|$)/i.test(path);
 
@@ -333,7 +341,8 @@ export const footer = (page, acc = DEFAULTS) => page.evaluate((acc) => {
     if (acc.paymentLogos) {
         const marks = Array.from(f.querySelectorAll("img, svg, [aria-label], [title]")).filter((x) => window.__uiVisible(x) && /visa|master ?card/i.test([x.getAttribute("alt"), x.getAttribute("aria-label"), x.getAttribute("title"), x.getAttribute("src"), x.getAttribute("class")].join(" ")));
         const ACCEPT = /we accept|accepted (payments|cards)|payment methods|we take|мы принимаем|принимаем( к оплате)?|способы оплаты|qəbul edirik|ödəniş üsulları|қабылдаймыз|төлем (әдістері|тәсілдері)|wir akzeptieren|zahlungsmethoden|nous acceptons|moyens de paiement|aceptamos|métodos de pago|accettiamo|akceptujemy|metody płatności|приймаємо/i;
-        const acceptEl = Array.from(f.querySelectorAll("*")).filter((e) => window.__uiVisible(e) && ACCEPT.test(e.textContent || "") && (e.textContent || "").length < 80)
+        // the innermost element that says it (a row holding the label and the logos says it too)
+        const acceptEl = Array.from(f.querySelectorAll("*")).filter((e) => window.__uiVisible(e) && ACCEPT.test(e.textContent || "") && (e.textContent || "").length < 80 && !Array.from(e.children).some((ch) => ACCEPT.test(ch.textContent || "")))
             .sort((x, y) => (x.textContent || "").length - (y.textContent || "").length)[0];
         if (marks.length < 2 && !/visa/i.test(text))
             push("F5", 'footer has no "We accept" Visa / Mastercard logos [F5, BQA 6]');
@@ -345,6 +354,26 @@ export const footer = (page, acc = DEFAULTS) => page.evaluate((acc) => {
             const near = marks.some((m) => { const r = m.getBoundingClientRect(); return Math.abs((r.top + r.bottom) / 2 - (lr.top + lr.bottom) / 2) < 160 && Math.min(Math.abs(r.left - lr.right), Math.abs(lr.left - r.right), Math.abs(r.left - lr.left)) < 400; });
             if (!near)
                 push("F5", '"We accept" is far from the payment logos — keep the label next to the Visa / Mastercard logos [F5, BQA 6]', acceptEl);
+            else {
+                // 5.5.0 (Compass r98e7t): on the logos' line, before the first one — not above them
+                const imgs = marks.filter((m) => m.getBoundingClientRect().width > 8).sort((x, y) => x.getBoundingClientRect().left - y.getBoundingClientRect().left);
+                const first = imgs[0] && imgs[0].getBoundingClientRect();
+                // a label element that holds the logos itself ("<p>We accept <svg/><svg/></p>") is on their line
+                if (first && !imgs.some((m) => acceptEl.contains(m))) {
+                    const mid = (lr.top + lr.bottom) / 2;
+                    const onLine = mid >= first.top - first.height / 2 && mid <= first.bottom + first.height / 2;
+                    const before = lr.right <= first.left + 4;
+                    if (!onLine || !before) {
+                        // a phone row too narrow for the label and the logos wraps on purpose: check by eye
+                        let row = imgs[0].parentElement; while (row && !row.contains(acceptEl)) row = row.parentElement;
+                        // the label's text, not its (block) box
+                        const rg = document.createRange(); rg.selectNodeContents(acceptEl);
+                        const need = rg.getBoundingClientRect().width + imgs.reduce((a, m) => a + m.getBoundingClientRect().width + 8, 0);
+                        const narrow = row && row.getBoundingClientRect().width < need;
+                        out.push({ id: "F5", soft: !!narrow, what: `"We accept" sits ${!onLine ? (mid < first.top ? "above" : "below") : "after"} the payment logos — put it on their line, right before the Visa logo [F5, BQA 6]`, where: window.__uiDescribe(acceptEl), selector: window.__uiSelector(acceptEl) });
+                    }
+                }
+            }
         }
         if (acceptEl) {
             const bodyFont = getComputedStyle(document.body).fontFamily.split(",")[0].trim();
@@ -396,7 +425,15 @@ export async function cookieConsent(page, { acc = DEFAULTS } = {}) {
         const after = nonEssentialOf(await storageNow(page), acc);
         page.off("request", onReq);
         const extra = [...before, ...after].filter((x, i, l) => l.findIndex((y) => y.kind === x.kind && y.name === x.name) === i);
-        if (!extra.length && !tracked.length) return out; // essential-only notice: nothing to choose
+        if (!extra.length && !tracked.length) {
+            // essential-only notice: nothing to choose — but when the site does have a cookie settings window (the
+            // footer's "Manage cookies" opens one with per-category switches), the banner offers it too (Compass
+            // y28qwn: "OK" on the banner, "Manage cookies" in the footer only). A footer link that reopens the same
+            // notice (Kindred) is not a settings window.
+            const settings = await openCookieSettingsFromFooter(page);
+            if (settings) out.push({ id: "C1", what: `the cookie notice offers only "${label}", while "${settings}" in the footer opens cookie settings — put a "Manage" button on the banner that opens the same window [C1, BQA 7]`, where: "cookie banner" });
+            return out;
+        }
         out.push({ id: "C1", what: `the cookie notice offers only "${label}", but the site stores ${extra.slice(0, 5).map((x) => `${x.kind} "${x.name}"`).join(", ")}${tracked.length ? `${extra.length ? " and " : ""}asks ${[...new Set(tracked)].join(", ")}` : ""} — that is not strictly necessary, so the visitor needs a "Reject" / "Necessary only" choice (or name it in acceptance.essentialStorage with the reason) [C1, BQA]`, where: "cookie banner" });
         return out;
     }
@@ -618,6 +655,8 @@ export async function policyLayout(page) {
     }
     else if (out.h2 >= 6)
         list.push({ id: "P2", what: `policy has ${out.h2} sections and no "On this page" navigation [P2, BQA 8]`, where: "main" });
+    // 5.5.0: what the site-wide P2 parity compares (policyRailParity)
+    Object.defineProperty(list, "meta", { value: { h2: out.h2, toc: !!(out.toc || out.ctrl) }, enumerable: false });
     return list;
 }
 
@@ -777,7 +816,7 @@ export async function clickControl(page, re) {
  * the browser stays on the same host, and `home` (the signed-in page) no longer opens signed in. A confirm dialog is
  * part of one sign-out; 5.1.0 never pressed it (and needed LOGIN_EMAIL, which role-based projects do not set).
  */
-export async function signOutOnce(page, { home }) {
+export async function signOutOnce(page, { home, afterSignOut = "/" }) {
     const out = [];
     const origin = new URL(page.url()).origin;
     if (!(await clickControl(page, SIGN_OUT_RE)))
@@ -794,6 +833,14 @@ export async function signOutOnce(page, { home }) {
     await page.waitForTimeout(2000);
     await page.waitForLoadState("load", { timeout: 15_000 }).catch(() => { });
     const landed = new URL(page.url());
+    // 5.5.0 (Compass 3v77n0): signing out lands on the home page (or its locale root), unless acceptance.afterSignOut says otherwise
+    if (landed.origin === origin && afterSignOut) {
+        const want = String(afterSignOut).replace(/\/+$/, "") || "/";
+        const at = landed.pathname.replace(/\/+$/, "") || "/";
+        const localeRoot = want === "/" && /^\/[a-z]{2}(-[A-Za-z]{2,4})?$/.test(at);
+        if (at !== want && !localeRoot)
+            out.push({ id: "A4", what: `Sign out lands on ${landed.pathname} — send people to ${want === "/" ? "the home page (/)" : want} (signOut({ callbackUrl: "${want}" }); acceptance.afterSignOut names another page when that is the owner's decision) [A4, BQA 11]`, where: landed.href });
+    }
     if (landed.origin !== origin)
         out.push({ id: "A4", what: `Sign out sends the browser to another host (${landed.origin}) — stay on ${origin}: a session on the other address may still be alive (a redirect built from NEXTAUTH_URL / an absolute callbackUrl) [A4, BQA 11]`, where: landed.href });
     await page.goto(new URL(home, origin).href, { waitUntil: "load" }).catch(() => { });
@@ -889,4 +936,158 @@ export async function chooseCurrency(page, code) {
     }
     await page.waitForTimeout(800);
     return true;
+}
+
+
+/* ─────────────── 5.5.0: money, footer, cookies, sign-out, signed-in areas ─────────────── */
+
+/** The footer's "Manage cookies" / "Cookie settings" control opens a window with per-category switches: its label, else null. */
+export async function openCookieSettingsFromFooter(page) {
+    const ctl = page.locator("footer, [role=contentinfo]").locator("a, button").filter({ hasText: /manage cookies|cookie (settings|preferences|choices)/i }).filter({ visible: true }).first();
+    if (!(await ctl.isVisible().catch(() => false))) return null;
+    const label = ((await ctl.textContent().catch(() => "")) || "").trim();
+    const href = await ctl.getAttribute("href").catch(() => null);
+    if (href && !href.startsWith("#") && !/^javascript:/i.test(href)) return null; // a link to the policy page
+    await ctl.click({ timeout: 2500 }).catch(() => { });
+    await page.waitForTimeout(700);
+    const toggles = await page.evaluate(() => Array.from(document.querySelectorAll("[role=dialog], [class*=cookie i], [id*=cookie i], [class*=consent i]")).filter((b) => window.__uiVisible(b))
+        .some((b) => b.querySelectorAll("[role=switch], input[type=checkbox], [role=checkbox], button[aria-pressed]").length >= 1)).catch(() => false);
+    await page.keyboard.press("Escape").catch(() => { });
+    return toggles ? label : null;
+}
+
+/**
+ * C2 — "Allow all" allows something (Compass faefuc: "We use no analytics, advertising or tracking cookies" with
+ * "Essential only" / "Allow all"). An Allow all / Accept all on a banner that names no optional category (or says
+ * there is none), after which nothing non-essential is stored and no tracker host is asked, offers a choice that
+ * does not exist.
+ */
+export async function allowAllNothingOptional(page, { acc = DEFAULTS } = {}) {
+    const btn = page.locator("button, a, [role=button]").filter({ hasText: /^\s*(allow|accept) all( cookies)?\s*$/i }).filter({ visible: true }).first();
+    if (!(await btn.isVisible().catch(() => false))) return [];
+    const label = ((await btn.textContent().catch(() => "")) || "").trim();
+    const text = await btn.evaluate((b) => { const box = b.closest('[class*=cookie i], [id*=cookie i], [class*=consent i], [id*=consent i], [role=dialog], [role=alertdialog], [role=region], [aria-label*=cookie i]') || b.parentElement?.parentElement || b.parentElement; return (box?.innerText || "").replace(/\s+/g, " "); }).catch(() => "");
+    const denies = /\b(no|not|never|without|don't|do not)\b[^.]{0,40}\b(analytics|advertis\w*|tracking|marketing|third[- ]party)\b|\bonly (the )?(strictly )?(necessary|essential|needed)\b|\bonly use the cookies (needed|necessary)\b/i.test(text);
+    const names = /\b(analytics|statistic\w*|marketing|advertis\w*|targeting|personali[sz]ation|preferences? cookies)\b/i.test(text.replace(/\b(no|not|never|without)\b[^.]{0,40}/gi, ""));
+    if (names && !denies) return [];
+    const hosts = acc.analyticsHosts || [];
+    const tracked = [];
+    const onReq = (req) => { try { const h = new URL(req.url()).hostname; if (hosts.some((x) => h === x || h.endsWith("." + x))) tracked.push(h); } catch { } };
+    page.on("request", onReq);
+    await btn.click({ timeout: 3000 }).catch(() => { });
+    await page.waitForTimeout(1200);
+    const extra = nonEssentialOf(await storageNow(page), acc);
+    page.off("request", onReq);
+    if (extra.length || tracked.length) return [];
+    return [{ id: "C2", what: `"${label}" allows nothing: the banner names no optional cookies${denies ? " (it says there are none)" : ""} and nothing beyond the necessary is stored after it — offer one "OK" (and Manage), or name the optional cookies it turns on [C2, BQA 7]`, where: "cookie banner" }];
+}
+
+/** F0 parity: the footer's links as label → path (auth calls to action and the account's own links left out). */
+export const footerLinks = (page) => page.evaluate(() => {
+    const f = Array.from(document.querySelectorAll("footer, [role=contentinfo]")).filter((x) => window.__uiVisible(x)).pop();
+    if (!f) return null;
+    const AUTH = /^(sign ?(in|up|out)|log ?(in|out)|register|create (an )?account|get started|join|dashboard|my account|account|profile|settings|войти|выйти)$/i;
+    const out = [];
+    for (const a of Array.from(f.querySelectorAll("a[href]"))) {
+        if (!window.__uiVisible(a)) continue;
+        const t = (a.innerText || a.getAttribute("aria-label") || "").replace(/\s+/g, " ").trim();
+        if (!t || AUTH.test(t)) continue;
+        let path = a.getAttribute("href") || "";
+        try { const u = new URL(a.href); path = u.origin === location.origin ? u.pathname : u.href; } catch { }
+        if (/^mailto:|^tel:/i.test(path)) continue;
+        out.push({ label: t, path });
+    }
+    return out;
+});
+/** F0 — the footer is the same signed in and signed out (Praxis xp7pmu: Contact gone from the Company column when signed in). */
+export function footerParity(anon, signed, role) {
+    if (!anon || !signed) return [];
+    const k = (x) => `${x.label.toLowerCase()}|${x.path}`;
+    const a = new Set(anon.map(k)), b = new Set(signed.map(k));
+    const out = [];
+    const gone = anon.filter((x) => !b.has(k(x))), added = signed.filter((x) => !a.has(k(x)));
+    if (gone.length) out.push({ id: "F0", what: `signed in${role ? ` as ${role}` : ""}, the footer loses ${gone.map((x) => `"${x.label}" (${x.path})`).join(", ")} — one footer for everyone [F0, BQA 6]`, where: "footer" });
+    if (added.length) out.push({ id: "F0", what: `signed in${role ? ` as ${role}` : ""}, the footer gains ${added.map((x) => `"${x.label}" (${x.path})`).join(", ")} that a visitor does not see — one footer for everyone (account links belong in the header) [F0, BQA 6]`, where: "footer", soft: true });
+    return out;
+}
+
+/** Visa / Mastercard marks of the footer: { src, alt } for each image (inline SVGs: { inline: true }). */
+export const paymentMarks = (page) => page.evaluate(() => {
+    const f = Array.from(document.querySelectorAll("footer, [role=contentinfo]")).filter((x) => window.__uiVisible(x)).pop();
+    if (!f) return [];
+    return Array.from(f.querySelectorAll("img, svg")).filter((x) => window.__uiVisible(x) && /visa|master ?card/i.test([x.getAttribute("alt"), x.getAttribute("aria-label"), x.getAttribute("src"), x.querySelector?.("title")?.textContent].join(" ")))
+        .map((x) => ({ src: x.tagName === "IMG" ? x.currentSrc || x.src : null, inline: x.tagName !== "IMG", name: /master/i.test([x.getAttribute("alt"), x.getAttribute("src"), x.getAttribute("aria-label")].join(" ")) ? "Mastercard" : "Visa", where: window.__uiDescribe(x), selector: window.__uiSelector(x) }));
+});
+/**
+ * F5 — the studio's payment marks (Compass cnfovs: "the Visa and Mastercard logos are not the standard ones"). Each mark's
+ * file (a Next.js /_next/image URL: its source) is hashed and compared with acceptance.paymentLogoSet.
+ */
+export async function paymentLogoFiles(page, acc = DEFAULTS) {
+    const set = acc.paymentLogoSet;
+    if (set === false || !Array.isArray(set) || !set.length) return [];
+    const { createHash } = await import("node:crypto");
+    const out = [];
+    for (const m of await paymentMarks(page)) {
+        if (m.inline) continue; // an inline SVG has no file to compare
+        let src = m.src;
+        try { const u = new URL(src); if (/\/_next\/image/.test(u.pathname) && u.searchParams.get("url")) src = new URL(u.searchParams.get("url"), u.origin).href; } catch { continue; }
+        const res = await page.request.get(src).catch(() => null);
+        if (!res || !res.ok()) continue;
+        const hash = createHash("sha256").update(await res.body()).digest("hex");
+        if (!set.includes(hash)) out.push({ id: "F5", what: `the ${m.name} mark (${new URL(src).pathname}) is not the studio's standard file — use the canonical ${m.name} image the other products ship [F5, BQA 6]`, where: m.where, selector: m.selector });
+    }
+    return out;
+}
+
+/** M2 — the signed-in header shows the credit balance (Compass gcrh4v): a number next to credits / cr in the site header. */
+export const headerBalance = (page) => page.evaluate(() => {
+    const hs = Array.from(document.querySelectorAll("header, [role=banner]")).filter((h) => window.__uiVisible(h) && !h.closest("main article, main section") && h.getBoundingClientRect().top < 200);
+    if (!hs.length) return [];
+    const RE = /\d[\d,.\u00a0\u202f ]*\s*(credits?|cr\b|кредит\p{L}*|kredit\p{L}*)|(credits?|balance|баланс|balans)\s*:?\s*\d/iu;
+    const shows = hs.some((h) => RE.test(h.innerText || "") || Array.from(h.querySelectorAll("[aria-label], [title]")).some((x) => RE.test(x.getAttribute("aria-label") || x.getAttribute("title") || "")));
+    return shows ? [] : [{ id: "M2", what: "the signed-in header does not show the credit balance — show it (e.g. \"6,000 credits\") on every signed-in page [M2, owner rule]", where: window.__uiDescribe(hs[0]), selector: window.__uiSelector(hs[0]) }];
+});
+
+/**
+ * A10 — a signed-in area does not render to a visitor who may not see it (Kindred gm21xv: /admin showed users,
+ * specialists and requests to anyone). The page as opened signed out (or as a role that is not admin): 200, not the
+ * sign-in page, no password field, and real content (a heading and a table / 2+ stat tiles, 300+ characters outside
+ * header and footer) is a finding.
+ */
+export const areaContent = (page) => page.evaluate(() => {
+    const vis = (e) => window.__uiVisible(e);
+    if (Array.from(document.querySelectorAll("input[type=password]")).some(vis)) return { content: false, why: "sign-in form" };
+    const main = document.querySelector("main, [role=main]") || document.body;
+    const text = Array.from(main.childNodes).map((n) => (n.nodeType === 1 && !n.matches("header, footer, nav, [role=banner], [role=contentinfo]") ? n.innerText || "" : n.nodeType === 3 ? n.nodeValue : "")).join(" ").replace(/\s+/g, " ").trim();
+    const heading = Array.from(main.querySelectorAll("h1, h2")).some(vis);
+    const table = Array.from(main.querySelectorAll("table, [role=table], [role=grid]")).some(vis);
+    const stats = Array.from(main.querySelectorAll("div, li, dd, section")).filter((e) => vis(e) && e.children.length <= 4 && /^\D{0,30}\d[\d,.]*\D{0,30}$/.test((e.innerText || "").replace(/\s+/g, " ").trim()) && (e.innerText || "").length < 60).length;
+    const loading = /^(loading|redirecting|please wait)/i.test(text) || text.length < 40;
+    return { content: !loading && heading && (table || stats >= 2) && text.length > 300, chars: text.length, heading, table, stats };
+});
+
+/**
+ * LS1 — the language switcher switches (Compass htmhfi: "choosing another language leaves the site in English").
+ * From .babysitter/locales.json: a language the switcher offers, that did not switch when it was chosen there and
+ * that does not open in its own language the recorded way either. Languages found only in hreflang / the repo stay notes.
+ */
+export function switcherLocales(loc) {
+    const out = [];
+    for (const l of loc?.locales || []) {
+        if (l.default || !l.offered) continue;
+        // what a person does: chooses it in the switcher. Nothing changed on the page → broken, whatever another way of
+        // opening it (a /az URL that may be a 404) says. Without a click record: the recorded way did not switch.
+        if (l.clicked ? l.clicked.switched : l.verified !== false) continue;
+        out.push({ id: "LS1", what: `choosing "${l.code.toUpperCase()}" in the language switcher leaves the page in ${loc.default || "the default language"}${l.clicked ? ` (<html lang="${l.clicked.lang || ""}">, ${l.clicked.shared}% of the words unchanged)` : ""} — the switcher must change the language${l.clicked ? "" : ` (${l.why || "not verified"})`} [LS1, BQA 9]`, where: "language switcher" });
+    }
+    return out;
+}
+
+/** P2 parity: [{ path, h2, toc }] of every policy page → the pages with 3+ sections and no rail, when 2+ others have one. */
+export function policyRailParity(pages) {
+    const withRail = pages.filter((p) => p.toc);
+    if (withRail.length < 2) return [];
+    const missing = pages.filter((p) => !p.toc && p.h2 >= 3);
+    if (!missing.length) return [];
+    return [{ id: "P2", what: `${missing.map((p) => `${p.path} (${p.h2} sections)`).join(", ")} ${missing.length > 1 ? "have" : "has"} no "On this page" contents, while ${withRail.length} other policies do (${withRail.slice(0, 4).map((p) => p.path).join(", ")}) — one policy layout: give every policy with sections the same contents rail [P2, BQA 8]`, where: missing[0].path }];
 }

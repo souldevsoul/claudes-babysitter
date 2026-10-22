@@ -125,3 +125,19 @@ named `/login`, `/register` and similar. `acceptance.auth.passwordless` turns of
 - FM5 checks the display name only. Balance after a top-up and list counts after a delete or add need a real
   mutation, which these checks do not make on shared accounts. The ESLint rule covers them statically.
 - FM6 needs both a visible balance and a price in credits on the same page.
+
+## 5.5.0 — from the miss loop
+
+Fixtures: `test/misses-550-states.test.mjs`, `test/issues-550-browser.test.mjs`.
+- **FM1 stated bounds:** the range the page states for a field ("between 25 and 500", "€1 to €17,800", "at least 5") is
+  typed; a refused end is hard (Praxis dejlep). A range "15 to 34" or the `aria-describedby` hint explains a refused
+  value (issue #4, Kindred IBAN).
+- **FM3 HTML error reply:** the sandbox also answers a failure with an HTML 404 page; showing "Unexpected token … is not
+  valid JSON" / "<!DOCTYPE" after it is hard (Compass av0m5i).
+- **FM4 no request:** a success message without any request sent is hard (Kindred vv08yz); an error or success message
+  under 4.5:1 on its toast is hard (Compass b4jdlq).
+- **FM13 prior text:** a success that takes the place of the text next to the submit in the same colour, weight and
+  size, without a box or icon (Parallel s6dz59).
+- **FM14 phone:** "+44 7700 900123" and "+1 415 555 0134" must be accepted; a digits-only hint beside a "+…" example and
+  Country after Phone are soft (Compass 1r8kpw ay9r6a).
+- **FM15 file:** a file input with no `accept` and no visible formats / size hint (Compass af1p4q).

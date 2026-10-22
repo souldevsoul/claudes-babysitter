@@ -91,3 +91,41 @@ the favicon without recording it.
   (4) px apart is soft.
 - **3.5** the open mobile menu: an item that is still off the screen after it was scrolled into view, or that only
   a script could scroll to (an overflow: hidden panel), cannot be reached — hard.
+
+## 5.5.0 — every missed card a check (Praxis, Parallel, Kindred, Compass)
+
+`playwright/checks/rhythm.js` (layout.spec "rhythm", run.spec i18n for the language-dependent ones) and
+`playwright/checks/boxes.js` (babysitter.spec, layout.spec, and `measure()` in every opened state). Fixtures:
+`test/misses-550-layout-a.test.mjs`, `test/misses-550-layout-b.test.mjs`.
+
+| ID | What | Cards |
+|---|---|---|
+| 2.5 | a money / credits range on two lines (per currency and language); a heading with a forced break that still wraps to a one-word or under-35 % line; 3+ lines that `text-wrap: balance` would even out (soft); the wordmark on one line at every width | Compass 34ebhu rqgkrl 9rkp6z ct4lge 69q0rj; Parallel c7p1wg; Kindred spdonv |
+| 2.6 | one short slot wraps in a row of equal cards; stacked phone buttons of different widths; `divide-x` left on a stacked strip | Praxis ysspcg qgevme; Parallel 2jsnme |
+| 2.7 | a marker / badge more than 2–4 px off its label's first line; side nav and content first lines 4–96 px apart (and the content top differs between pages of one shell); fields of one form row more than 2 px apart; a caption on the list's decorative rule (soft) | Praxis 1r8w0p dbrs0h; Parallel m0oxf9; Compass spixep zk611j |
+| 2.11 | the glyphs of two texts intersect anywhere on the page (fixed / sticky layers, faint text and dialogs left out) | Compass 25x6e8 |
+| 2.12 | a key–value row lacks the leader the others have, its value ends elsewhere, or its label wraps; a short slot more than 6 px off in flex rows | Praxis tjm4fx; Compass 69q0rj x2okne k25bx0 25x6e8 |
+| 2.14 | text running into the next table cell; an icon (≤ 64 px) cut by a clipping box or squeezed by flex (`shrink-0`) | Praxis izrv19; Kindred x099su |
+| 2.17 | one content width per page: a framed band wider than the median container by > 8 % and > 64 px (desktop) | Parallel 1xtxc4 |
+| 2.18 | a box rounded ≥ 8 px on a right corner that scrolls itself (a desktop scrollbar draws across the corner; headless Chrome hides it) | Kindred 5k8emt |
+| 2.19 | an empty state ("No messages yet") that scrolls | Praxis prmi5d |
+| 2.20 | a panel that scrolls sideways although nothing in flow is wider | Kindred 1zetde |
+| 2.21 | 10+ words at under 2.2 words per line, in a box under 35 % of its container or beside 40 % empty room | Compass akf9f4 2qp6hw 3ypscy |
+| 2.22 | two-column blocks: the right column starts on no line of the left one, or blocks follow different rules on a page / across the site | Compass 1wq9va 76glyk uiv7nb 2ghvum tp3fvq khokf3 |
+| 2.23 | even rhythm: one gap in a list over 1.6× the median, gaps in a row spread over 6 px, a framed row off centre | Compass xfm2up iiy7tk |
+| 2.24 | an icon ≤ 24 px under 3 px from its label (hard), under 4 px / 0.25 em (soft) | Kindred dq793h |
+| 1.6 | hover makes an even edge uneven (hard) or moves the card ≥ 2 px (soft, once per group); `layout.maxHoverEdge` | Kindred 1rto89 |
+| 1.11 | one brand mark: footer logo = header mark, favicon hue within 40° of the mark, manifest name shares a word with the brand | Kindred kytm39 bmlrc4 |
+| 1.20 | one typeface for the header's word controls (codes like EN / USD and the wordmark exempt); one placement of the "Most popular" badge | Praxis f8e3xf m0n604; Kindred fqsn52 |
+| 1.21 | one accent colour per site (CIELAB ΔE ≥ 30 between pages) | Compass u5brwv 9ln1xx |
+| 1.22 | (soft) a card in a row of ≥ 4 lacks a part ≥ 75 % of the others have | Compass 01s1e1 |
+| 3.5 | at ≥ 1024 px a header with no internal links while ≥ 3 destinations sit in its menu / footer (`layout.desktopNav: "menu"` opts out) | Kindred sxnm89 62i3ff |
+| 3.10 | a burger at desktop width that opens only links the header already shows | Compass 6d0aki |
+| 6.5 | among 3+ section h2s of one look an outlier alignment (hero, bands, cards, closing CTA left out); an h1 in capitals while the site's h1s are mixed case; heading accent italic vs upright (soft) | Parallel k6c1vm; Kindred 9ha0j4; Compass 5dudz9 |
+| 6.9 | focus drawn on the inner input of a framed field instead of the frame | Compass h59hxv |
+| B5 | in the top-up dialog the custom amount is a tile like the packages (`acceptance.customAmount: false` when there is none by design) | Kindred c25ux3 |
+
+Issue #4 (5.5.0): 1.3 / 1.16 count a select trigger (`role=combobox`, `aria-haspopup=listbox`) with the fields, not as
+an outlined button; 2.7 skips a column whose content is a sticky contents list (its band is where the nav travels); 3.5
+takes only the longest matching prefix as the current section; 6.12 judges toggling back on what the click opened, not on
+the page's own re-render.

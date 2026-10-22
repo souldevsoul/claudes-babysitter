@@ -13,6 +13,7 @@ import * as fit from "./fit.js";
 import * as copy from "./copy.js";
 import * as boxes from "./boxes.js";
 import * as fm from "./forms.js";
+import * as M from "./money.js";
 import { untranslatedReason, untranslatedWhat } from "../../lib/content-rules.js";
 
 /* ───────────────────────── shared ───────────────────────── */
@@ -20,7 +21,8 @@ import { untranslatedReason, untranslatedWhat } from "../../lib/content-rules.js
 // "Pay", "Place order", "Submit application", "Confirm hire" … the last press of a flow: never pressed by a check
 export const FINAL_RE = /\b(pay|pay now|checkout|check out|purchase|place (the )?order|buy( now)?|subscribe|submit( (application|request|order|task))?|send( (message|request|application))?|apply( now)?|confirm( (hire|payment|order|purchase|booking))?|hire|book( now)?|finish|complete( (order|purchase|payment|application))?|publish|post( task)?|create( account)?|sign ?up|register|delete|remove|cancel (subscription|order|task)|withdraw|transfer|оплат\w*|купить|отправить|подтверд\w*|заказать|удалить|ödə\w*|göndər\w*|təsdiq\w*|sil\b|төле\w*|жіберу|жібер\w*|растау|жою)\b/i;
 // opens a top-up / checkout dialog: clicked in "no-pay" mode (opened and checked, never paid)
-export const WALLET_RE = /\b(add (credits|funds|money|balance)|top ?-?up|buy credits|get credits|deposit|recharge|refill|пополн\w*|balansı artır\w*|kredit (al|əlavə)\w*|толтыр\w*|кредит (сатып|қос)\w*)\b/i;
+// 5.5.0 (Compass kdn5xf): \b is an ASCII boundary — "Кредит қосу" (kk Add credits) never matched; letters of any script now
+export const WALLET_RE = /(?<![\p{L}\p{N}])(add (credits|funds|money|balance)|top ?-?up|buy credits|get credits|deposit|recharge|refill|пополн\p{L}*|balansı artır\p{L}*|kredit (al|əlavə)\p{L}*|толтыр\p{L}*|кредит (сатып|қос)\p{L}*)(?![\p{L}\p{N}])/iu;
 // a step forward in a multi-step form
 export const NEXT_RE = /^(next|next step|continue|proceed|forward|далее|дальше|продолжить|вперёд|növbəti|davam( et)?|irəli|келесі|жалғастыру|әрі қарай|weiter|suivant|siguiente|avanti|dalej)\b/i;
 // a step back in a multi-step form (never final, never sends anything)
@@ -85,6 +87,9 @@ export async function measure(page, { allowLightWeights = false, noTax = true, t
     add("1.9", await c.inputVisibility(page).catch(() => []));
     // 5.5.0 (Praxis 32q0gs): one alignment axis inside an open dialog / sheet
     add("2.7", await dialogAxis(page).catch(() => []));
+    // 5.5.0 (Compass Add Credits 7bouc8 / 6lyos0): a placeholder cut by its field; amounts and credit counts grouped two ways
+    add("2.14", await M.placeholderCut(page).catch(() => []));
+    add("B4", await M.numberGrouping(page).catch(() => []));
     return list;
 }
 

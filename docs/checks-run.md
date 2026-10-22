@@ -130,3 +130,35 @@ top lands: the step pane, the form or the list, inside the box that scrolls it (
 that scrolls itself). The reader is put at the button first. The region is found again after React replaces it.
 The walk also starts when a form's first button is Back, picks an option when Next waits for a choice, counts a
 step titled by a `<p>`, and walks Next buttons outside every form even when the page has other forms.
+
+## 5.5.0 — states, links and the crawl (from the miss loop)
+
+Fixtures: `test/misses-550-states.test.mjs`.
+- **1.9 / 2.7 in states:** `measure()` also runs 1.9 (an input edge that disappears in its error state) and 2.7
+  `dialogAxis` (an open dialog mixes centred and left-aligned blocks; full-width rows and buttons sharing the row are
+  neutral; a centred title alone passes). It also runs the copy rules (CT1–CT4, CT8, CT12, CT29 …), 2.18, 2.20, the 2.14
+  icon rule and B5 in every state. (Parallel zu9088, Praxis 32q0gs; Compass q0qz7n 4ec28x wee3g3)
+- **3.9 a selection's result opens on screen:** one control per group (pressed / selected / radio / tab / option, or ≥ 3
+  like buttons) is clicked; the region that changed must start on screen, below the sticky header. `states.selections:
+  false`. (Compass gn14vd vu8j0h 2t4uiv 1fxg7h r2jy12)
+- **6.14 a button does something:** a body button clicked once with no DOM / URL / request / dialog / focus / aria change
+  within 1 s. `states.deadButtons: false`. (Compass tpag4h)
+- **`states.allowPost`** (default none): read-only POSTs (`["/api/match"]`) that may reach the server; a non-final form
+  is then submitted with sample data and its result is a state (measure, 3.9; signed in also A5 and FM6). (Compass s2l9w1
+  1nel7r)
+- **Wizard walk:** when Next does not advance and a group's error asks for a choice, its first option is ticked and Next
+  pressed again. (Parallel uzbnam)
+- **`states.wallet: false`** opens the top-up / checkout dialog and measures it; nothing inside is pressed (issue #5).
+- **4.5** a card's action carries its card: two cards whose action opens the identical URL. (Kindred gn3zcj)
+- **J1** a CTA carries its context (the entity's page, the role preselected on sign-up); **J2** a guest's choice survives
+  sign-in (needs credentials + `login.url`). (Compass tco25o 6pn1k8 kls2ou 2g46xt)
+- **D4** a page loads without a data error: same-origin `/api/` GETs answering 4xx / 5xx while the page loads plus an
+  error text or Retry. (Kindred x6wx1s)
+- **COV1** (prepare): when the links run out, every static page route of the repo that was not reached is opened too
+  (signed out and per role); `api/`, `_private`, `crawl.exclude` and forbidden pages stay out; `crawl.json → unlinked`;
+  `crawl.unlinked: false`, `crawl.unlinkedMax` (30). (Kindred ga1ipn d6p4gh spdonv gm21xv 2b9nt9)
+- **Viewports of the run:** with `--project` the states run at the narrowest and widest of the selected projects
+  (`BABYSITTER_PROJECTS`), not of the configured list (issue #5).
+- **Signed-in pages:** a configured role that does not sign in makes the run partial and `e2e` exit 1; `prepare` exits 1
+  when no signed-in page was reached (`BABYSITTER_SIGNED_OUT=1` for a deliberate signed-out run). A test that only ran
+  out of time is "not tested (time budget)", not a finding (issue #4).

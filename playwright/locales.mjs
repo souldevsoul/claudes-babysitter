@@ -113,7 +113,10 @@ async function probeSwitcher(browser, base, code, current, ctxOpts) {
         const st = Object.entries(after.storage).filter(([k, v]) => before.storage[k] !== v && String(v).toLowerCase().includes(baseLang(code)));
         if (st.length) rec.storage = st.map(([key, value]) => ({ key, value }));
         rec.how = `language switcher: ${[rec.prefix && `URL ${rec.prefix}`, rec.query && `?${Object.keys(rec.query)[0]}=`, rec.origin && `domain ${rec.origin}`, rec.cookies && `cookie ${rec.cookies.map((c) => c.name).join(", ")}`, rec.storage && `localStorage ${rec.storage.map((s) => s.key).join(", ")}`].filter(Boolean).join(" + ") || "no visible change"}`;
-        if (!rec.prefix && !rec.query && !rec.origin && !rec.cookies && !rec.storage) return { how: rec.how, inPage: true };
+        // 5.5.0 (Compass htmhfi): did the click change the language at all? (LS1)
+        const sim = similar(after.text, before.text);
+        rec.clicked = { switched: baseLang(after.lang) === baseLang(code) || sim < 0.6, lang: after.lang, shared: Math.round(sim * 100) };
+        if (!rec.prefix && !rec.query && !rec.origin && !rec.cookies && !rec.storage) return { how: rec.how, inPage: true, clicked: rec.clicked };
         return rec;
     }
     finally {
@@ -128,10 +131,12 @@ async function verify(browser, base, loc, def, defText, ctxOpts) {
     try {
         await applyLocale(ctx, loc, base);
         const origin = loc.origin || base;
-        await page.goto(new URL(localize("/", loc, def), origin).href, { waitUntil: "domcontentloaded", timeout: 30_000 });
+        const res = await page.goto(new URL(localize("/", loc, def), origin).href, { waitUntil: "domcontentloaded", timeout: 30_000 });
         await quiet(page);
         await page.waitForTimeout(600);
         const s = await snapshot(page);
+        // 5.5.0: an error page is not the language (a guessed /az prefix that answers 404 shared 0 % of the words)
+        if (res && res.status() >= 400) return { verified: false, lang: s.lang, why: `opened the recorded way (${new URL(page.url()).pathname}), the site answers ${res.status()}` };
         const sim = similar(s.text, defText);
         if (baseLang(s.lang) === baseLang(loc.code)) return { verified: true, lang: s.lang, why: `<html lang="${s.lang}">` };
         if (sim < 0.6) return { verified: true, lang: s.lang, why: `page text changed (${Math.round(sim * 100)}% words shared with the default)` };
@@ -199,7 +204,7 @@ export async function detectLocales(browser, base, { repo = null, cfg = null, lo
         if (!rec || (!rec.prefix && !rec.query && !rec.origin)) {
             const sw = await probeSwitcher(browser, base, code, def, ctxOpts).catch(() => null);
             if (sw && !sw.inPage) rec = { ...(rec || {}), ...sw };
-            else if (sw?.inPage) rec = { ...(rec || {}), how: `${sw.how} — the language lives only in page state` };
+            else if (sw?.inPage) rec = { ...(rec || {}), how: `${sw.how} — the language lives only in page state`, clicked: sw.clicked };
         }
         if (!rec || (!rec.prefix && !rec.query && !rec.origin && !rec.cookies && !rec.storage)) {
             // the repo says how: app/[locale] → URL prefix; a storage key or a cookie the code reads
@@ -208,11 +213,13 @@ export async function detectLocales(browser, base, { repo = null, cfg = null, lo
             if (repo?.storageKey || cfg?.storageKey) r.storage = [{ key: cfg?.storageKey || repo.storageKey, value: code }];
             if (repo?.cookie || cfg?.cookie) r.cookies = [{ name: cfg?.cookie || repo.cookie, value: code }];
             if (!r.prefix && !r.storage && !r.cookies) r.prefix = `/${code}`; // the usual next-intl layout; verified below
-            rec = { ...r, how: rec?.how ? `${rec.how}; ${r.how}` : r.how };
+            rec = { ...r, how: rec?.how ? `${rec.how}; ${r.how}` : r.how, ...(rec?.clicked ? { clicked: rec.clicked } : {}) };
         }
         const full = { code, ...rec };
         const v = await verify(browser, base, full, defRec, home.text, ctxOpts);
-        locales.push({ ...full, ...v });
+        // the site offers this language in its switcher (LS1 fails when choosing it changes nothing)
+        const offered = home.switcher.some((x) => baseLang(x.code) === baseLang(code));
+        locales.push({ ...full, ...v, ...(offered ? { offered: true } : {}) });
         log(`  locale ${code}: ${v.verified ? "✓" : "✗"} ${full.how} — ${v.why}`);
     }
     return { default: def, locales, from };
