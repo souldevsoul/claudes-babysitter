@@ -4,6 +4,7 @@
 import { test, expect } from "@playwright/test";
 import * as c from "./checks.js";
 import * as L from "./checks/layout.js";
+import * as boxes from "./checks/boxes.js";
 import { existsSync, readFileSync } from "node:fs";
 import { resolve } from "node:path";
 import { loadConfig, loadRoutes, ROOT, authTag, storageFor } from "./project.js";
@@ -126,6 +127,14 @@ for (const route of ROUTES) {
             soft(h.soft, "clickable cards without hover feedback");
             hard(h.hard);
         });
+        // 5.5.0 (Kindred 1rto89): the hover that is there draws an even edge and does not move the card
+        test("1.6 hover draws an even edge on every side and does not move the card [hover-state]", async ({ page }, info) => {
+            test.skip(/mobile|tablet/.test(info.project.name), "pointer screens only");
+            await open(page, r);
+            const h = await boxes.hoverEdge(page, { max: Number(lay.maxHoverEdge ?? 10) });
+            soft(h.soft, "hover moves the card");
+            hard(h.hard);
+        });
         test("2.10 one menu on a phone: the burger and the avatar do not both open the navigation [mobile-menu]", async ({ page }, info) => {
             test.skip(!/mobile/.test(info.project.name), "narrow screens only");
             await open(page, r);
@@ -218,5 +227,20 @@ test.describe("site-wide layout", () => {
         test.info().annotations.push({ type: "favicon", description: f.info.join("\n") || "none" });
         soft(f.soft, "favicon");
         hard(f.hard);
+    });
+    // 5.5.0 (Kindred kytm39, bmlrc4): one brand mark — the footer logo is the header's, the tab icon is the mark, the
+    // web manifest names the brand
+    test("1.11 one brand mark: footer logo = header logo, favicon = the mark, manifest = the brand [logo-link favicon]", async ({ browser }, info) => {
+        test.skip(!/desktop-1440/.test(info.project.name), "once per run");
+        const home = ROUTES.find((x) => !x.auth && x.path === "/") || ROUTES[0];
+        const ctx = await browser.newContext({ ...info.project.use, baseURL: info.project.use.baseURL });
+        const page = await ctx.newPage();
+        await open(page, home.path);
+        const m = await boxes.brandMark(page, { brandTerms: (cfg.content?.brandTerms || []).concat(cfg.name ? [cfg.name] : []) });
+        await ctx.close();
+        if (m.eye.length)
+            test.info().annotations.push({ type: "check by eye", description: fmt(m.eye) });
+        soft(m.soft, "brand mark");
+        hard(m.hard);
     });
 });

@@ -7,6 +7,7 @@ import * as c from "./checks.js";
 import * as fit from "./checks/fit.js";
 import * as looks from "./checks/looks.js";
 import * as details from "./checks/details.js";
+import * as boxes from "./checks/boxes.js";
 import { loadConfig, loadRoutes, storageFor } from "./project.js";
 const cfg = loadConfig();
 const ROUTES = loadRoutes(cfg);
@@ -63,6 +64,21 @@ for (const route of ROUTES) {
         });
         test("2.16 a pinned panel's scroll box ends on the screen [P16]", async ({ page }) => { await open(page, r); hard(await details.stuckScrollPastScreen(page)); });
         test("6.13 a link in a sentence is not marked by colour alone (WCAG 1.4.1) [P34]", async ({ page }) => { await open(page, r); hard(await details.colourOnlyLinks(page)); });
+        // 5.5.0 — boxes, icons, the header (playwright/checks/boxes.js; Praxis, Kindred, Compass cards)
+        test("2.14 table cells and icons: text does not run into the next cell, icons are not cut or squeezed [P16]", async ({ page }) => { await open(page, r); hard([...(await boxes.cellSpill(page)), ...(await boxes.iconClipped(page))]); });
+        test("2.18 a rounded box does not scroll itself · 2.19 an empty box does not scroll · 2.20 a panel does not scroll sideways over nothing [P21 P16]", async ({ page }) => { await open(page, r); hard([...(await boxes.roundedScroller(page)), ...(await boxes.emptyScroller(page)), ...(await boxes.sidewaysScroll(page))]); });
+        test("2.24 an icon and its label have a gap [P16]", async ({ page }) => { await open(page, r); const g = await boxes.iconGap(page); soft(g.soft, "icon close to its label"); hard(g.hard); });
+        test("1.20 the header's word controls share one typeface · 3.5 a desktop header shows its navigation · 3.10 a burger beside the nav adds something [P04 P10]", async ({ page }, info) => {
+            test.skip((info.project.use.viewport?.width ?? 1440) < 1024, "desktop widths (the header's full row)");
+            await open(page, r);
+            const out = [...(await boxes.headerFaces(page))];
+            if ((cfg.layout || {}).desktopNav !== "menu")
+                out.push(...(await boxes.desktopHeaderNav(page)));
+            out.push(...(await boxes.burgerRepeatsNav(page)));
+            hard(out);
+        });
+        test("6.9 a focused field shows one ring (the frame's, not the inner input's) [P09]", async ({ page }) => { await open(page, r); hard(await boxes.innerFocusRing(page)); });
+        test("1.22 sibling cards have the same parts [P27]", async ({ page }) => { await open(page, r); soft(await boxes.siblingParts(page), "a card lacks a part its row has"); });
         test("1.1 no native select/date/file/checkbox/radio [P01 P03 P50]", async ({ page }) => { await open(page, r); hard(await c.nativeControls(page)); });
         test("6.4 text ≥12px, legible weight, contrast ≥4.5:1 (3:1 large) [P11 P34]", async ({ page }) => {
             await open(page, r);
@@ -310,6 +326,31 @@ test.describe("site-wide consistency", () => {
             test.info().annotations.push({ type: "not tested", description: notTested.join("\n") });
         const r = looks.roleLookOutliers(items, { radiusTolerance: Number(cfg.consistency?.radiusTolerance ?? 4) });
         soft(r.soft, "corner radius differs between pages (same corner family)");
+        hard(r.hard);
+    });
+    // 5.5.0: one placement of the "Most popular" badge (Kindred fqsn52), one accent hue (Compass u5brwv / 9ln1xx), page
+    // titles in one case (Kindred 9ha0j4), one accent style in headings (Compass 5dudz9, soft)
+    test("1.20 one placement of the popular badge · 1.21 one accent per site · 6.5 page titles in one case, one accent style in headings [P04 P46]", async ({ browser }, info) => {
+        test.skip(!/mobile-390|desktop-1440/.test(info.project.name), "run at one mobile and one desktop width");
+        test.setTimeout(60_000 + ROUTES.length * 15_000);
+        const list = [];
+        const notTested = [];
+        for (const route of ROUTES) {
+            const ctx = await browser.newContext({ ...info.project.use, storageState: route.auth ? storageFor(route.role) : undefined, baseURL: info.project.use.baseURL });
+            const page = await ctx.newPage();
+            try {
+                await open(page, route.path);
+                list.push(await boxes.siteSignals(page, route.path));
+            }
+            catch (e) {
+                notTested.push(`${route.path}: ${String(e.message).split("\n")[0]}`);
+            }
+            await ctx.close();
+        }
+        if (notTested.length)
+            test.info().annotations.push({ type: "not tested", description: notTested.join("\n") });
+        const r = boxes.siteSignalFindings(list);
+        soft(r.soft, "heading accent styles differ between pages");
         hard(r.hard);
     });
 });
