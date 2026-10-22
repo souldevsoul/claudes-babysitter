@@ -1,10 +1,40 @@
 {
   "$comment": "The babysitter-adopted products whose people's cards `babysitter misses` pulls from Nexus (slug = the Nexus project slug). excludeAuthors overrides the default [\"Admin\"] for one project.",
   "projects": [
-    { "slug": "praxis", "name": "Praxis", "mode": "adoption" },
-    { "slug": "parallel", "name": "Parallel", "mode": "adoption" },
-    { "slug": "deskhand", "name": "Deskhand", "mode": "strict" },
-    { "slug": "proxy", "name": "Proxy", "mode": "strict" },
-    { "slug": "tandem", "name": "Tandem", "mode": "strict" }
+    {
+      "slug": "praxis",
+      "name": "Praxis",
+      "mode": "adoption"
+    },
+    {
+      "slug": "parallel",
+      "name": "Parallel",
+      "mode": "adoption"
+    },
+    {
+      "slug": "deskhand",
+      "name": "Deskhand",
+      "mode": "strict"
+    },
+    {
+      "slug": "proxy",
+      "name": "Proxy",
+      "mode": "strict"
+    },
+    {
+      "slug": "tandem",
+      "name": "Tandem",
+      "mode": "strict"
+    },
+    {
+      "slug": "kindred",
+      "name": "Kindred",
+      "mode": "adoption"
+    },
+    {
+      "slug": "compass",
+      "name": "Compass",
+      "mode": "adoption"
+    }
   ]
 }

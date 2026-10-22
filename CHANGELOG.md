@@ -2,6 +2,154 @@
 
 Earlier releases (4.11.1 and before) are described in the README under "What changed in …".
 
+## 5.5.0 — issues #4 and #5 closed; every in-scope missed card is a check (2026-10-21)
+
+The owner's decision of 21.10: before the ratchet / baseline step, close the holes, then make the tool catch every bug it
+missed. (The brief named this release 5.4.0; 5.4.0 and 5.4.1 had already shipped from another session, so it is 5.5.0.)
+
+**Catch rate, re-measured** (a card counts as caught when a check reports the defect as the card describes it, proven by
+a fixture of the card as shipped; reports in `misses/kindred-2026-10-21.md`, `misses/compass-2026-10-21.md`,
+`misses/praxis-parallel-deferred-2026-10-21.md`):
+
+| product | cards | out of scope | in scope | caught by 5.4.1 / last run | caught by 5.5.0 | cannot automate |
+|---|---|---|---|---|---|---|
+| Kindred (all 53 cards since 08-29) | 53 | 11 | 42 | 0 by a run (12 by checks that existed but never ran there) | **39 / 42 = 93 %** | 3 |
+| Compass (since 08-26, re-triaged) | 122 rows | 5 | 117 | 0 (the 4 "caught" were unrelated findings) | **109 / 117 = 93 %** | 8 |
+| Compass, cards since the first babysitter run (20.10) | 31 | 2 | 29 | 0 / 29 | **28 / 29 = 97 %** | 1 |
+| Praxis + Parallel, the 34 rows 5.3.0 deferred (incl. the 9 Helena items) | 34 | 0 | 34 | 1 (CT21, 5.4.0) | **33 / 34** | 1 |
+
+Rows that cannot be checked automatically, and why:
+
+| card | product | what | why not |
+|---|---|---|---|
+| 2jhzy1 | Kindred | AI match explanation names initials next to anonymous handles | the text exists only after a real POST to the matcher (AI output); judging "N.R." as a leaked identity needs meaning |
+| m87322 | Kindred | task page: narrow frame, small chat | a narrow frame is a legitimate choice elsewhere; no threshold without an owner layout decision (taste) |
+| qvarju | Kindred | after onboarding, "Become a Partner" offered again | exists only right after a real onboarding in the same session (stale role in the JWT) |
+| qr60yb | Compass | "Find a match" always errors | a server failure on a real POST; `states.allowPost` would show the error state, the cause is backend |
+| 64fac9 | Compass | wallet history says "Custom Task" | needs a real hire to create the transaction row |
+| cwyzwv | Compass | hired for a service only another specialist offers | backend data integrity after a real hire |
+| xluiul, bgp3u0 | Compass | brief template validation by its brackets | product-specific template semantics |
+| 17s9ne | Compass | brief to a preselected specialist shows "Finding matches" | judging that a status contradicts the flow's intent, after a real submit |
+| awyi64 | Compass | a failed applicant sees "pending" | needs a fresh account failing the quiz, then a judgement of meaning |
+| xnahco | Compass | "TRIAL PASSED 80 %" next to "You need at least 60 %" | needs passing a real quiz |
+| 2s63fa | Parallel | after creating a task the mobile shortlist sits left | exists only after a real brief POST creates a task; the layout rule (2.12) catches it on any list it can reach |
+| af1p4q (half) | Compass | "upload always fails" | needs a real upload; the missing formats / size hint is FM15 |
+
+**Issue #4 (onboarding Kindred) and #5 (Compass): every item closed** (`test/issues-550.test.mjs`, `test/issues-550-browser.test.mjs`, each from the real case):
+- **A run whose signed-in pages were never reached fails.** `init` writes `login.url` from the sign-in route it detects
+  (it wrote `acceptance.auth.signIn` and left `login.url` empty, so every role was skipped with "no login.url" while the
+  run summed up as normal); `prepare` falls back to `acceptance.auth.signIn` for older configs. When roles, `LOGIN_EMAIL`
+  or `SESSION_COOKIES` are configured and not one signed-in page is reached, `prepare` exits 1 with "NO SIGNED-IN PAGE WAS
+  REACHED" and each role's reason; a role that did not sign in makes `e2e` partial and exit 1 ("SIGNED-IN PAGES NOT
+  CHECKED for …"), never "Clean.". `BABYSITTER_SIGNED_OUT=1` says a signed-out run is meant.
+- **The vendored copy stays out of the product's `tsc` and `eslint`.** `init --vendor` and `update` add
+  `tools/claudes-babysitter` to tsconfig `exclude` (JSONC with comments kept; `node_modules` kept when there was no
+  exclude) and an `{ ignores: ["tools/claudes-babysitter/**"] }` entry to a flat ESLint config (`export default [...]`,
+  `defineConfig([...])`, `tseslint.config(...)`, `const x = [...]; export default x`), `.eslintrc*` ignorePatterns and
+  `.eslintignore`; what it cannot edit it says. Proved with the real `tsc -p` and `eslint .` on a Next-style project
+  (without the exclude, `templates/e2e/journeys.spec.ts` of the copy breaks a Next tsconfig).
+- **`--quick` and `--project` runs check page states at phone width.** The states / scroll suite runs at the narrowest and
+  the widest viewport of the run; a run narrowed with `--project` (mobile-390 + desktop-1440, as sharded runs do) still
+  took 360 from the full list, so the phone states never ran. `e2e` / `test-ui` pass the selected projects
+  (`BABYSITTER_PROJECTS`) and the specs pick from those.
+- **`update` asks the remote.** It always runs one `git ls-remote` — never the 12-hour version-check cache, never a
+  `BABYSITTER_LATEST` pin — refreshes the cache with what it saw, says the tag it saw ("asked just now"), and a `--to`
+  tag that is not on the remote says so ("not pushed yet?").
+- **`misses` writes into the product, not into the copy**: from `tools/claudes-babysitter` or
+  `node_modules/claudes-babysitter` reports go to `.babysitter/misses/` (gitignored); the tool's own repository keeps
+  `misses/`.
+- **A timeout is not a finding.** A test that only ran out of time (`Test timeout of …ms exceeded`, a teardown that ran
+  out, a page closed by the timeout) is listed as "Not tested — time budget" and kept out of `findings.json` and
+  `fix-plan`; a real failure that also timed out stays a finding.
+- **Robustness:** `e2e` (and its `prepare`) run Playwright asynchronously and pass SIGTERM / SIGINT / SIGHUP / SIGALRM on;
+  a second signal or 15 s kills the child; no orphaned Playwright with its browsers.
+
+False alarms fixed:
+- **CT2** a message is an input hint by its use: a key only ever shown as `placeholder={t("…")}` (Kindred
+  `auth.astronautEmail = "you@example.com"`) is no longer test data; the same address shown as text still is.
+- **CT2 / CT9 / CT10** the signed-in test account's own address: every configured account (`LOGIN_EMAIL` and each
+  `roles[].env.LOGIN_EMAIL`) is the user's own on a signed-in page (Kindred / Compass /settings).
+- **`ui/overlay-motion`** follows a lookup map: `className={cn(DIALOG_MOTION[variant], …)}` reads every entry of the
+  const object (also `as const` / `satisfies` / typed); a map without motion still fails (Kindred dialog.tsx).
+- **1.19** "dark page" is judged from the painted top-level surface (the opaque box spanning the width under a few points
+  of the screen), not `<body>`: a leftover dark root theme under a cream page is a light page (Kindred).
+- **ST3** "Open a case" (Kindred), "Start a brief with this profile" (Compass) and other request-flow CTAs are hire steps;
+  a link into the request flow (`/request`, `/brief`, `/hire`, `/book`, `/order`, `/checkout`, `…/new`) is followed one
+  step; `stageGates.hireLabel` adds a product's own wording; `stageGates.catalogRole` walks the catalog as a QA role when
+  test entities are shown to QA viewers only (owner decision 20.10).
+- **C1** "OK" / "Got it" / "I understand" count as the banner's accept (Compass: "OK" + "Manage"); a notice with only
+  "OK" on a site that stores nothing beyond the strictly necessary before or after it is compliant (Kindred) — measured:
+  storage and analytics requests; if more is stored the notice needs Reject. An "OK" of an ordinary dialog is not a banner.
+- **FM1** a range "15 to 34" / "€1 – €500" counts as the hint, and so does the text the field names with
+  `aria-describedby` (Kindred IBAN; the static `ui/numeric-input-bounds` already accepted "1 to {max}").
+- **CT11** what a user wrote is shown back as written: `[data-user-content]`, chat logs, quotes and text kept with its line
+  breaks (`white-space: pre-wrap`) are not untranslated copy (Compass /dashboard/tasks [kk]).
+- **M1, A1/A3/A6** a roles-only project (no `LOGIN_EMAIL`) uses its first role's storage instead of crashing on
+  `storage.json` (ENOENT); the product's `user` fixture too (Compass).
+- **A4** account menus first: triggers labelled account / user / profile / avatar in the header, nav or sidebar are opened
+  before the other menus, up to 8 (Compass: the avatar dropdown came after the language and currency switchers).
+
+Misses of issue #5:
+- **A — CT1 in English**: "not switched on yet", "not yet enabled / activated / connected", "once / until / when (card)
+  payment(s) / checkout / payouts / top-ups … is live / switched on" (and ru / az / kk equivalents); "Once your profile
+  is live" passes. **The same message in every language:** unfinished copy found at a key in one locale is reported at
+  the same key in each other locale (Compass: caught in az "hələ aktiv deyil", missed in en). A text left in English in
+  another locale is not a source.
+- **B** see `--project` above. **C** `states.wallet: false` opens the top-up / checkout dialog and measures it (every
+  non-GET request is aborted anyway); nothing inside it is pressed.
+
+**Every missed card a check** — six areas, each card pinned by a fixture named after it (bad fails, the fix passes,
+look-alikes stay quiet; `test/misses-550-{layout-a,layout-b,content-a,content-b,money,states}.test.mjs`). Per-check text
+and the cards behind each id: the 5.5.0 sections of docs/checks-layout.md, checks-content.md, checks-run.md,
+checks-forms.md and acceptance.md.
+- **Rhythm** (`playwright/checks/rhythm.js`): 2.5 a money range split at its dash (every currency and language), heading
+  breaks and balance, the wordmark on one line; 2.6 one slot wraps in a row of equals, stacked phone buttons of one width,
+  dividers that follow the stacking; 2.7 marker / badge level, side nav vs content top, fields of a row share a top; 2.11
+  glyph overlap on the whole page; 2.12 key–value rows; new 2.17 one content width, 2.21 squeezed text, 2.22 two-column
+  blocks share one rule, 2.23 even rhythm; 6.5 heading alignment per page.
+- **Boxes, icons, header, brand** (`playwright/checks/boxes.js`): 2.14 cell spill and icons cut / squeezed; new 2.18
+  rounded box that scrolls, 2.19 empty box that scrolls, 2.20 sideways scroll over nothing, 2.24 icon gap; 1.6 hover edge;
+  1.11 one brand mark (footer, favicon, manifest); 1.20 header faces and popular-badge placement; new 1.21 one accent,
+  1.22 sibling parts (soft); 3.5 desktop header shows its nav (`layout.desktopNav: "menu"`); new 3.10 burger repeats the
+  nav; 6.5 h1 case and heading accent; 6.9 one focus ring; new B5 custom amount tile.
+- **Site-wide copy** (lib/content-consistency.js, lib/content-site.js): CT19 loanword spelling per language and the
+  handover verb; CT20 recourse after acceptance, who sets the task list, what the site stores, minimum age, closed payment
+  lists vs the checkout, refused countries offered; CT15 brand prefix, lower-case and qualified document names; CT21 the
+  page's own name is the suggested label; new CT23 promises backed by the policies, CT27 worked examples add up, CT31 one
+  order per list (soft), F5 "marks shown in X", M3 the payment API accepts every switcher currency.
+- **Copy rules** (lib/copy-rules.js, playwright/checks/copy.js): CT12 path labels; new CT24 near-copy of a sibling
+  product's headline (`~/.claudes-babysitter/copy.json`), CT25 brand URL on another host (`content.ownDomains`),
+  CT26 slugs as names, CT28 heading case and acronyms, CT29 e-mail case, CT30 a catalogue of zeros, 6.15 one `<title>` per
+  page, P4 numbering vs contents; CT8 sentence capital and count placeholders; CT3 raw scores and fetch / JSON errors.
+  The copy rules now run in every state of the states run.
+- **Money and acceptance** (`playwright/checks/money.js`): B4 the stated rate reproduces the prices, the calculator
+  follows its label, a bracket does not repeat its amounts, unconverted amounts after a switch, one price per pack across
+  pages and the top-up dialog, one unit per rate, one number grouping per state (credits included), x.10–x.90 tails are
+  round; 2.14 a placeholder cut by its field; P2 rail parity; F0 footer parity per role; F5 label line and the studio's
+  logo files; A4 lands home; new A10 closed signed-in areas, M2 header balance, LS1 the switcher switches; C1 Manage when
+  settings exist; C2 Allow all that allows nothing. `WALLET_RE` matches Cyrillic labels; a segmented currency row is
+  found before a dropdown; a guessed locale prefix that answers 4xx is not "verified".
+- **States, links, forms, crawl** (playwright/checks/run.js, forms.js, prepare.mjs): 1.9 and 2.7 (dialog axis) in every
+  state; new 3.9 a selection's result opens on screen, 6.14 a button does something, `states.allowPost` for read-only
+  result screens, the wizard ticks the group a step asks for; new 4.5 a card's action carries its card, J1 a CTA carries
+  its context, J2 a guest's choice survives sign-in, D4 a page loads without a data error; FM1 stated bounds, FM3 HTML
+  error reply, FM4 no request / outcome contrast, FM13 prior text, new FM14 phone, FM15 file; new COV1 the crawl opens the
+  repo's unlinked static routes (`crawl.unlinked`, `crawl.unlinkedMax`).
+- Fixed on the way: CT19 / CT20 / CT7 site-wide findings were reported only when CT21 or CT22 was on (a comment had
+  swallowed a closing brace).
+
+**Issue #4 items 13–17** (added during this round): 1.3 / 1.16 count a select trigger with the fields; 2.7 skips a column
+whose content is a sticky contents list; 6.12 judges toggling back on what the click opened (not the page's re-render
+after "Manage cookies"); P2 accepts a collapsible contents list at the top on phones (`layout.tocMobile`); 3.5 takes
+the longest matching prefix as the current section.
+
+**Not done here, on purpose:** products are not updated (the coordinator rolls 5.5.0 out). Checks with the highest
+false-alarm risk on real sites — 6.14 dead buttons, 3.9 selections, 4.5 card actions, 2.21–2.23 — can each be switched
+off (`states.deadButtons`, `states.selections`, `acceptance.skip` / the check id); the first rollout run should be read
+by eye. Live probes on Compass and Kindred public pages (/, /pricing, /specialists, /about at 390 and 1440) tightened the
+rhythm and boxes rules; what they still report looks real (Compass stat rows wrapping their price band, stacked hero CTAs
+of different widths, `.fg-plate` cards lifting on hover; a squeezed icon on Kindred /pricing at 390).
+
 ## 5.4.1 — page names the copy uses, redirects, package mode on Node 26, husky (2026-10-21)
 
 Two copy problems 5.4.0 missed on a product, and two problems of products that install the tool as a package.

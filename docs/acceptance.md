@@ -132,3 +132,19 @@ with `"stage": "live" | "test"` in `babysitter.config.json`. With no stage known
 - Whether contact mail actually arrives.
 - Copy that sounds AI-written.
 - Fonts, logos and sentences shared across sibling products. The theme fingerprint registry (`babysitter fingerprint`) covers part of this.
+
+## 5.5.0 — from the miss loop and issues #4 / #5
+
+| ID | Check | Cards |
+|---|---|---|
+| P2 | contents-rail parity across policy pages (3+ sections, when 2+ policies have a rail); `-policy`, `-agreement`, `-notice` paths are policies; on phones a collapsible contents list before the first section counts (`layout.tocMobile: "auto" \| "collapsible" \| "sticky"`) | Parallel gjfjnc; issue #4 item 16 |
+| F0 | the footer links are the same signed in as signed out, per role (links only signed-in users get are soft) | Praxis xp7pmu |
+| F5 | "We accept" on the logos' line, before Visa; the marks are the studio's files (`acceptance.paymentLogoSet`, sha256) | Compass r98e7t cnfovs |
+| A4 | sign out lands on `acceptance.afterSignOut` (default `/`) or a locale root; account menus (account / user / profile / avatar triggers in header, nav or sidebar) are opened first, up to 8 | Compass 3v77n0; issue #5 |
+| A10 | signed-in and admin areas are not rendered to signed-out visitors or to another role | Kindred gm21xv |
+| M2 | the signed-in header shows the credit balance (`acceptance.headerBalance`) | Compass gcrh4v |
+| LS1 | a language offered in the switcher switches the page | Compass htmhfi |
+| C1 | "OK" / "Got it" count as accept; an essential-only "OK" notice is compliant when nothing beyond the strictly necessary is stored (measured), and still needs "Manage" when the footer opens a settings window | issues #4 #5; Compass y28qwn |
+| C2 | "Allow all" must allow something | Compass faefuc |
+| ST3 | request-flow CTAs ("Open a case", "Start a brief with this profile"), a link into the request flow followed one step, `stageGates.hireLabel`, `stageGates.catalogRole` (walk the catalog as a QA role) | issues #4 #5 |
+| M1, A1/A3/A6 | a roles-only project uses its first role's storage | issue #5 |

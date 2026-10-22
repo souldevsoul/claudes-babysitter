@@ -71,6 +71,19 @@ Or install it as a dev dependency: `npm i -D github:souldevsoul/claudes-babysitt
 | `docs/` | The guidelines the rules enforce |
 | `test/`, `fixtures/` | `npm test`: RuleTester, Stylelint fixtures, end-to-end cases |
 
+## What changed in 5.5.0 (issues #4 and #5 closed; every in-scope missed card is a check)
+
+A run whose signed-in pages were never reached fails (`init` writes `login.url`; `prepare` exits 1 when no role signs
+in; a role not checked makes `e2e` exit 1 — `BABYSITTER_SIGNED_OUT=1` for a deliberate signed-out run). The vendored copy
+stays out of the product's `tsc` and `eslint`; `--project` runs check states at the narrowest selected width; `update`
+always asks the remote; `misses` writes into `.babysitter/misses/`; a timeout is "not tested", not a finding; signals
+reach the Playwright child. False alarms of both issues are fixed (CT2 by use, the accounts' own e-mail, lookup-map
+motion, 1.19 painted surface, ST3 wording / `stageGates.catalogRole`, C1 "OK" and essential-only notices, FM1 ranges,
+CT11 user text, roles-only storage, A4 account menus, 1.3 select triggers, 2.7 sticky columns, 6.12 re-renders, P2
+collapsible phone contents, 3.5 longest prefix). Every in-scope card Praxis, Parallel, Kindred and Compass testers filed
+and the tool missed is now a check with a fixture of the card (catch rate on Kindred 39/42, Compass 109/117, Compass
+since the first run 28/29; the rest cannot be automated, each with the reason). Details: [`CHANGELOG.md`](CHANGELOG.md).
+
 ## What changed in 5.4.1 (page names in the copy, redirects, package mode on Node 26, husky)
 
 CT21 compares the names the copy and the emails give a page ("download it from My videos") with the page's own name
