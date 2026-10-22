@@ -11,6 +11,7 @@ import * as c from "./checks.js";
 import * as a from "./acceptance.js";
 import * as run from "./checks/run.js";
 import * as L from "./checks/layout.js";
+import * as Rh from "./checks/rhythm.js";
 import * as fit from "./checks/fit.js";
 import { loadConfig, loadRoutes, storageFor, loadLocales, applyLocale, localize, viewports } from "./project.js";
 const cfg = loadConfig();
@@ -75,6 +76,9 @@ for (const route of ROUTES) {
                 add("B4", await a.moneyText(page, opts));
                 add("N6", await a.clippedControls(page));
                 add("2.14", (await fit.textCutOff(page)).hard); // 5.2.0: a longer language cuts text that fits in English
+                // 5.5.0 (Praxis tjm4fx AZ, Compass rqgkrl AZ / 9rkp6z KK): ranges split at their dash, one slot wrapping in a
+                // row of equals, squeezed text, the wordmark and heading breaks — in every language at every width
+                add("rhythm", await Rh.rhythmText(page));
                 // 2.5 words broken mid-word / numbers split / orphans: a longer language breaks what fits in English (Praxis KK
                 // "ТАПСЫРМА" broken by letters at 360) — layout.spec checks the default language, this checks the others
                 let breaks = { hard: [], soft: [] };
