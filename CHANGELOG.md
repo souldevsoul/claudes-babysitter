@@ -2,6 +2,19 @@
 
 Earlier releases (4.11.1 and before) are described in the README under "What changed in …".
 
+## 5.5.2 — two false alarms: CSS-sized icons, card columns (2026-10-22)
+
+- **2.14 `iconClipped`: an icon set's width attribute is not its size.** Icon libraries draw `width="24" height="24"`
+  and size the icon with CSS (16px, 14px, 20px). Every such icon in a flex row was reported as "squeezed to 16×16px
+  (declared 24px)". Now a candidate is measured again with `flex-shrink: 0`, and it is squeezed only when flex shrinking
+  really took width away (more than 1px); the message gives that unshrunk width as the intended size. A CSS-sized icon
+  with room passes; a 24px icon (or a CSS-sized one) shrunk beside a long label in a narrow row is still caught.
+- **2.22 `twoColumnRule`: box to box, ink to ink.** A right column that is a card was placed by its box top, but the
+  left column's lines always by their text, even when the left column was cards too: two card panels with top-aligned
+  boxes were reported as "the right column starts 63px above the eyebrow". A left item that is a painted box (background,
+  border or shadow, down its single-child chain, the same test as the right side) is now placed by its box top. Top-
+  aligned card columns pass; a card that starts off every line of a text column still fails.
+
 ## 5.5.1 — relative periods are a natural order in dropdowns (2026-10-22)
 
 1.2 (dropdown order) reported a date filter such as "All dates, Today, Last 7 days, Last 30 days, Last 12 months" as

@@ -231,9 +231,21 @@ try {
     await load(page, doc(row("")));
     bad = await check(page);
     assert.equal(bad.length, 1, JSON.stringify(bad));
-    assert.match(bad[0].what, /icon squeezed to \d+×14px \(declared 14px\)/);
+    assert.match(bad[0].what, /icon squeezed to \d+×14px \(intended 14px\)/);
     await load(page, doc(row("flex-shrink:0")));
     assert.deepEqual(await check(page), []);
+    // an icon set's width attribute is not its size: lucide draws width="24" and CSS sizes it (size-4 = 16px)
+    const css = (st) => `<div style="display:flex;align-items:center;gap:8px;width:${st}"><svg width="24" height="24" viewBox="0 0 24 24" style="width:16px;height:16px"><path d="M2 2h20v20H2z"/></svg><span style="white-space:nowrap">Active Orders and a long label</span></div>`;
+    await load(page, doc(css("320px")));
+    assert.deepEqual(await check(page), [], "CSS-sized 16px icon with width=24, room to spare: not squeezed");
+    await load(page, doc(css("120px;overflow:hidden").replace('style="width:16px', 'style="min-width:0;width:16px')));
+    bad = await check(page);
+    assert.equal(bad.length, 1, JSON.stringify(bad));
+    assert.match(bad[0].what, /icon squeezed to \d+×16px \(intended 16px\)/, "a CSS-sized icon that flex really shrank is still caught");
+    await load(page, doc('<div style="display:flex;width:120px;overflow:hidden"><svg width="24" height="24" viewBox="0 0 24 24" style="min-width:0"><path d="M2 2h20v20H2z"/></svg><span style="white-space:nowrap">Active Orders and a long label</span></div>'));
+    bad = await check(page);
+    assert.equal(bad.length, 1, JSON.stringify(bad));
+    assert.match(bad[0].what, /icon squeezed to \d+×24px \(intended 24px\)/, "a 24px icon at shrink 1 beside a long label");
     await load(page, doc('<div style="width:200px;overflow:hidden"><svg width="400" height="300" viewBox="0 0 400 300"><rect width="400" height="300"/></svg></div><div style="width:32px;height:32px;border-radius:50%;overflow:hidden"><img src="data:image/gif;base64,R0lGODlhAQABAAAAACw=" width="40" height="40"></div>'));
     assert.deepEqual(await check(page), [], "decorative / avatar");
   });

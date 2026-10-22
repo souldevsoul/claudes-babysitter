@@ -71,6 +71,12 @@ Or install it as a dev dependency: `npm i -D github:souldevsoul/claudes-babysitt
 | `docs/` | The guidelines the rules enforce |
 | `test/`, `fixtures/` | `npm test`: RuleTester, Stylelint fixtures, end-to-end cases |
 
+## What changed in 5.5.2 (two false alarms)
+
+2.14 no longer takes an icon's `width="24"` attribute for its size: an icon counts as squeezed only when flex shrinking
+really narrowed it. 2.22 places a left column of cards by their box tops, like a right column card, so two top-aligned
+card columns pass. Details: [`CHANGELOG.md`](CHANGELOG.md).
+
 ## What changed in 5.5.1 (relative periods in dropdowns)
 
 A dropdown of relative periods ("Today, Last 7 days, Last 30 days, Last 12 months", also in French and Russian) is a

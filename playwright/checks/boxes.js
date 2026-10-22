@@ -74,8 +74,16 @@ export const iconClipped = (page) => page.evaluate(() => {
       const squeezedW = Number.isFinite(declared) && declared > 0 && r.width < declared - 1;
       const squeezedA = vbAspect && Math.abs(r.width / r.height - vbAspect) / vbAspect > 0.1 && r.width < r.height;
       if (squeezedW || squeezedA) {
-        out.push({ what: `icon squeezed to ${Math.round(r.width)}×${Math.round(r.height)}px${squeezedW ? ` (declared ${declared}px)` : ""} by the flex row beside it — give it shrink-0 (flex-shrink: 0) [2.14]`, where: W.__uiDescribe(el.parentElement || el), selector: W.__uiSelector(el), human: W.__uiHuman(el.parentElement || el) });
-        continue;
+        // a width attribute is not the size: icon sets (lucide: width="24") are sized by CSS (size-4 = 16px). Squeezed
+        // means flex shrinking took width away — measure it unshrunk and compare
+        const saved = el.style.flexShrink;
+        el.style.flexShrink = "0";
+        const unshrunk = el.getBoundingClientRect().width;
+        el.style.flexShrink = saved;
+        if (unshrunk > r.width + 1) {
+          out.push({ what: `icon squeezed to ${Math.round(r.width)}×${Math.round(r.height)}px (intended ${Math.round(unshrunk)}px) by the flex row beside it — give it shrink-0 (flex-shrink: 0) [2.14]`, where: W.__uiDescribe(el.parentElement || el), selector: W.__uiSelector(el), human: W.__uiHuman(el.parentElement || el) });
+          continue;
+        }
       }
     }
     // (a) cut by an ancestor that clips (not a scroller), while partly visible

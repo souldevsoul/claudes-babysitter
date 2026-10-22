@@ -574,7 +574,9 @@ export async function twoColumnRule(page) {
       if (!(left.innerText || "").trim() || (right.innerText || "").trim().length < 3) continue;
       if (/center/.test(R.cs(b).alignItems) || /center/.test(R.cs(right).alignSelf)) continue;
       let col = left; while (R.kids(col).length === 1) col = R.kids(col)[0];
-      const anchors = R.kids(col).map((k) => R.firstInk(k)).filter(Boolean).slice(0, 4).map((r) => r.top);
+      // box to box, ink to ink: a left item that is a painted box (a card) is placed by its box top, like the right column
+      const boxTop = (k) => { let e = k; while (!R.painted(e) && R.kids(e).length === 1) e = R.kids(e)[0]; return R.painted(e) ? e.getBoundingClientRect().top : null; };
+      const anchors = R.kids(col).map((k) => boxTop(k) ?? R.firstInk(k)?.top ?? null).filter((t) => t !== null).slice(0, 4);
       if (anchors.length < 2) continue;
       let rc = right; while (R.kids(rc).length === 1 && !R.painted(rc)) rc = R.kids(rc)[0];
       const firstBox = R.painted(rc) ? rc.getBoundingClientRect().top : (R.kids(rc)[0] && R.painted(R.kids(rc)[0]) ? R.kids(rc)[0].getBoundingClientRect().top : null);

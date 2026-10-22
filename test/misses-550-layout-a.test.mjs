@@ -170,6 +170,17 @@ try {
     const across = Rh.twoColumnRulesAcross([{ route: "/", rules: [good.rules[0], { ...good.rules[0], text: "Measured scale" }] }, { route: "/pricing", rules: [{ ...good.rules[0], rule: 1, name: "the heading", text: "What a credit does" }] }]);
     assert.equal(across.length, 1); assert.match(across[0].what, /different rules/);
     await expectQuiet(page, ck, doc(`<main><section style="display:grid;grid-template-columns:1fr 1fr;width:1200px"><div><p style="margin:0">INDEX</p><h1>Hero</h1><p>Lead</p></div><div style="align-self:center"><p>Illustration caption</p></div></section></main>`), "centred on purpose");
+ 
+  });
+  await test("2.22 box to box, ink to ink: two card columns with top-aligned boxes pass; a card 60px off a text column still fails", async (page) => {
+    const ck = need(Rh.twoColumnRule);
+    const card = (t, extra = "") => `<div style="background:#fff;border:1px solid #ddd;box-shadow:0 4px 12px rgba(0,0,0,.08);padding:32px${extra}"><p style="font-size:12px;margin:0">${t}</p><h3 style="margin:16px 0 0">Panel heading</h3><p style="margin:8px 0 0">A line of the panel.</p></div>`;
+    const cards = `<section style="display:grid;grid-template-columns:1fr 1fr;gap:24px;width:1200px;margin:40px 0"><div style="display:flex;flex-direction:column;gap:24px">${card("FIRST")}${card("SECOND")}</div><div>${card("RIGHT")}</div></section>`;
+    await load(page, doc(`<main>${cards}</main>`));
+    const ok = await ck(page);
+    assert.deepEqual(ok.hard, [], "two card columns whose boxes start on one line");
+    assert.equal(ok.rules.length, 1); assert.equal(ok.rules[0].rule, 0);
+    await expectHits(page, ck, doc(`<main><section style="display:grid;grid-template-columns:1fr 1fr;width:1200px;margin:40px 0"><div><p style="font-size:12px;margin:0">INDEX</p><h1 style="margin:24px 0 0">Every specialist</h1><p style="margin:24px 0 0">Lead paragraph of the block.</p></div><div style="padding-top:150px">${card("RIGHT")}</div></section></main>`), 1, /lines up with nothing/);
   });
 
   /* ═════ 2.23 rhythm ═════ */
