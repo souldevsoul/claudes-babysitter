@@ -653,7 +653,8 @@ export async function policyLayout(page, { tocMobile = "auto" } = {}) {
         const sc = out.ctrl ? await probe(out.ctrl) : null;
         const stays = (x) => x && x.sticky && x.inView;
         // the open list or the collapsed bar stays on screen: either is the sticky "On this page"
-        const collapsibleOk = out.phone && tocMobile !== "sticky" && (out.collapsibleTop || tocMobile === "collapsible");
+        // the product says so (layout.tocMobile: "collapsible", an owner decision): a sticky bar stays the default
+        const collapsibleOk = out.phone && tocMobile === "collapsible" && out.collapsibleTop;
         if ((st || sc) && !stays(st) && !stays(sc) && !collapsibleOk)
             list.push({ id: "P2", what: '"On this page" scrolls away — make it sticky [P2, BQA 8]', where: out.toc || out.ctrlWhere });
         if (stays(st) && st.tooTall)

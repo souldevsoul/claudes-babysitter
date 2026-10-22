@@ -184,10 +184,10 @@ document.getElementById("mc").onclick = () => {
     const sections = Array.from({ length: 8 }, (_, i) => `<h2 id="s${i}">Section ${i + 1}</h2>${"<p>" + "The specialist keeps the work private and delivers it on time. ".repeat(6) + "</p>"}`.repeat(1)).join("");
     const acc = `<div><button aria-expanded="false" aria-controls="toc" id="tb">On this page</button><nav id="toc" hidden>${Array.from({ length: 8 }, (_, i) => `<a href="#s${i}">Section ${i + 1}</a>`).join("")}</nav></div>`;
     await load(page, doc(`<main><h1>Terms</h1>${acc}${sections}</main>`));
-    assert.ok(!(await a.policyLayout(page)).some((f) => /scrolls away/.test(f.what)), "collapsible at the top on a phone");
-    assert.ok((await a.policyLayout(page, { tocMobile: "sticky" })).some((f) => /scrolls away/.test(f.what)), "layout.tocMobile: sticky asks for the sticky bar");
+    assert.ok(!(await a.policyLayout(page, { tocMobile: "collapsible" })).some((f) => /scrolls away/.test(f.what)), "layout.tocMobile: collapsible — a collapsible list at the top on a phone");
+    assert.ok((await a.policyLayout(page)).some((f) => /scrolls away/.test(f.what)), "without the decision the sticky bar stays the rule (fp-510 P2)");
     await load(page, doc(`<main><h1>Terms</h1>${sections}${acc}</main>`));
-    assert.ok((await a.policyLayout(page)).some((f) => /scrolls away/.test(f.what)), "a list after the sections is not the contents at the top");
+    assert.ok((await a.policyLayout(page, { tocMobile: "collapsible" })).some((f) => /scrolls away/.test(f.what)), "a list after the sections is not the contents at the top");
   }, { width: 390, height: 800 });
   /* ═════ #4.1 prepare: login.url from acceptance.auth.signIn; no signed-in page reached → exit 1, loudly ═════ */
   const fx = await start();

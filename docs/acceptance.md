@@ -137,7 +137,7 @@ with `"stage": "live" | "test"` in `babysitter.config.json`. With no stage known
 
 | ID | Check | Cards |
 |---|---|---|
-| P2 | contents-rail parity across policy pages (3+ sections, when 2+ policies have a rail); `-policy`, `-agreement`, `-notice` paths are policies; on phones a collapsible contents list before the first section counts (`layout.tocMobile: "auto" \| "collapsible" \| "sticky"`) | Parallel gjfjnc; issue #4 item 16 |
+| P2 | contents-rail parity across policy pages (3+ sections, when 2+ policies have a rail); `-policy`, `-agreement`, `-notice` paths are policies; on phones a collapsible contents list before the first section counts when `layout.tocMobile: "collapsible"` (owner decision; a sticky bar is the default) | Parallel gjfjnc; issue #4 item 16 |
 | F0 | the footer links are the same signed in as signed out, per role (links only signed-in users get are soft) | Praxis xp7pmu |
 | F5 | "We accept" on the logos' line, before Visa; the marks are the studio's files (`acceptance.paymentLogoSet`, sha256) | Compass r98e7t cnfovs |
 | A4 | sign out lands on `acceptance.afterSignOut` (default `/`) or a locale root; account menus (account / user / profile / avatar triggers in header, nav or sidebar) are opened first, up to 8 | Compass 3v77n0; issue #5 |

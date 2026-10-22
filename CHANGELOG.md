@@ -140,7 +140,7 @@ checks-forms.md and acceptance.md.
 
 **Issue #4 items 13–17** (added during this round): 1.3 / 1.16 count a select trigger with the fields; 2.7 skips a column
 whose content is a sticky contents list; 6.12 judges toggling back on what the click opened (not the page's re-render
-after "Manage cookies"); P2 accepts a collapsible contents list at the top on phones (`layout.tocMobile`); 3.5 takes
+after "Manage cookies"); P2 accepts a collapsible contents list at the top on phones when the product says so (`layout.tocMobile: "collapsible"`; a sticky bar stays the default); 3.5 takes
 the longest matching prefix as the current section.
 
 **Not done here, on purpose:** products are not updated (the coordinator rolls 5.5.0 out). Checks with the highest
