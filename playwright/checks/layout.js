@@ -1263,7 +1263,7 @@ const findSwitcher = (codes) => {
  * by one, then the original is put back). Hard/soft per moneyIssues; soft: a header balance in money while the
  * product sells credits. Without a switcher only the current currency is checked. At most `max` currencies.
  */
-export async function moneyFormat(page, max = 8, { rateDecimals = 4 } = {}) {
+export async function moneyFormat(page, max = 8, { rateDecimals = 4, each = null } = {}) {
   await ensure(page);
   const hard = [], soft = [], notTested = [], tested = [];
   const read = async () => { await ensure(page); return page.evaluate(moneyTokens, MONEY_SRC); };
@@ -1310,6 +1310,8 @@ export async function moneyFormat(page, max = 8, { rateDecimals = 4 } = {}) {
       const r = moneyIssues(st.tokens, { label: `in ${code}`, baseNice: b.niceShare, rateDecimals });
       hard.push(...r.hard); soft.push(...r.soft);
       tested.push(code);
+      // 5.5.0: the caller measures the page in this currency too (layout.spec: 2.5 ranges split at their dash)
+      if (each) await each(code).catch(() => {});
     }
   } finally {
     if (sw.current && tested.length > 1) { try { await page.evaluate(findSwitcher, CODES); if (sw.kind === "custom") await page.locator("[data-bs-cur]").first().isVisible() && (await choose(sw.current)); else await choose(sw.current); } catch { notTested.push(`could not switch back to ${sw.current}`); } }

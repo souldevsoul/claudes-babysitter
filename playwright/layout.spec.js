@@ -5,6 +5,7 @@ import { test, expect } from "@playwright/test";
 import * as c from "./checks.js";
 import * as L from "./checks/layout.js";
 import * as boxes from "./checks/boxes.js";
+import * as Rh from "./checks/rhythm.js";
 import { existsSync, readFileSync } from "node:fs";
 import { resolve } from "node:path";
 import { loadConfig, loadRoutes, ROOT, authTag, storageFor } from "./project.js";
@@ -88,6 +89,17 @@ for (const route of ROUTES) {
             soft(a.soft, "near-miss alignment");
             hard(a.hard);
         });
+        // 5.5.0 (Praxis, Parallel, Compass, Kindred cards): rhythm and alignment measured from the glyphs — ranges split at
+        // their dash, headings broken by a forced break, the wordmark on two lines (2.5); one slot wrapping in a row of
+        // equals, stacked buttons of two widths, dividers on a stacked strip (2.6); markers / badges off their label, side
+        // nav vs content, fields of one row (2.7); text over text (2.11); key–value rows (2.12); one content width (2.17);
+        // squeezed text (2.21); two-column blocks (2.22); uneven list / row gaps (2.23); section headings of one look (6.5)
+        test("2.5/2.6/2.7/2.11/2.12/2.17/2.21/2.22/2.23/6.5 rhythm: ranges on one line, equal slots, levels, one content width, column rules, even gaps [rhythm]", async ({ page }) => {
+            await open(page, r);
+            const x = await Rh.rhythmChecks(page);
+            soft(x.soft, "aligned with a decorative rule");
+            hard(x.hard);
+        });
         test("2.7 no excess empty space between or inside sections — crops attached [empty-space]", async ({ page }) => {
             await open(page, r);
             const e = await L.emptySpace(page, Number(lay.emptySpaceRatio ?? 2.5));
@@ -145,7 +157,11 @@ for (const route of ROUTES) {
         test("money: amounts formatted the same way in every currency of the switcher [price-rounding currency-format number-format]", async ({ page }) => {
             test.setTimeout(180_000);
             await open(page, r);
-            const m = await L.moneyFormat(page, Number(lay.maxCurrencies ?? 8), { rateDecimals: Number(lay.rateDecimals ?? 4) });
+            // 5.5.0 (Compass 34ebhu, rqgkrl, 9rkp6z): a range that fits in one currency breaks in another — 2.5 after each switch
+            const ranges = [];
+            const m = await L.moneyFormat(page, Number(lay.maxCurrencies ?? 8), { rateDecimals: Number(lay.rateDecimals ?? 4), each: async (code) => { for (const f of await Rh.rangeSplit(page))
+                    if (!ranges.some((g) => g.where === f.where)) ranges.push({ ...f, what: `in ${code}: ${f.what}` }); } });
+            m.hard.push(...ranges);
             test.info().annotations.push({ type: "currencies", description: `${m.switcher ? `switcher (${m.switcher}): ` : "no switcher: "}${m.tested.join(", ")}` });
             notes("money", m.notTested);
             soft(m.soft, "money formatting");
@@ -165,12 +181,13 @@ for (const route of ROUTES) {
  *   6.5 h1 / h2 come in at most `layout.headingVariants` (2) looks per breakpoint — h1 hard, h2 soft [heading-style]
  */
 test.describe("site-wide layout", () => {
-    test("3.7 nav names match their pages; 6.5 one heading style per level; 1.2 ticks on one side", async ({ browser }, info) => {
+    test("3.7 nav names match their pages; 6.5 one heading style per level; 1.2 ticks on one side; 2.7 one content top per shell; 2.22 one two-column rule", async ({ browser }, info) => {
         test.skip(!/mobile-390|desktop-1440/.test(info.project.name), "run at one mobile and one desktop width");
         test.setTimeout(60_000 + ROUTES.length * 20_000);
         const pages = [];
         const heads = [];
         const marks = [];
+        const shells = [], cols = [];
         const notTested = [];
         for (const route of ROUTES) {
             const ctx = await browser.newContext({ ...info.project.use, storageState: route.auth ? storageFor(route.role) : undefined, baseURL: info.project.use.baseURL });
@@ -183,6 +200,9 @@ test.describe("site-wide layout", () => {
                     continue;
                 }
                 pages.push(await L.navParity(page));
+                // 5.5.0 (Praxis dbrs0h, Compass 1wq9va): one content top per app shell, one rule per two-column block
+                shells.push({ route: route.path, shell: (await Rh.shellTops(page).catch(() => ({ shell: null }))).shell });
+                cols.push({ route: route.path, rules: (await Rh.twoColumnRule(page).catch(() => ({ rules: [] }))).rules });
                 heads.push(...(await L.collectHeadings(page, route.path)));
                 for (const mk of (await L.dropdowns(page, 6)).marks)
                     marks.push({ ...mk, page: route.path });
@@ -194,6 +214,9 @@ test.describe("site-wide layout", () => {
         }
         if (notTested.length)
             test.info().annotations.push({ type: "not tested", description: notTested.join("\n") });
+        const rhythmAcross = [...Rh.shellTopsAcross(shells), ...Rh.twoColumnRulesAcross(cols)];
+        if (rhythmAcross.length)
+            expect.soft(rhythmAcross, `one shell, one content top; one rule per two-column block [2.7 2.22]\n${fmt(rhythmAcross)}`).toEqual([]);
         const m = L.navTitleMismatches(pages);
         soft(m.soft, "nav label and page title differ");
         if (m.hard.length)
