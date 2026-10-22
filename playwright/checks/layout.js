@@ -886,8 +886,38 @@ const MONTHS = ["jan", "feb", "mar", "apr", "may", "jun", "jul", "aug", "sep", "
 const MONTHS_RU = ["янв", "фев", "мар", "апр", "май", "июн", "июл", "авг", "сен", "окт", "ноя", "дек"];
 const DAYS = ["mon", "tue", "wed", "thu", "fri", "sat", "sun"];
 const SIZES = ["xxxs", "xxs", "xs", "s", "m", "l", "xl", "xxl", "2xl", "xxxl", "3xl", "4xl", "5xl"];
-const PLACEHOLDER = /^(all|any|none|select|choose|pick|default|—|-|все|любой|любая|не выбран|выберите|hamısı|барлығы)\b/i;
+const PLACEHOLDER = /^(all|any|none|select|choose|pick|default|—|-|tous|toutes|tout|aucun|aucune|choisir|sélectionner|все|любой|любая|не выбран|выберите|hamısı|барлығы)(?![\p{L}\d])/iu;
 const LAST = /^(other|others|другое|прочее|digər|басқа)\b/i;
+/* relative periods ("Today", "Last 7 days", "This month", "12 derniers mois", "За 30 дней"): their length in hours */
+const PERIOD_UNIT = [
+  [/^(hours?|h|heures?|час|часа|часов)$/u, 1],
+  [/^(days?|d|jours?|день|дня|дней|сутки|суток)$/u, 24],
+  [/^(weeks?|semaines?|неделя|недели|недель|неделю)$/u, 24 * 7],
+  [/^(months?|mois|месяц|месяца|месяцев)$/u, 24 * 30],
+  [/^(quarters?|trimestres?|квартал|квартала|кварталов)$/u, 24 * 91],
+  [/^(years?|ans?|années?|год|года|лет)$/u, 24 * 365],
+];
+const PERIOD_DAY = /^(today|yesterday|aujourd'hui|aujourd’hui|hier|сегодня|вчера)$/u;
+const PERIOD_FILLER = /^(last|past|previous|this|the|current|in|within|ce|cet|cette|ces|le|la|les|l'|l’|dernier|dernière|derniers|dernières|passé|passée|passés|passées|en|cours|depuis|за|последний|последняя|последние|последних|прошлый|прошлая|прошлые|этот|эта|это|эти|текущий|текущая|-ci|ci)$/u;
+const unitHours = (w) => { for (const [re, h] of PERIOD_UNIT) if (re.test(w)) return h; return null; };
+/** A relative period's length in hours, or null when the label is not one. */
+export function periodHours(label) {
+  const t = String(label).toLowerCase().replace(/[’]/g, "'").replace(/\s+/g, " ").trim();
+  if (PERIOD_DAY.test(t)) return 24;
+  const words = t.replace(/-ci\b/g, " ci").split(/[\s,.:()]+/).filter(Boolean);
+  let n = null, unit = null;
+  for (const w of words) {
+    if (/^\d+(?:[.,]\d+)?$/.test(w)) { if (n !== null) return null; n = parseFloat(w.replace(",", ".")); continue; }
+    const m = w.match(/^(\d+)([a-zа-я]+)$/u);
+    if (m && unitHours(m[2])) { if (n !== null || unit !== null) return null; n = Number(m[1]); unit = unitHours(m[2]); continue; }
+    const u = unitHours(w);
+    if (u !== null) { if (unit !== null) return null; unit = u; continue; }
+    if (PERIOD_FILLER.test(w)) continue;
+    return null;
+  }
+  return unit === null ? null : (n ?? 1) * unit;
+}
+
 /**
  * Is a list of option labels in an order a reader can follow? Alphabetical (either way, locale-aware, numbers inside
  * compared as numbers), numeric by the first number, sizes, months, weekdays or dates — up or down. A placeholder first
@@ -913,6 +943,7 @@ export function orderOf(labels, lang = null) {
   if (keyed(idx(MONTHS)) || keyed(idx(MONTHS_RU)) || keyed(idx(DAYS))) return null;
   if (keyed((x) => { const i = SIZES.indexOf(x.toLowerCase().split(/[\s(/]/)[0]); return i < 0 ? null : i; })) return null;
   if (keyed((x) => { const t = Date.parse(x); return Number.isNaN(t) ? null : t; })) return null;
+  if (keyed(periodHours)) return null;
   return "neither alphabetical nor a natural order (numbers, sizes, months, dates)";
 }
 const SORT_SELECT = /sort|order by|ordering|сортир|упорядоч|sırala|сұрыпта/i;

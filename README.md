@@ -71,6 +71,12 @@ Or install it as a dev dependency: `npm i -D github:souldevsoul/claudes-babysitt
 | `docs/` | The guidelines the rules enforce |
 | `test/`, `fixtures/` | `npm test`: RuleTester, Stylelint fixtures, end-to-end cases |
 
+## What changed in 5.5.1 (relative periods in dropdowns)
+
+A dropdown of relative periods ("Today, Last 7 days, Last 30 days, Last 12 months", also in French and Russian) is a
+natural order for 1.2 when the periods run shortest to longest or back; French "Tous / Toutes …" first is a placeholder.
+Details: [`CHANGELOG.md`](CHANGELOG.md).
+
 ## What changed in 5.5.0 (issues #4 and #5 closed; every in-scope missed card is a check)
 
 A run whose signed-in pages were never reached fails (`init` writes `login.url`; `prepare` exits 1 when no role signs

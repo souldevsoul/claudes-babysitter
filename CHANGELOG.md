@@ -2,6 +2,18 @@
 
 Earlier releases (4.11.1 and before) are described in the README under "What changed in …".
 
+## 5.5.1 — relative periods are a natural order in dropdowns (2026-10-22)
+
+1.2 (dropdown order) reported a date filter such as "All dates, Today, Last 7 days, Last 30 days, Last 12 months" as
+unsorted: shortest to longest is the order a reader expects, but none of the known orders (A–Z, numbers, sizes, months,
+weekdays, dates) covered it. New:
+- `periodHours(label)`: a relative period's length in hours — today / yesterday, "last / past / this" N hours, days,
+  weeks, months, quarters, years — in English, French ("Aujourd'hui", "7 derniers jours", "Cette semaine", "Ce mois-ci")
+  and Russian ("Сегодня", "За 7 дней", "Эта неделя"); a label with any other word is not a period
+- `orderOf` accepts a list whose labels are all periods with lengths going one way (up or down); a shuffled list or one
+  non-period label still fails
+- the leading placeholder now also covers French ("Tous les statuts", "Toutes les dates", "Aucun")
+
 ## 5.5.0 — issues #4 and #5 closed; every in-scope missed card is a check (2026-10-21)
 
 The owner's decision of 21.10: before the ratchet / baseline step, close the holes, then make the tool catch every bug it

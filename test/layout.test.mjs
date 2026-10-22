@@ -290,6 +290,21 @@ try {
     assert.equal(L.orderOf(["Billing", "Account", "Technical", "Other"]) !== null, true);
     assert.equal(L.orderOf(["EUR", "USD", "AZN", "CAD", "GBP", "KZT"]), null, "favourites pinned on top, then A–Z");
     assert.notEqual(L.orderOf(["EUR", "USD", "SAR", "MAD", "CAD", "LKR"]), null, "truelogos currency list: no order after the pinned ones");
+    // relative periods: shortest to longest (or back) is a natural order, in English, French and Russian
+    assert.equal(L.orderOf(["All dates", "Today", "Last 7 days", "Last 30 days", "Last 12 months"]), null, "date filter");
+    assert.equal(L.orderOf(["Yesterday", "This week", "This month", "This year"]), null);
+    assert.equal(L.orderOf(["Last 24 hours", "Last 7 days", "Last 3 months", "Past year"]), null, "hours to a year");
+    assert.equal(L.orderOf(["Past year", "Last 3 months", "Last 7 days", "Today"]), null, "longest first is an order too");
+    assert.equal(L.orderOf(["Toutes les dates", "Aujourd’hui", "7 derniers jours", "30 derniers jours", "12 derniers mois"]), null, "French, placeholder Toutes");
+    assert.equal(L.orderOf(["Aujourd'hui", "Cette semaine", "Ce mois-ci", "Cette année"]), null);
+    assert.equal(L.orderOf(["Все", "Сегодня", "За 7 дней", "За 30 дней", "За 12 месяцев"]), null, "Russian");
+    assert.equal(L.orderOf(["Сегодня", "Эта неделя", "Этот месяц", "Этот год"]), null);
+    assert.notEqual(L.orderOf(["Last 30 days", "Today", "Last 12 months", "Last 7 days"]), null, "shuffled periods are not an order");
+    assert.notEqual(L.orderOf(["Today", "Last 7 days", "Billing", "Last 30 days"]), null, "one label that is not a period breaks it");
+    assert.notEqual(L.orderOf(["Tous les statuts", "Banni", "Actif", "Inactif"]), null, "French placeholder skipped, the rest still checked");
+    assert.equal(L.periodHours("Last 7 days"), 168);
+    assert.equal(L.periodHours("Billing"), null);
+    assert.equal(L.periodHours("Monday"), null);
   });
   await test("1.2 dropdowns on a page: unsorted native/custom lists are soft; an unmarked or hidden selected option and ticks on both sides are hard", async (page) => {
     const opt = (labels, sel, tick) => labels.map((l) => `<div role="option" aria-selected="${l === sel}"><span>${l}</span>${l === sel && tick ? `<svg class="tick" viewBox="0 0 12 12"><path d="M1 6l3 3 7-7" stroke="#000" fill="none"/></svg>` : ""}</div>`).join("");
