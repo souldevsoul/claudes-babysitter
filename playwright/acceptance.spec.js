@@ -10,7 +10,7 @@ import * as stg from "./checks/stage.js";
 import { resolveStage } from "../lib/stage.js";
 import { loadConfig, loadRoutes, STORAGE, STATE_DIR, storageFor } from "./project.js";
 import { resolve } from "node:path";
-import { existsSync } from "node:fs";
+import { existsSync, readFileSync } from "node:fs";
 const cfg = loadConfig();
 const acc = a.acceptanceConfig(cfg);
 const ROUTES = loadRoutes(cfg);
@@ -82,6 +82,15 @@ for (const route of ROUTES) {
             await open(page, r);
             hard(await a.moneyText(page, { noTax: acc.noTax, thousandsFrom: acc.thousandsFrom }));
         });
+        // 5.5.0 (Compass gcrh4v): a product that sells credits shows the balance in the signed-in header
+        if (route.auth)
+            test("M2 the signed-in header shows the credit balance [owner rule]", async ({ page }) => {
+                test.skip(!on("M2") || acc.headerBalance === false, acc.headerBalance === false ? "acceptance.headerBalance: false" : why("M2"));
+                await open(page, r);
+                const sells = acc.headerBalance === true || (await page.evaluate(() => /\bcredits?\b|кредит|kredit/i.test(document.body.innerText)));
+                test.skip(!sells, "the product shows no credits (acceptance.headerBalance: true to require a balance anyway)");
+                hard(await a.headerBalance(page));
+            });
         test("H2 everything clickable shows the hand cursor [BQA 3]", async ({ page }) => {
             test.skip(!on("H2") || /mobile/.test(test.info().project.name), on("H2") ? "no cursor on touch" : why("H2"));
             await open(page, r);
@@ -169,7 +178,78 @@ test.describe("acceptance site-wide", () => {
     test("F1–F5 footer: legal order, © line, company line, support email, payment logos [BQA 6]", async ({ page }) => {
         await open(page, PUBLIC[0]?.path || "/");
         const list = (await a.footer(page, acc)).filter((o) => o.id !== "F0" && on(o.id));
-        hard(list);
+        // 5.5.0 (Compass cnfovs): the payment marks are the studio's files
+        if (on("F5") && acc.paymentLogos) list.push(...(await a.paymentLogoFiles(page, acc)));
+        soft(list.filter((o) => o.soft), "check by eye: a phone footer too narrow for the label and the logos on one line");
+        hard(list.filter((o) => !o.soft));
+    });
+    // 5.5.0 (Praxis xp7pmu): one footer signed in and signed out
+    test("F0 the footer has the same links signed in as signed out (each role) [BQA 6]", async ({ browser }) => {
+        test.skip(!on("F0"), why("F0"));
+        test.skip(!SIGNED_IN, "no signed-in storage");
+        const path = PUBLIC.find((r) => a.isPolicyPath(r.path, acc))?.path || PUBLIC[0]?.path || "/";
+        const read = async (auth, role) => { const ctx = await ctxFor(browser, auth, role); const page = await ctx.newPage(); await open(page, path); const l = await a.footerLinks(page); await ctx.close(); return l; };
+        const anon = await read(false);
+        const roles = [...new Set(AUTH.map((r) => r.role || "user"))];
+        const out = [];
+        for (const role of roles.length ? roles : ["user"]) {
+            if (!existsSync(storageFor(role === "user" ? undefined : role))) continue;
+            out.push(...a.footerParity(anon, await read(true, role === "user" ? undefined : role), role === "user" ? null : role).map((o) => ({ ...o, where: `${path} ${o.where}` })));
+        }
+        soft(out.filter((o) => o.soft), "footer links only signed-in users see");
+        hard(out.filter((o) => !o.soft));
+    });
+    // 5.5.0 (Parallel gjfjnc): when the policies have an "On this page" rail, every policy with 3+ sections has one
+    test("P2 every policy with sections has the contents rail the other policies have [BQA 8]", async ({ browser }) => {
+        test.skip(!on("P1"), why("P1"));
+        const pols = PUBLIC.filter((r) => a.isPolicyPath(r.path, acc));
+        test.skip(pols.length < 3, "fewer than 3 policy pages");
+        test.setTimeout(60_000 + pols.length * 20_000);
+        const seen = [];
+        for (const r of pols) {
+            const ctx = await ctxFor(browser, false);
+            const page = await ctx.newPage();
+            await open(page, r.path);
+            const res = await a.policyLayout(page);
+            seen.push({ path: r.path, ...(res.meta || {}) });
+            await ctx.close();
+        }
+        hard(a.policyRailParity(seen));
+    });
+    // 5.5.0 (Kindred gm21xv): /admin showed users, specialists and requests to anyone who typed the address
+    test("A10 a signed-in area does not render to a visitor who may not see it (signed out; admin pages as other roles) [BQA 11]", async ({ browser }) => {
+        test.skip(!on("A10"), why("A10"));
+        const AREA = /^\/(admin|dashboard|settings|account|wallet|billing|orders|onboarding)(\/|$)/;
+        const cands = [...new Map([...AUTH, ...PUBLIC.filter((r) => AREA.test(r.path)), ...(cfg.roles || []).flatMap((x) => (x.authRoutes || []).map((path) => ({ path, auth: true, role: x.name })))].map((r) => [r.path, r])).values()].filter((r) => !/\[/.test(r.path)).slice(0, 25);
+        test.skip(!cands.length, "no signed-in or account routes found");
+        test.setTimeout(60_000 + cands.length * 15_000);
+        const out = [];
+        const signIn = acc.auth.signIn;
+        const probe = async (r, role) => {
+            const ctx = role ? await ctxFor(browser, true, role) : await ctxFor(browser, false);
+            const page = await ctx.newPage();
+            await c.install(page);
+            const res = await page.goto(r.path, { waitUntil: "networkidle" }).catch(() => null);
+            await page.waitForTimeout(1500);
+            const at = new URL(page.url()).pathname;
+            const status = res ? res.status() : 0;
+            const shown = status && status < 400 && at === r.path.split("?")[0] && at !== signIn && !/log-?in|sign-?in/i.test(at) ? await a.areaContent(page) : { content: false };
+            await ctx.close();
+            if (shown.content) out.push({ id: "A10", what: `${r.path} renders its content to ${role ? `the "${role}" role` : "a signed-out visitor"} (HTTP ${status}, ${shown.chars} characters, ${shown.table ? "a table" : `${shown.stats} stat tiles`}) — redirect to sign-in, or answer 401 / 403 [A10, BQA 11]`, where: r.path });
+        };
+        for (const r of cands) await probe(r, null);
+        // pages only the admin role reaches, opened as every other role
+        const roles = (cfg.roles || []).map((x) => x.name).filter((n) => !/admin/i.test(n) && existsSync(storageFor(n)));
+        for (const r of cands.filter((x) => /admin/i.test(x.role || "") || /^\/admin(\/|$)/.test(x.path))) for (const role of roles) await probe(r, role);
+        hard(out);
+    });
+    // 5.5.0 (Compass htmhfi): a language the switcher offers that does not switch is a failure, not a note in the summary
+    test("LS1 the language switcher switches: every language it offers turns the page into that language [BQA 9]", async () => {
+        test.skip(!on("LS1"), why("LS1"));
+        const f = resolve(STATE_DIR, "locales.json");
+        test.skip(!existsSync(f), "no .babysitter/locales.json (run prepare)");
+        const loc = JSON.parse(readFileSync(f, "utf8"));
+        hard(a.switcherLocales(loc));
     });
     test("C1/C4/C5 cookie choice: accept, reject, manage per category; closing closes [BQA 7]", async ({ browser }) => {
         test.skip(!on("C1"), why("C1"));
@@ -244,13 +324,16 @@ test.describe("acceptance site-wide", () => {
         catch { } });
         await open(page, PUBLIC[0]?.path || "/");
         const cats = await a.cookieCategories(page);
+        // 5.5.0 (Compass faefuc): "Allow all" on a banner that names no optional cookies
+        const allowAll = await a.allowAllNothingOptional(page, { acc });
         // accept everything, then browse: whatever loads now is what the site really uses
         await page.locator("button, a").filter({ hasText: /^\s*(accept( all)?|allow all|agree)\s*$/i }).first().click().catch(() => { });
         for (const r of PUBLIC.slice(0, 8))
             await page.goto(r.path, { waitUntil: "networkidle" }).catch(() => { });
         const loaded = [...hosts];
         const out = [];
-        if ((cats.analytics || cats.marketing) && !loaded.length)
+        out.push(...allowAll);
+        if ((cats.analytics || cats.marketing) && !loaded.length && !allowAll.length)
             out.push({ what: `cookie choices offer ${[cats.analytics && "Analytics", cats.marketing && "Marketing"].filter(Boolean).join(" + ")}, but no analytics/marketing script loads even after "Accept all" — remove the category from the banner and the policy [C2, BQA 7]`, where: "cookie banner" });
         hard(out);
         await ctx.close();
@@ -451,7 +534,7 @@ test.describe("acceptance site-wide", () => {
         await c.install(page);
         expect(await a.login(page, cfg, test.info().project.use.baseURL, creds), `could not sign in${creds?.role ? ` as role "${creds.role}"` : ""}`).toBe(true);
         const home = new URL(page.url()).pathname;
-        hard(await a.signOutOnce(page, { home }));
+        hard(await a.signOutOnce(page, { home, afterSignOut: acc.afterSignOut }));
         await ctx.close();
     });
 });

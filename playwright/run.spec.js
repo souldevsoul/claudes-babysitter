@@ -12,6 +12,7 @@ import * as a from "./acceptance.js";
 import * as run from "./checks/run.js";
 import * as L from "./checks/layout.js";
 import * as fit from "./checks/fit.js";
+import * as money from "./checks/money.js";
 import { loadConfig, loadRoutes, storageFor, loadLocales, applyLocale, localize, viewports } from "./project.js";
 const cfg = loadConfig();
 const ROUTES = loadRoutes(cfg);
@@ -75,6 +76,8 @@ for (const route of ROUTES) {
                 add("B4", await a.moneyText(page, opts));
                 add("N6", await a.clippedControls(page));
                 add("2.14", (await fit.textCutOff(page)).hard); // 5.2.0: a longer language cuts text that fits in English
+                add("2.14", await money.placeholderCut(page)); // 5.5.0 (Compass kdn5xf: the kk placeholder is cut)
+                add("B4", await money.numberGrouping(page)); // 5.5.0 (Compass 5fgum8: "10 000 кредит" next to "1,000")
                 // 2.5 words broken mid-word / numbers split / orphans: a longer language breaks what fits in English (Praxis KK
                 // "ТАПСЫРМА" broken by letters at 360) — layout.spec checks the default language, this checks the others
                 let breaks = { hard: [], soft: [] };

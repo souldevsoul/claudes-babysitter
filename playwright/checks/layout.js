@@ -1158,7 +1158,10 @@ export function parseMoney(raw, dec = null) {
   const style = `${g.pre ? "before" : "after"}:${mark}${/[ \u00a0\u202f]/.test(gap) ? " spaced" : ""}`;
   return { raw: m[0], code, mark, style, intPart, decimals, decimal, group, value, ambiguous };
 }
-const nice = (p) => !p.decimals || /^(0+|5|50|9|90|95|99|49)$/.test(p.decimals) || (p.value >= 100 && /^0+$/.test(p.decimals));
+// 5.5.0 (Kindred b2d1mi): $9.70 is a round price too — packs of $10.00 / $9.70 / $46.00 / $85.00 gave a 75 % "nice"
+// share, so the dirty-conversion rule never armed and €8.63 / €8.37 / €39.71 / €73.38 passed. One significant decimal
+// (x.10–x.90) counts as round.
+const nice = (p) => !p.decimals || /^(0+|5|50|9|90|95|99|49|[1-9]0)$/.test(p.decimals) || (p.value >= 100 && /^0+$/.test(p.decimals));
 /**
  * Format problems in the amounts of one page state (one currency). `tokens`: [{ raw, fontSize, where, selector,
  * unit }] from the page. Hard: float garbage or too many decimals, decimals on a zero-decimal currency, one currency
@@ -1202,7 +1205,8 @@ export function moneyIssues(tokens, { baseNice = null, label = "", rateDecimals 
   const grpSeen = new Map(); for (const x of all) if (x.p.group && !grpSeen.has(x.p.group)) grpSeen.set(x.p.group, x);
   if (grpSeen.size > 1) { const ex = [...grpSeen.values()]; hard.push({ what: `${pre}two thousands separators on one page: ${ex.map((x) => `"${x.p.raw}"`).join(" and ")} [money]`, ...at(ex[1]) }); }
   // dirty conversions: prices shown large (packs, plans) were round in the base currency and are not here
-  const big = all.filter((x) => x.t.fontSize >= 18 && !x.t.unit && !x.t.rate);
+  // 5.5.0 (Compass 64f15b): a pack price in a 14px pricing table row next to its credits counts as a pack too
+  const big = all.filter((x) => (x.t.fontSize >= 18 || x.t.creditsNear) && !x.t.unit && !x.t.rate);
   if (baseNice !== null && baseNice >= 0.8 && big.length >= 2) {
     const dirty = big.filter((x) => !nice(x.p));
     if (dirty.length / big.length > 0.5) soft.push({ what: `${pre}converted prices are not rounded (${dirty.slice(0, 4).map((x) => x.p.raw).join(", ")}${dirty.length > 4 ? ", …" : ""}) while the base currency's were — round packs to the currency's minor unit or a nice step (x.99 / x.90 / whole) [money]`, ...at(dirty[0]) });
@@ -1244,11 +1248,12 @@ const findSwitcher = (codes) => {
   for (const e of document.querySelectorAll("[data-bs-cur]")) e.removeAttribute("data-bs-cur");
   const sel = Array.from(document.querySelectorAll("select")).find((s) => Array.from(s.options).filter((o) => CUR.test(o.text) || CUR.test(o.value)).length >= 2);
   if (sel) { sel.setAttribute("data-bs-cur", ""); const so = sel.options[sel.selectedIndex]; const cm = so && (so.text.match(CUR) || so.value.match(CUR)); return { kind: "native", current: cm ? cm[1] : null, options: Array.from(sel.options).filter((o) => CUR.test(o.text) || CUR.test(o.value)).map((o) => ({ value: o.value, code: (o.text.match(CUR) || o.value.match(CUR))[1] })) }; }
-  const btn = Array.from(document.querySelectorAll("button, [role=combobox], [aria-haspopup]")).find((b) => W.__uiVisible(b) && CUR.test(b.innerText || "") && (b.innerText || "").trim().length <= 16);
-  if (btn) { btn.setAttribute("data-bs-cur", ""); return { kind: "custom", current: btn.innerText.match(CUR)[1] }; }
-  // a segmented row of currency buttons
+  // a segmented row of currency buttons (5.5.0: before the dropdown trigger — "USD" "EUR" side by side are not a
+  // trigger showing the current currency; read as one, no other currency was ever found)
   const segs = Array.from(document.querySelectorAll("button, [role=radio], [role=tab]")).filter((b) => W.__uiVisible(b) && /^\W*([A-Z]{3})\W*$/.test((b.textContent || "").trim()) && CUR.test(b.textContent));
   if (segs.length >= 2 && segs.every((s) => s.parentElement === segs[0].parentElement)) { segs.forEach((s) => s.setAttribute("data-bs-cur-opt", s.textContent.match(CUR)[1])); return { kind: "segmented", options: segs.map((s) => ({ code: s.textContent.match(CUR)[1] })), current: (segs.find((s) => s.getAttribute("aria-pressed") === "true" || s.getAttribute("aria-checked") === "true" || s.getAttribute("data-state") === "on" || s.getAttribute("aria-selected") === "true") || segs[0]).textContent.match(CUR)[1] }; }
+  const btn = Array.from(document.querySelectorAll("button, [role=combobox], [aria-haspopup]")).find((b) => W.__uiVisible(b) && CUR.test(b.innerText || "") && (b.innerText || "").trim().length <= 16);
+  if (btn) { btn.setAttribute("data-bs-cur", ""); return { kind: "custom", current: btn.innerText.match(CUR)[1] }; }
   return null;
 };
 /**
@@ -1256,20 +1261,35 @@ const findSwitcher = (codes) => {
  * by one, then the original is put back). Hard/soft per moneyIssues; soft: a header balance in money while the
  * product sells credits. Without a switcher only the current currency is checked. At most `max` currencies.
  */
-export async function moneyFormat(page, max = 8, { rateDecimals = 4 } = {}) {
+export async function moneyFormat(page, max = 8, { rateDecimals = 4, onEach = null } = {}) {
   await ensure(page);
-  const hard = [], soft = [], notTested = [], tested = [];
+  const hard = [], soft = [], notTested = [], tested = [], records = [];
   const read = async () => { await ensure(page); return page.evaluate(moneyTokens, MONEY_SRC); };
+  // 5.5.0: the arithmetic of what is on screen (money.js): the stated rate reproduces the prices, a bracket does not
+  // repeat the amounts it explains, the calculator follows its label — in every currency
+  const M = await import("./money.js");
+  const arithmetic = async (label) => {
+    const r = await M.moneyPairs(page).catch(() => null);
+    if (!r) return;
+    records.push({ currency: label || "(current)", ...r });
+    const pre = (list) => list.map((f) => ({ ...f, what: label ? `in ${label}: ${f.what}` : f.what }));
+    hard.push(...pre(M.rateMismatches(r)), ...pre(M.bracketRepeats(r)), ...pre(await M.calculatorCheck(page, r.calculators).catch(() => [])));
+    // the site-wide comparison reads more in the same currency (a top-up dialog) before the next switch
+    if (onEach) await onEach(label || sw0?.current || "", records[records.length - 1]).catch(() => {});
+  };
   const base = await read();
   const b = moneyIssues(base.tokens, { label: "", rateDecimals });
   hard.push(...b.hard); soft.push(...b.soft);
+  hard.push(...(await M.numberGrouping(page).catch(() => [])));
+  const sw0 = onEach ? await page.evaluate(findSwitcher, CODES).catch(() => null) : null;
+  await arithmetic("");
   // an amount on the same line as credits ("10 credits = $1") is the hint next to the credits, not a money balance
   if (base.credits && !base.headerCredits && base.tokens.some((t) => t.inHeader && !t.creditsNear)) {
     const t = base.tokens.find((x) => x.inHeader && !x.creditsNear);
     soft.push({ what: `the header shows money ("${t.raw}") but the product sells credits — show the balance in credits (money only as a hint next to it) [money]`, where: t.where, selector: t.selector, human: t.human });
   }
   const sw = await page.evaluate(findSwitcher, CODES);
-  if (!sw) return { hard, soft, notTested, tested: ["(current)"], switcher: null };
+  if (!sw) return { hard, soft, notTested, tested: ["(current)"], switcher: null, records };
   tested.push(`${sw.current || "(current)"}`);
   let options = sw.options;
   const openCustom = async () => {
@@ -1302,10 +1322,14 @@ export async function moneyFormat(page, max = 8, { rateDecimals = 4 } = {}) {
       const st = await read();
       const r = moneyIssues(st.tokens, { label: `in ${code}`, baseNice: b.niceShare, rateDecimals });
       hard.push(...r.hard); soft.push(...r.soft);
+      // 5.5.0 (Compass b2950h / 9n16n2): an amount that kept the base currency's number while the rest was converted
+      hard.push(...M.unconverted(base.tokens, st.tokens, parseMoney, `in ${code}`));
+      hard.push(...(await M.numberGrouping(page).catch(() => [])).map((f) => ({ ...f, what: `in ${code}: ${f.what}` })));
+      await arithmetic(code);
       tested.push(code);
     }
   } finally {
     if (sw.current && tested.length > 1) { try { await page.evaluate(findSwitcher, CODES); if (sw.kind === "custom") await page.locator("[data-bs-cur]").first().isVisible() && (await choose(sw.current)); else await choose(sw.current); } catch { notTested.push(`could not switch back to ${sw.current}`); } }
   }
-  return { hard, soft, notTested, tested, switcher: sw.kind };
+  return { hard, soft, notTested, tested, switcher: sw.kind, records };
 }

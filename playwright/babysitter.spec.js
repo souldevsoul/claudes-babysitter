@@ -7,6 +7,7 @@ import * as c from "./checks.js";
 import * as fit from "./checks/fit.js";
 import * as looks from "./checks/looks.js";
 import * as details from "./checks/details.js";
+import * as money from "./checks/money.js";
 import { loadConfig, loadRoutes, storageFor } from "./project.js";
 const cfg = loadConfig();
 const ROUTES = loadRoutes(cfg);
@@ -52,7 +53,8 @@ for (const route of ROUTES) {
             const { hard: list, eye } = await fit.textCutOff(page);
             if (eye.length)
                 test.info().annotations.push({ type: "check by eye", description: fmt(eye) });
-            hard(list);
+            // 5.5.0 (Compass 7bouc8): a placeholder is text too
+            hard([...list, ...(await money.placeholderCut(page))]);
         });
         test("2.15 a shadow is not cut off by a box that clips [P16]", async ({ page }) => {
             await open(page, r);
