@@ -14,6 +14,7 @@ import * as k from "../playwright/checks/content.js";
 import * as stg from "../playwright/checks/stage.js";
 import * as run from "../playwright/checks/run.js";
 import * as forms from "../playwright/checks/forms.js";
+import * as L from "../playwright/checks/layout.js";
 import { start } from "./fixtures/run/site/server.mjs";
 
 const TOOL = join(dirname(fileURLToPath(import.meta.url)), "..");
@@ -137,6 +138,46 @@ try {
     assert.ok(res.findings.some((f) => /after clicking "Add credits"/.test(f.what)), JSON.stringify(res.findings.map((f) => f.what)));
   }, { width: 390, height: 800 });
 
+
+  /* ═════ #4.13 1.3: a select trigger is a field, not an outlined button ═════ */
+  await test("#4.13 1.3/1.16 (Kindred): the currency SelectTrigger and a form select (role=combobox) are not outlined buttons with their own font; a real outlined button still counts", async (page) => {
+    await load(page, doc(`<main style="padding:20px"><button role="combobox" aria-haspopup="listbox" style="border:1px solid #888;padding:8px 12px;height:48px;font-family:Arial">$ USD</button><button id="contact-topic" role="combobox" style="border:1px solid #888;padding:8px 12px;height:48px;font-family:Arial">Other</button><div><button style="border:1px solid #888;padding:8px 12px;height:40px;font-family:Georgia;border-radius:999px">Sign In</button></div></main>`));
+    const btns = (await c.collectSignatures(page, "/")).filter((x) => x.kind === "button");
+    assert.deepEqual(btns.map((x) => x.where.match(/"([^"]+)"/)?.[1] || x.where), ["Sign In"], JSON.stringify(btns.map((x) => x.where)));
+  });
+
+  /* ═════ #4.15 2.7: a sticky contents column is not an empty section ═════ */
+  await test("#4.15 2.7 (Kindred /terms): an aside stretched to the article's height around a sticky nav is not 'mostly empty'; a min-h-screen section with nothing in it still is", async (page) => {
+    const para = "<p>Clause text. ".repeat(1) + "</p>";
+    await load(page, doc(`<main><section style="display:grid;grid-template-columns:220px 1fr;gap:24px"><aside><nav style="position:sticky;top:96px"><a href="#a">One</a><br><a href="#b">Two</a></nav></aside><article>${Array.from({ length: 120 }, (_, i) => `<p>Clause ${i + 1}: the specialist keeps the work private and delivers it on time.</p>`).join("")}</article></section><section><p>End</p></section></main>`));
+    const r = await L.emptySpace(page);
+    assert.ok(!r.soft.some((f) => /mostly empty/.test(f.what)), JSON.stringify(r.soft.map((f) => f.what)));
+    await load(page, doc(`<main><section style="min-height:300vh"><h2>Hero</h2></section><section><p>End</p></section></main>`));
+    assert.ok((await L.emptySpace(page)).soft.some((f) => /mostly empty/.test(f.what)), "a tall empty section still fails");
+    void para;
+  });
+
+  /* ═════ #4.14 6.12: toggling back is judged on what the click opened ═════ */
+  await test("#4.14 6.12 (Kindred /dashboard @390): 'Manage cookies' reopens an animated notice; the page's own re-render hiding its content wrapper is not blamed on the toggle", async (page) => {
+    await load(page, doc(`<div id="app" class="min-h-screen"><main><h1>Case log Dashboard</h1><p>Rows</p></main></div><footer><button id="mc" type="button">Manage cookies</button></footer><div id="note" style="position:fixed;bottom:0;left:0;right:0;background:#eee;padding:12px;transition:opacity .2s, transform .2s;opacity:0;transform:translateY(8px);display:none">We use only necessary cookies <button id="ok" type="button">OK</button></div><script>
+const note = document.getElementById("note"); let open = false;
+document.getElementById("mc").onclick = () => {
+  if (!open) { note.style.display = "block"; requestAnimationFrame(() => requestAnimationFrame(() => { note.style.opacity = 1; note.style.transform = "none"; })); open = true; }
+  else { note.style.opacity = 0; note.style.transform = "translateY(8px)"; setTimeout(() => { note.style.display = "none"; }, 220); open = false;
+    const app = document.getElementById("app"); const copy = app.cloneNode(true); app.replaceWith(copy); }
+};</script>`));
+    const u = page.url();
+    const r = await c.interactionMotion(page, { reload: () => page.goto(u) });
+    assert.ok(!r.hard.some((f) => /min-h-screen|Case log/.test(f.what)), JSON.stringify(r.hard.map((f) => f.what)));
+  }, { width: 390, height: 800 });
+
+  /* ═════ #4.17 3.5: the longest prefix is the current section ═════ */
+  await test("#4.17 3.5 (Kindred /admin drawer): on /admin/users/42 'Members' (/admin/users) is the current section, not 'Overview' (/admin)", async (page) => {
+    const nav = `<header><nav><ul><li><a href="/admin">Overview</a></li><li><a href="/admin/users" style="font-weight:700;color:#06c">Members</a></li><li><a href="/admin/cases">Cases</a></li><li><a href="/admin/settings">Settings</a></li></ul></nav></header><main><h1>Member 42</h1></main>`;
+    await load(page, doc(nav), { "/admin/users/42": doc(nav) }, "/admin/users/42");
+    const r = await L.activeNavStyle(page);
+    assert.ok(![...r.hard, ...r.soft].some((f) => /Overview|Members/.test(f.what)), JSON.stringify([...r.hard, ...r.soft].map((f) => f.what)));
+  });
   /* ═════ #4.1 prepare: login.url from acceptance.auth.signIn; no signed-in page reached → exit 1, loudly ═════ */
   const fx = await start();
   const repo = mkdtempSync(join(tmpdir(), "bs-550-prep-"));

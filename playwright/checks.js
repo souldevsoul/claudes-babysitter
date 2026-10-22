@@ -1756,6 +1756,10 @@ export const collectSignatures = (page, route) => page.evaluate((route) => {
             continue;
         if (el.closest("nav, [role=navigation], footer, [role=contentinfo], [role=tablist], [role=radiogroup], [role=toolbar]") || el.matches(CHIP) || chipRow(el))
             continue;
+        // 5.5.0 (Kindred, issue #4 item 13): a select trigger (the currency SelectTrigger, a form select) is a field —
+        // it is counted with the inputs below, not as an outlined button with a font of its own
+        if (el.matches('[role=combobox], [aria-haspopup=listbox], [data-slot=select-trigger], [data-radix-select-trigger]'))
+            continue;
         // a link counts only when it is dressed as a button (short label, no card content)
         if (el.matches("a") && !W.__uiButtonLike(el))
             continue;
@@ -3329,6 +3333,12 @@ export async function interactionMotion(page, { reload, max = 30, perReload = 6,
                     await g(page.waitForFunction(() => window.__bsIx.run.done, null, { timeout: 6000 }).catch(() => { }));
                     await g(settle(page, 1200));
                     back = page.url().split("#")[0] === home.split("#")[0] ? await g(page.evaluate(() => window.__bsIx.result()).catch(() => null)) : null;
+                }
+                // 5.5.0 (Kindred /dashboard @390, issue #4 item 14): toggling back must hide what the click opened — the
+                // page's own client-side re-render ("div.min-h-screen … Case log Dashboard") after "Manage cookies" is not it
+                if (back && back.disappeared.length) {
+                    const opened = new Set(r.appeared.map((x) => x.where));
+                    back = { ...back, disappeared: back.disappeared.filter((x) => opened.has(x.where) || x.positioned) };
                 }
                 if (back && back.disappeared.length && !back.appeared.length && !back.disappeared.some((x) => x.moved))
                     hard.push({ kind: "close", what: back.disappeared.some((x) => x.radixSelect)

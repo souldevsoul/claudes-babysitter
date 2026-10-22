@@ -283,7 +283,11 @@ const activeScan = (scope) => {
       if (items.length < 3) continue;
       const path = (a) => { const d = L.dest(a); return d.includes("#") ? null : d; };
       const exact = items.filter((a) => path(a) === here || a.getAttribute("aria-current") === "page");
-      const prefix = exact.length ? [] : items.filter((a) => { const p = path(a); return p && p !== "/" && here.startsWith(p + "/"); });
+      // 5.5.0 (Kindred /admin drawer, issue #4 item 17): of the prefix matches only the longest is the current section —
+      // on /admin/users/… "Members" (/admin/users) is current, not "Overview" (/admin)
+      const prefixAll = exact.length ? [] : items.filter((a) => { const p = path(a); return p && p !== "/" && here.startsWith(p + "/"); });
+      const longest = Math.max(0, ...prefixAll.map((a) => path(a).length));
+      const prefix = prefixAll.filter((a) => path(a).length === longest);
       const cur = exact.length ? exact : prefix;
       const looks = new Map(items.map((a) => [a, look(a)]));
       const others = items.filter((a) => !cur.includes(a));
@@ -690,6 +694,9 @@ export async function emptySpace(page, ratio = 2.5) {
     for (const x of info) {
       const h = x.bottom - x.top;
       if (h <= innerHeight || pictured(x.s)) continue;
+      // 5.5.0 (Kindred legal pages, issue #4 item 15): a column whose content is a sticky contents list keeps the
+      // height of the article beside it — the band is where the sticky nav travels, empty by design
+      if (Array.from(x.s.querySelectorAll("*")).some((e) => getComputedStyle(e).position === "sticky" && e.getBoundingClientRect().height < h * 0.8)) continue;
       const edges = [x.top, ...x.b.flat(), x.bottom];
       let worst = 0, at = x.top;
       for (let i = 0; i < edges.length; i += 2) { const band = edges[i + 1] - edges[i]; if (band > worst) { worst = band; at = edges[i]; } }
