@@ -359,11 +359,26 @@ export const siblingParts = (page) => page.evaluate(() => {
       if (!paintsBox || /^(LI|TR|DT|DD)$/.test(cards[0].tagName) && cards[0].parentElement.closest("ol, dl, table") || parent.tagName === "DL") continue;
       seen.add(parent);
       const slots = cards.map((c) => new Set(Array.from(c.querySelectorAll("*")).filter((e) => W.__uiVisible(e) && e.children.length === 0 && (e.textContent || "").trim()).map((e) => `${e.tagName}.${(e.getAttribute("class") || "").trim()}`)));
+      // one kit component in another variant is the same part: the class lists overlap (Jaccard ≥ 0.6), or they are
+      // equal once colour / state utilities are set aside (bg-*, text-<colour>, border-<colour>, ring-*, shadow-*)
+      const tokens = (slot) => slot.slice(slot.indexOf(".") + 1).split(/\s+/).filter(Boolean);
+      const COLOUR = /^(?:[\w-]+:)*!?(?:bg|ring|shadow|from|via|to|fill|stroke|outline|decoration|divide|placeholder|accent|caret)-|^(?:[\w-]+:)*!?text-(?!(?:xs|sm|base|lg|xl|\d+xl|left|center|right|justify|start|end|wrap|nowrap|balance|pretty|ellipsis|clip)$)|^(?:[\w-]+:)*!?border-(?!(?:\d+|x|y|t|r|b|l|s|e|x-\d+|y-\d+|t-\d+|r-\d+|b-\d+|l-\d+|solid|dashed|dotted|double|none|hidden|collapse|separate|spacing-[\w-]+)$)/;
+      const shape = (ts) => ts.filter((t) => !COLOUR.test(t)).sort().join(" ");
+      const variantOf = (slot, other) => {
+        if (slot.split(".")[0] !== other.split(".")[0]) return false;
+        const a = tokens(slot), b = tokens(other);
+        const A = new Set(a), B = new Set(b), inter = [...A].filter((t) => B.has(t)).length, union = new Set([...a, ...b]).size;
+        if (union && inter / union >= 0.6) return true;
+        const sa = shape(a);
+        return sa !== "" && sa === shape(b);
+      };
       const count = new Map();
       for (const s of slots) for (const x of s) count.set(x, (count.get(x) || 0) + 1);
       for (const [slot, n] of count) {
         if (n === cards.length || n < 0.75 * cards.length || cards.length - n !== 1) continue;
-        const miss = cards[slots.findIndex((s) => !s.has(slot))];
+        const mi = slots.findIndex((s) => !s.has(slot));
+        if ([...slots[mi]].some((o) => variantOf(slot, o))) continue;
+        const miss = cards[mi];
         const name = ((miss.querySelector("h1, h2, h3, h4, strong, b") || miss).innerText || "").trim().split("\n")[0].slice(0, 40);
         out.push({ what: `"${name}" lacks a part the other ${n} cards of its row have (${slot.split(".")[0].toLowerCase()}${slot.includes(".") && slot.split(".")[1] ? `.${slot.split(".").slice(1).join(".").split(" ")[0]}` : ""}) — give every card the same parts, or show why this one differs [1.22]`, where: W.__uiDescribe(miss), selector: W.__uiSelector(miss), human: W.__uiHuman(miss) });
       }

@@ -181,6 +181,14 @@ try {
     assert.deepEqual(ok.hard, [], "two card columns whose boxes start on one line");
     assert.equal(ok.rules.length, 1); assert.equal(ok.rules[0].rule, 0);
     await expectHits(page, ck, doc(`<main><section style="display:grid;grid-template-columns:1fr 1fr;width:1200px;margin:40px 0"><div><p style="font-size:12px;margin:0">INDEX</p><h1 style="margin:24px 0 0">Every specialist</h1><p style="margin:24px 0 0">Lead paragraph of the block.</p></div><div style="padding-top:150px">${card("RIGHT")}</div></section></main>`), 1, /lines up with nothing/);
+ 
+    // the left column starts with a grid of stat cards (an unpainted wrapper of 3 painted cards), then a panel
+    const stat = (n, label) => `<div style="background:#fff;border:1px solid #ddd;padding:32px"><p style="font-size:28px;margin:0">${n}</p><p style="font-size:12px;margin:8px 0 0">${label}</p></div>`;
+    const statsBlock = (rightPad) => `<main><section style="display:grid;grid-template-columns:1fr 1fr;gap:24px;width:1200px;margin:40px 0"><div class="space-y-2" style="display:flex;flex-direction:column;gap:8px"><div class="grid grid-cols-3" style="display:grid;grid-template-columns:repeat(3,1fr);gap:8px">${stat(30, "Languages")}${stat(12, "Voices")}${stat(4, "Formats")}</div>${card("PANEL")}</div><div style="padding-top:${rightPad}px">${card("RIGHT")}</div></section></main>`;
+    await load(page, doc(statsBlock(0)));
+    const grid = await ck(page);
+    assert.deepEqual(grid.hard, [], "the right card starts on the first stat card's box");
+    assert.equal(grid.rules.length, 1); assert.equal(grid.rules[0].rule, 0);
   });
 
   /* ═════ 2.23 rhythm ═════ */

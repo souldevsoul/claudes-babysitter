@@ -2,6 +2,19 @@
 
 Earlier releases (4.11.1 and before) are described in the README under "What changed in …".
 
+## 5.5.3 — two false alarms: kit variants as card parts, a grid of cards in a column (2026-10-22)
+
+- **1.22 `siblingParts`: one kit component in another variant is the same part.** A part was keyed by its tag and its
+  full class string, so a badge in its neutral variant on one card ("Standard rate", `bg-muted text-foreground`) and the
+  same badge in its success variant on the others (`bg-success/10 text-success`) were two different parts: the first card
+  was reported as lacking one. A missing part is now accepted when the card has an element of the same tag whose classes
+  overlap the part's (Jaccard ≥ 0.6), or match once colour and state utilities (`bg-*`, `text-<colour>`,
+  `border-<colour>`, `ring-*`, `shadow-*` and the like) are set aside. A card with no such element is still reported.
+- **2.22 `twoColumnRule`: a left column that starts with a grid of cards.** 5.5.2 placed a left item by its box when it
+  (or its single-child chain) was a painted card; a wrapper of several stat cards fell back to its text and the right
+  card was reported as starting above the eyebrow. An unpainted left item is now placed by its first painted box down the
+  first-child path, when that box starts above the item's first text.
+
 ## 5.5.2 — two false alarms: CSS-sized icons, card columns (2026-10-22)
 
 - **2.14 `iconClipped`: an icon set's width attribute is not its size.** Icon libraries draw `width="24" height="24"`

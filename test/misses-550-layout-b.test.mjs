@@ -313,6 +313,22 @@ try {
     await load(page, grid(["A", "B", "C", "D", "E", "F"].map((n, i) => card(n, true, i === 0 ? '<span class="badge">Featured</span>' : ""))));
     assert.deepEqual(await check(page), [], "an extra part on one card");
   });
+  await test("1.22 one kit component in another variant is the same part: a neutral badge on the first pricing card passes; a card with no badge is still reported", async (page) => {
+    const check = need(B.siblingParts);
+    const KIT = "inline-flex items-center gap-1.5 rounded-full border font-medium px-2.5 py-0.5 text-xs";
+    const badge = (tone, text) => `<span class="${KIT} ${tone}">${text}</span>`;
+    const card = (name, b) => `<div class="plan" style="border:1px solid;padding:12px;height:160px;width:200px"><h3>${name}</h3><p class="price">£35</p>${b}</div>`;
+    const row = (cards) => doc(`<main><div style="display:grid;grid-template-columns:repeat(4,200px);gap:12px">${cards.join("")}</div></main>`);
+    const saving = (n) => badge("border-transparent bg-success/10 text-success", `${n}% less per credit`);
+    await load(page, row([card("Starter", badge("border-transparent bg-muted text-foreground", "Standard rate")), card("Pro", saving(12)), card("Creator", saving(19)), card("Agency", saving(25))]));
+    assert.deepEqual(await check(page), [], "the same badge in its neutral variant");
+    await load(page, row([card("Starter", ""), card("Pro", saving(12)), card("Creator", saving(19)), card("Agency", saving(25))]));
+    const bad = await check(page);
+    assert.equal(bad.length, 1, JSON.stringify(bad));
+    assert.match(bad[0].what, /"Starter" lacks a part the other 3 cards/);
+    await load(page, row([card("Starter", '<span class="note">Billed monthly</span>'), card("Pro", saving(12)), card("Creator", saving(19)), card("Agency", saving(25))]));
+    assert.equal((await check(page)).length, 1, "another span that is not the badge does not stand in for it");
+  });
 
   /* ═════ 6.5 one accent style in headings — Compass 5dudz9 (soft) ═════ */
   await test("5dudz9 Compass: the accented word is italic on one page and upright on the others (soft); one style passes", async (page) => {

@@ -575,7 +575,15 @@ export async function twoColumnRule(page) {
       if (/center/.test(R.cs(b).alignItems) || /center/.test(R.cs(right).alignSelf)) continue;
       let col = left; while (R.kids(col).length === 1) col = R.kids(col)[0];
       // box to box, ink to ink: a left item that is a painted box (a card) is placed by its box top, like the right column
-      const boxTop = (k) => { let e = k; while (!R.painted(e) && R.kids(e).length === 1) e = R.kids(e)[0]; return R.painted(e) ? e.getBoundingClientRect().top : null; };
+      // an unpainted wrapper (a grid of stat cards) is placed by its first painted box down the first-child path, when
+      // that box starts above the wrapper's first text
+      const boxTop = (k) => {
+        let e = k;
+        while (e && !R.painted(e)) e = R.kids(e)[0];
+        if (!e) return null;
+        const top = e.getBoundingClientRect().top, ink = R.firstInk(k);
+        return e === k || !ink || top < ink.top ? top : null;
+      };
       const anchors = R.kids(col).map((k) => boxTop(k) ?? R.firstInk(k)?.top ?? null).filter((t) => t !== null).slice(0, 4);
       if (anchors.length < 2) continue;
       let rc = right; while (R.kids(rc).length === 1 && !R.painted(rc)) rc = R.kids(rc)[0];

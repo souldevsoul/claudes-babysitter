@@ -71,6 +71,11 @@ Or install it as a dev dependency: `npm i -D github:souldevsoul/claudes-babysitt
 | `docs/` | The guidelines the rules enforce |
 | `test/`, `fixtures/` | `npm test`: RuleTester, Stylelint fixtures, end-to-end cases |
 
+## What changed in 5.5.3 (two false alarms)
+
+1.22 treats one kit component in another variant (a neutral badge beside success badges) as the same card part. 2.22
+places a left column that opens with a grid of stat cards by the first card's box. Details: [`CHANGELOG.md`](CHANGELOG.md).
+
 ## What changed in 5.5.2 (two false alarms)
 
 2.14 no longer takes an icon's `width="24"` attribute for its size: an icon counts as squeezed only when flex shrinking
