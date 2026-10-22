@@ -213,11 +213,11 @@ try {
   });
 
   /* ═════ Compass gn14vd / vu8j0h / 2t4uiv / 1fxg7h / r2jy12: after a choice the result stays below the screen (3.9) ═════ */
-  const chips = (scroll, header = "") => doc(`${header}<main style="padding:16px"><div role="group" aria-label="Discipline"><button aria-pressed="true">All</button><button aria-pressed="false" id="d">Design AI</button><button aria-pressed="false">Language AI</button></div><div style="height:900px">Intro text about the service index.</div><section id="r"><h3>All specialists</h3></section></main><script>d.onclick=()=>{d.setAttribute('aria-pressed','true');r.innerHTML='<h3>4 specialists in Design AI</h3><ul><li>A</li><li>B</li></ul>';${scroll}}</script>`);
+  const chips = (scroll, header = "") => doc(`${header}<main style="padding:16px"><div role="group" aria-label="Discipline"><button aria-pressed="true">All</button><button aria-pressed="false" id="d">Design AI</button><button aria-pressed="false">Language AI</button></div><div style="height:900px">Intro text about the service index.</div><section id="r"><h3>All specialists</h3></section><div style="height:1200px">More content below the results.</div></main><script>d.onclick=()=>{d.setAttribute('aria-pressed','true');r.innerHTML='<h3>4 specialists in Design AI</h3><ul><li>A</li><li>B</li></ul>';${scroll}}</script>`);
   await test("gn14vd + vu8j0h 3.9: choosing a discipline renders '4 specialists in Design AI' 600px below the screen (fails); scrollIntoView passes; under a sticky header it fails again (2t4uiv / 1fxg7h)", async (page) => {
     await load(page, chips(""));
     const bad = await run.selectionChecks(page, { max: 1 });
-    assert.ok(bad.findings.some((f) => f.check === "3.9" && /below the screen/.test(f.what) && /Design AI/.test(f.what)), JSON.stringify(bad, null, 1));
+    assert.ok(bad.findings.some((f) => f.check === "3.9" && /below the screen/.test(f.what) && /Design AI/.test(f.what)), JSON.stringify(bad));
     await load(page, chips("r.scrollIntoView({block:'start'})"));
     assert.deepEqual((await run.selectionChecks(page, { max: 1 })).findings.filter((f) => f.check === "3.9"), []);
     await load(page, chips("r.scrollIntoView({block:'start'})", `<header style="position:sticky;top:0;height:72px;background:#fff;border-bottom:1px solid #ddd;z-index:5">Compass</header>`));

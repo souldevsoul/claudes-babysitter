@@ -103,6 +103,8 @@ export const dialogAxis = (page) => page.evaluate(() => {
             const text = (k.innerText || "").trim();
             if (!text) continue;
             if (k.matches("button[aria-label*=close i], [data-dismiss], [aria-label*=close i]")) continue;
+            // a control that fills the row (a full-width "Sign out" with its label centred) is neutral: its box is the axis
+            if (k.matches("button, a, [role=button], input, select") && k.getBoundingClientRect().width >= innerW - 6) continue;
             // where the visible content of the block sits: its text lines (a Range over its text), else its box
             const rg = document.createRange(); rg.selectNodeContents(k);
             const rects = Array.from(rg.getClientRects()).filter((r) => r.width > 1 && r.height > 1);
