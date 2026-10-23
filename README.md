@@ -71,6 +71,11 @@ Or install it as a dev dependency: `npm i -D github:souldevsoul/claudes-babysitt
 | `docs/` | The guidelines the rules enforce |
 | `test/`, `fixtures/` | `npm test`: RuleTester, Stylelint fixtures, end-to-end cases |
 
+## What changed in 5.5.7 (dead buttons after a modal)
+
+6.14 closes what a click opened (Escape, else a reload) before it clicks the next button, and a click that cannot land is
+"not tested" instead of "does nothing". Details: [`CHANGELOG.md`](CHANGELOG.md).
+
 ## What changed in 5.5.6 (two false alarms)
 
 CT28 judges each sentence of a heading on its own ("… a century. It's time …" is sentence case); 1.6 measures a hovered

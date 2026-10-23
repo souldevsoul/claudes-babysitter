@@ -2,6 +2,19 @@
 
 Earlier releases (4.11.1 and before) are described in the README under "What changed in …".
 
+## 5.5.7 — 6.14 dead buttons: what a click opened is closed before the next one (2026-10-23)
+
+6.14 clicks the page's buttons one after another, but never closed what a click opened. On a pricing page with four
+"Buy N credits" buttons, the first opened a modal checkout (a full-screen overlay and a dialog); every following button
+was then under the overlay, its click was intercepted and swallowed, nothing changed, and buttons 2–4 and "Choose an
+amount" were reported as "does nothing when clicked". Now:
+- after a click that opened something (a new `[role=dialog]`, `[aria-modal=true]` or `dialog[open]`, or the button's
+  `aria-expanded` turned true) the page is put back before the next button: Escape, a wait for the dialog to go, and if
+  it is still there a reload of the page with the remaining buttons marked again;
+- a click that does not land (covered, not actionable, timed out) is not a dead button: it is listed under "not tested"
+  (`deadButtons(page, { notTested })`; the states run passes its own list), never as a finding.
+A truly dead button after the modal-opening ones is still reported.
+
 ## 5.5.6 — two false alarms: two sentences in a heading, hover on a smooth-scrolling page (2026-10-23)
 
 - **CT28 heading case: each sentence on its own.** A heading of two sentences ("Subtitles had a century. It's time to

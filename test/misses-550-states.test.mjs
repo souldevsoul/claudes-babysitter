@@ -252,6 +252,30 @@ try {
     await load(page, doc(`<main style="padding:24px"><a class="btn" href="mailto:sales@compass.test">Talk to sales</a></main>`));
     assert.deepEqual(await run.deadButtons(page), []);
   });
+  await test("6.14 a click that opens a modal is undone before the next button: buttons under the overlay are not dead; a dead one after them still is; a click that cannot land is not tested, not dead", async (page) => {
+    const modal = (escape) => `<script>
+      function openModal(n) {
+        const o = document.createElement("div");
+        o.className = "overlay"; o.style.cssText = "position:fixed;inset:0;background:rgba(0,0,0,.5);z-index:50";
+        o.innerHTML = '<div role="dialog" aria-modal="true" style="position:absolute;top:20%;left:20%;width:300px;background:#fff;padding:24px">Checkout ' + n + '</div>';
+        document.body.appendChild(o);
+      }
+      ${escape ? 'document.addEventListener("keydown", (e) => { if (e.key === "Escape") document.querySelectorAll(".overlay").forEach((o) => o.remove()); });' : ""}
+    </script>`;
+    const buy = [100, 500, 1000].map((n) => `<button onclick="openModal(${n})">Buy ${n} credits</button>`).join("");
+    for (const escape of [true, false]) {
+      await load(page, doc(`<main style="padding:24px"><section><h2>Plans</h2>${buy}</section></main>${modal(escape)}`));
+      assert.deepEqual(await run.deadButtons(page), [], `modal buttons are not dead (Escape ${escape ? "closes" : "does not close"} the modal)`);
+    }
+    await load(page, doc(`<main style="padding:24px"><section><h2>Plans</h2>${buy}<button class="btn">Choose an amount</button><button>Talk to sales</button></section></main>${modal(false)}<script>document.querySelector(".btn").onclick = () => openModal(0)</script>`));
+    const bad = await run.deadButtons(page);
+    assert.deepEqual(bad.map((f) => f.what.split('"')[1]), ["Talk to sales"], JSON.stringify(bad));
+    // a button the click cannot reach (always covered) is listed as not tested, never as dead
+    const notTested = [];
+    await load(page, doc(`<main style="padding:24px;position:relative"><button>Covered</button><div style="position:absolute;inset:0;z-index:5"></div></main>`));
+    assert.deepEqual(await run.deadButtons(page, { notTested }), []);
+    assert.ok(notTested.some((x) => /6\.14 "Covered": the click did not land/.test(x)), JSON.stringify(notTested));
+  });
 
   /* ═════ Kindred ga1ipn / d6p4gh / spdonv / gm21xv / 2b9nt9: /admin and /docs/api are not linked from anything (COV1) ═════ */
   await test("ga1ipn + d6p4gh + spdonv + gm21xv + 2b9nt9 COV1: prepare opens the repo's static routes no link leads to (/admin, /docs/api); api/ routes and a page that bounces to /login stay out", async () => {

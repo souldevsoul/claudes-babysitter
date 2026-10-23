@@ -777,15 +777,20 @@ export const authCtaSignedIn = (page) => page.evaluate(() => {
  * something must happen — a DOM change outside the button, a URL or hash change, a request, a dialog, a focus move, a
  * clipboard write, or an aria-expanded / aria-pressed change. Nothing at all is a finding. The caller aborts POSTs.
  */
-export async function deadButtons(page, { max = 12, deadline = Infinity } = {}) {
+export async function deadButtons(page, { max = 12, deadline = Infinity, notTested = null } = {}) {
     const out = [];
-    const list = await page.evaluate(({ final }) => {
+    const skipped = notTested || [];
+    const mark = () => page.evaluate(({ final }) => {
         const W = window, F = new RegExp(final, "i");
         document.querySelectorAll("[data-bs-dead]").forEach((e) => e.removeAttribute("data-bs-dead"));
         const text = (b) => (b.innerText || b.getAttribute("aria-label") || "").trim().replace(/\s+/g, " ");
         const els = Array.from(document.querySelectorAll("main button, main [role=button], main a[href='#'], main a[href=''], body > div > section button")).filter((b) => W.__uiVisible(b) && !b.disabled && b.getAttribute("aria-disabled") !== "true" && !b.closest("form, [role=dialog], header, nav, footer, [role=tablist], [role=radiogroup], [role=listbox], [role=menu]") && !F.test(text(b)) && text(b).length > 1 && !b.matches("[type=submit], [aria-haspopup], [aria-controls], [aria-expanded], [aria-pressed], [role=tab], [role=radio], [role=option], [data-state]"));
         return els.slice(0, 40).map((b, i) => { b.setAttribute("data-bs-dead", String(i)); return { i, label: text(b).slice(0, 40), where: W.__uiDescribe(b), selector: W.__uiSelector(b) }; });
     }, { final: FINAL_RE.source }).catch(() => []);
+    const list = await mark();
+    // what a click opened (a dialog, a modal, a disclosure) must be closed before the next button, or that button sits
+    // under its overlay and its click never lands
+    const openCount = () => page.evaluate(() => Array.from(document.querySelectorAll("[role=dialog], [aria-modal=true], dialog[open]")).filter((d) => window.__uiVisible(d)).length).catch(() => 0);
     const ctx = page.context();
     let requests = 0;
     const onReq = () => { requests++; };
@@ -815,7 +820,14 @@ export async function deadButtons(page, { max = 12, deadline = Infinity } = {}) 
                 window.__bsDeadAria = [btn.getAttribute("aria-expanded"), btn.getAttribute("aria-pressed"), btn.textContent];
             }).catch(() => { });
             const r0 = requests, d0 = dialogs, p0 = popups;
-            await loc.click({ timeout: 2000 }).catch(() => { });
+            const open0 = await openCount();
+            const clickErr = await loc.click({ timeout: 2000 }).then(() => null, (e) => e);
+            if (clickErr) {
+                // the click never landed (covered, not actionable, timed out): not a dead button, an untested one
+                await loc.evaluate(() => { if (window.__bsDeadObs) window.__bsDeadObs.disconnect(); }).catch(() => { });
+                skipped.push(`6.14 "${b.label}": the click did not land (${String(clickErr.message || clickErr).split("\n")[0].slice(0, 80)}) — not tested`);
+                continue;
+            }
             await page.waitForTimeout(1000);
             if (page.url() !== url) { await page.goBack({ waitUntil: "load", timeout: 15_000 }).catch(() => page.goto(url, { waitUntil: "load" }).catch(() => { })); await page.waitForTimeout(300); continue; }
             const did = await loc.evaluate((el) => {
@@ -826,6 +838,17 @@ export async function deadButtons(page, { max = 12, deadline = Infinity } = {}) 
             }).catch(() => true);
             if (!did && requests === r0 && dialogs === d0 && popups === p0)
                 out.push({ check: "6.14", what: `"${b.label}" does nothing when clicked — no page, no dialog, no change on screen. Link it where it promises (a page, a mailto:, a form) or remove it [6.14]`, where: b.where, selector: b.selector });
+            // put the page back: Escape, then a reload (with the remaining buttons marked again) if it is still open
+            const expanded = await loc.getAttribute("aria-expanded").catch(() => null);
+            if ((await openCount()) > open0 || expanded === "true") {
+                await page.keyboard.press("Escape").catch(() => { });
+                for (let k = 0; k < 10 && (await openCount()) > open0; k++) await page.waitForTimeout(100);
+                if ((await openCount()) > open0) {
+                    await page.goto(url, { waitUntil: "load" }).catch(() => { });
+                    await page.waitForTimeout(300);
+                    await mark();
+                }
+            }
         }
     }
     finally {
@@ -1122,7 +1145,7 @@ export async function stateChecks(page, { reload, opts = {}, maxOpeners = 15, ma
         /* 6. a button does something (6.14, 5.5.0) */
         if (dead && timeLeft() > 15_000) {
             await back();
-            findings.push(...(await deadButtons(page, { deadline })));
+            findings.push(...(await deadButtons(page, { deadline, notTested })));
         }
     }
     finally {
