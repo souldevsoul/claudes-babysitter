@@ -267,7 +267,9 @@ export async function stackedDividers(page) {
       const ks = R.kids(p);
       if (ks.length < 3) continue;
       const side = (e, s) => { const c = R.cs(e); return parseFloat(c[`border${s}Width`]) > 0 && c[`border${s}Style`] !== "none" && R.cs(e)[`border${s}Color`]; };
-      const pattern = (s, skip) => { const rest = ks.filter((_, i) => i !== skip); return !side(ks[skip], s) && rest.every((e) => side(e, s)) && new Set(rest.map((e) => `${R.cs(e)[`border${s}Width`]}|${side(e, s)}`)).size === 1; };
+      // a divider is a side rule alone: a box bordered on top and bottom too (a card) is not one
+      const rule = (e, s) => side(e, s) && !side(e, "Top") && !side(e, "Bottom");
+      const pattern = (s, skip) => { const rest = ks.filter((_, i) => i !== skip); return !rule(ks[skip], s) && rest.every((e) => rule(e, s)) && new Set(rest.map((e) => `${R.cs(e)[`border${s}Width`]}|${side(e, s)}`)).size === 1; };
       const left = pattern("Left", 0), right = pattern("Right", ks.length - 1);
       if (!left && !right) continue;
       const bs = ks.map((k) => k.getBoundingClientRect());

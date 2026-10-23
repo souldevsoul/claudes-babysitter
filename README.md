@@ -71,6 +71,13 @@ Or install it as a dev dependency: `npm i -D github:souldevsoul/claudes-babysitt
 | `docs/` | The guidelines the rules enforce |
 | `test/`, `fixtures/` | `npm test`: RuleTester, Stylelint fixtures, end-to-end cases |
 
+## What changed in 5.5.9 (two false alarms)
+
+3.7 leaves out header links into the signed-in areas the config declares (`authRoutes`, `roles[].authRoutes`): app
+navigation is not a section the footer must list. 2.6 counts a side border as a divider only when the top and bottom
+borders are off, so a stack of bordered cards is not "vertical dividers on a strip that stacks".
+Details: [`CHANGELOG.md`](CHANGELOG.md).
+
 ## What changed in 5.5.8 (windows open and close with motion)
 
 The states run measures each window it opens: the opening must animate for 180–600ms, and on close the window must stay

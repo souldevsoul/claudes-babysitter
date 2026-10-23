@@ -15,6 +15,7 @@ const cfg = loadConfig();
 const ROUTES = loadRoutes(cfg);
 const STRICT = process.env.STRICT !== "0";
 const lay = cfg.layout || {};
+const APP = L.appRoutes(cfg);
 // the product's name in the favicon registry: config name, then package name, else the site's host
 const PRODUCT = cfg.name || (() => { try {
     const p = resolve(ROOT, "package.json");
@@ -59,7 +60,7 @@ for (const route of ROUTES) {
         const r = route.path;
         test("3.7 header links are in the footer under the same name [nav-mismatch]", async ({ page }) => {
             await open(page, r);
-            const p = await L.navParity(page);
+            const p = await L.navParity(page, { appRoutes: APP });
             soft(p.soft, "header links missing from the footer");
             hard(p.hard);
         });
@@ -201,7 +202,7 @@ test.describe("site-wide layout", () => {
                     await ctx.close();
                     continue;
                 }
-                pages.push(await L.navParity(page));
+                pages.push(await L.navParity(page, { appRoutes: APP }));
                 // 5.5.0 (Praxis dbrs0h, Compass 1wq9va): one content top per app shell, one rule per two-column block
                 shells.push({ route: route.path, shell: (await Rh.shellTops(page).catch(() => ({ shell: null }))).shell });
                 cols.push({ route: route.path, rules: (await Rh.twoColumnRule(page).catch(() => ({ rules: [] }))).rules });

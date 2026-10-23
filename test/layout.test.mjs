@@ -73,6 +73,19 @@ try {
     const r = await L.navParity(page);
     assert.deepEqual([...r.hard, ...r.soft], []);
   });
+  await test("3.7 nav parity: links into configured signed-in areas (authRoutes, any role) are app navigation, public ones still count", async (page) => {
+    const cfg = { authRoutes: ["/"], roles: [{ name: "specialist", authRoutes: ["/workspace", "/studio/[id]"] }, { name: "client", authRoutes: ["/studio"] }] };
+    assert.deepEqual(L.appRoutes(cfg), ["/workspace", "/studio"]);
+    await load(page, "nav-app.html", { path: "/pricing" });
+    const r = await L.navParity(page, { appRoutes: L.appRoutes(cfg) });
+    const all = JSON.stringify([...r.hard, ...r.soft]);
+    assert.ok(!/Workspace"/.test(all) && !/Clients/.test(all), `app links are not section nav: ${all}`);
+    assert.equal(r.hard.length, 0, all);
+    assert.deepEqual(r.soft.map((f) => f.what.match(/\((\/[^)]*)\)/)[1]).sort(), ["/blog", "/workspaces"], all);
+    const before = await L.navParity(page);
+    assert.match(JSON.stringify(before.soft), /\/workspace\)/, "without the config the same link is reported");
+    assert.equal(before.hard.length, 1, "without the config the renamed app link is reported");
+  });
   await test("3.7 nav names vs pages: legal title mismatch is hard, marketing h1 passes, an unrelated page name is soft", async () => {
     const links = [
       { dest: "/terms", label: "Terms", area: "footer" }, { dest: "/privacy", label: "Privacy Policy", area: "footer" },

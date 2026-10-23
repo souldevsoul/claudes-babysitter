@@ -2,6 +2,19 @@
 
 Earlier releases (4.11.1 and before) are described in the README under "What changed in …".
 
+## 5.5.9 — two false alarms: app navigation in 3.7, bordered cards in 2.6 (2026-10-23)
+
+- **3.7 nav-mismatch:** a header link into a signed-in role area (a `/workspace` that is not one of the sign-in, account
+  or dashboard words) was reported as "not in the footer — the footer should list every section the header does". App
+  navigation is not a site section. A header link whose path is, or is under, any `authRoutes` entry of
+  babysitter.config.json (top-level and every `roles[].authRoutes`; a dynamic `/x/[id]` counts from `/x`, `/` never
+  does) is now left out like the sign-in and account links: neither "not in the footer" nor "the same page has two
+  names". Public links are compared as before. New export: `appRoutes(cfg)`; `navParity(page, { appRoutes })`.
+- **2.6 stacked dividers:** a page header over a column of `rounded border` cards was reported as "vertical dividers
+  (border-left) on a strip that stacks", because only the left or right border was read. A child counts as having a
+  divider now only when its side border is on and its top and bottom borders are off; a box border is not a divider.
+  A `divide-x` strip that stacks is still reported.
+
 ## 5.5.8 — 6.12 windows open and close with motion (2026-10-23)
 
 A miss: windows opened abruptly and closed with no animation at all, and no check said so. Two causes behind it: the

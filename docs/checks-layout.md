@@ -15,7 +15,7 @@ didn't open) is listed under a "not tested" annotation. Nothing is dropped witho
 
 | Test | Function | Hard | Soft |
 |---|---|---|---|
-| 3.7 header links are in the footer under the same name | `navParity` | the same destination has two labels (header "Pricing", footer "Plans") | a header route is missing from the footer |
+| 3.7 header links are in the footer under the same name | `navParity` | the same destination has two labels (header "Pricing", footer "Plans") | a header route is missing from the footer (links into the signed-in areas in `authRoutes` / `roles[].authRoutes` are app navigation and are left out) |
 | 3.7 nav names match their pages (site-wide) | `navTitleMismatches` | a legal document's nav label is not its page title / h1, word for word ("Terms" vs "Terms of Service", "License" vs "Licence") | a nav label shares no word with the page's h1 or title |
 | 1.11 logos link home | `logoHome` | a header, footer, auth-page or open-mobile-menu logo (mark, `logo`/`brand` attributes, or the brand name as a wordmark) that is not a link | a logo that links somewhere other than `/` or the locale root |
 | 3.5 the current nav item looks different, and only it | `activeNavStyle` | the current item has the same computed look as its siblings (colour, weight, visible underline, background, border, pseudo-element bar, child indicator); a non-current item shares the current item's highlight | a section page (`/blog/x`) whose section item is plain; a non-current item looks highlighted on a page with no current item |

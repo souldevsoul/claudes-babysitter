@@ -104,6 +104,12 @@ try {
     await expectQuiet(page, ck, doc(`<div style="display:flex;width:340px"><div>Created</div><div style="border-left:1px solid #ddd">Specialist</div><div style="border-left:1px solid #ddd">Category</div></div>`), "a strip still in a row");
   }, PHONE);
 
+  await test("2.6 stacked dividers: a page header over fully bordered cards is not a divider strip; a divide-x strip that stacks at 390 still is", async (page) => {
+    const ck = need(Rh.stackedDividers);
+    const card = (t) => `<div style="border:1px solid #ddd;border-radius:8px;padding:16px;margin-top:12px">${t}</div>`;
+    await expectQuiet(page, ck, doc(`<main style="display:flex;flex-direction:column;padding:16px"><header><h1>Requests</h1></header>${card("One")}${card("Two")}${card("Three")}</main>`), "bordered cards");
+    await expectHits(page, ck, doc(`<div class="dx" style="display:flex;flex-direction:column;margin:16px"><div>Created</div><div>Specialist</div><div>Category</div></div>`, ".dx>*+*{border-width:0;border-style:solid;border-color:#ddd;border-left-width:1px}"), 1, /vertical dividers \(border-left\)/);
+  }, P390);
   /* ═════ 6.5 heading alignment ═════ */
   await test("k6c1vm home: 'From brief to hired' centred while the other section headings are left-aligned; a centred heading in the CTA band and in the hero pass", async (page) => {
     const ck = need(Rh.headingAlignment);

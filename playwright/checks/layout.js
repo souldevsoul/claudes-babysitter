@@ -78,18 +78,21 @@ const AUTHY = /(^|\/)(log-?in|sign-?in|sign-?up|signin|signup|register|auth|logo
 /**
  * Every route the header navigates to is in the footer under the same name. Same destination, different label → hard
  * ("Pricing" in the header, "Plans" in the footer); a header route missing from the footer → soft (the footer is the
- * site map). Logo, sign-in/up, account and cart links are not section navigation and are left out; so are CTAs.
+ * site map). Logo, sign-in/up, account and cart links are not section navigation and are left out; so are CTAs, and
+ * so is every link into a signed-in area the config declares (`appRoutes`: the path itself or anything under it).
  * Also returns the page's nav links and its h1/title for the site-wide name-vs-page comparison (navTitleMismatches).
+ * @param {{ appRoutes?: string[] }} [opts]
  */
-export async function navParity(page) {
+export async function navParity(page, { appRoutes: app = [] } = {}) {
   await ensure(page);
-  return page.evaluate((authy) => {
+  return page.evaluate(({ authy, app }) => {
     const W = window, L = W.__ly;
     const AUTHY_RE = new RegExp(authy, "i");
+    const inApp = (d) => { const p = d.replace(/[?#].*$/, "").replace(/\/+$/, "") || "/"; return app.some((r) => p === r || p.startsWith(r + "/")); };
     const hard = [], soft = [];
     const H = L.header(), F = L.footer();
     const nav = (roots) => roots.flatMap((r) => Array.from(r.querySelectorAll("a[href]")))
-      .filter((a) => { const d = L.dest(a); return d && d.startsWith("/") && !L.isHome(a) && !AUTHY_RE.test(d) && L.label(a) && !/^(mailto|tel):/.test(a.getAttribute("href") || ""); });
+      .filter((a) => { const d = L.dest(a); return d && d.startsWith("/") && !L.isHome(a) && !AUTHY_RE.test(d) && !inApp(d) && L.label(a) && !/^(mailto|tel):/.test(a.getAttribute("href") || ""); });
     const hl = nav(H).filter((a) => !(W.__uiVisible(a) && W.__uiButtonLike(a)) && !a.closest("[role=menu], [data-radix-popper-content-wrapper]"));
     const fl = nav(F);
     const byDest = new Map();
@@ -107,8 +110,15 @@ export async function navParity(page) {
       .map(({ a, where }) => ({ dest: L.dest(a), label: L.label(a), area: where, selector: W.__uiSelector(a) }));
     const h1 = Array.from(document.querySelectorAll("h1")).find((h) => W.__uiVisible(h));
     return { hard, soft, links, h1: h1 ? L.clean(h1.innerText) : "", title: document.title, path: location.pathname.replace(/\/+$/, "") || "/" };
-  }, AUTHY.source);
+  }, { authy: AUTHY.source, app: app.map((r) => String(r).replace(/\[.*$/, "").replace(/\/+$/, "")).filter((r) => r.startsWith("/") && r !== "") });
 }
+
+/**
+ * The signed-in areas a project declares (babysitter.config.json → authRoutes and every roles[].authRoutes): app
+ * navigation, not site sections. Dynamic segments ("/workspace/[id]") count from their static part; "/" is never one.
+ */
+export const appRoutes = (cfg = {}) => [...new Set([...(cfg.authRoutes || []), ...(cfg.roles || []).flatMap((r) => r.authRoutes || [])]
+  .map((r) => String(r).replace(/\[.*$/, "").replace(/\/+$/, "")).filter((r) => r.startsWith("/")))];
 
 /** Legal documents: their name in the nav must be the document's own title, word for word. */
 export const LEGAL = /privacy|terms|cookie|refund|return|shipping|delivery|\baml\b|\bkyc\b|licen[cs]e|disclaimer|acceptable|gdpr|\bdpa\b|imprint|impressum|agreement|conditions|legal|policy|eula|sla\b|withdrawal|complaints?/i;
