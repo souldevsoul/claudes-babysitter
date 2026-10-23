@@ -84,6 +84,10 @@ await t("CT12 / CT28 look-alikes: a mailto / tel link labelled with its address;
     assert.equal(K.mixedCase(h, { lower }), null, h);
   assert.ok(K.mixedCase("Company information And Terms", { lower }), "true mixed case still fires");
   assert.ok(K.mixedCase("2. Company information And Terms", { lower }), "and after a number too");
+  const lower2 = new Set(["had", "century", "time", "heard", "it's", "yes"]);
+  assert.equal(K.mixedCase("Subtitles had a century. It's time to be heard", { lower: lower2 }), null, "two sentences: each starts with a capital");
+  assert.equal(K.mixedCase("Is it ready? Yes, and it's time", { lower: lower2 }), null);
+  assert.ok(K.mixedCase("Subtitles Had a century. it's time", { lower: lower2 }), "a capital inside the sentence still mixes");
 });
 
 await t("CT8 plural by the language's own rule (Intl.PluralRules): fr '0 message' passes, fr '2 message' and en '0 message' fail", () => {

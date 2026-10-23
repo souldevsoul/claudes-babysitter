@@ -71,6 +71,12 @@ Or install it as a dev dependency: `npm i -D github:souldevsoul/claudes-babysitt
 | `docs/` | The guidelines the rules enforce |
 | `test/`, `fixtures/` | `npm test`: RuleTester, Stylelint fixtures, end-to-end cases |
 
+## What changed in 5.5.6 (two false alarms)
+
+CT28 judges each sentence of a heading on its own ("… a century. It's time …" is sentence case); 1.6 measures a hovered
+card in document coordinates on a settled, non-smooth-scrolling page, so a page still scrolling is not a card that moves.
+Details: [`CHANGELOG.md`](CHANGELOG.md).
+
 ## What changed in 5.5.5 (two false alarms)
 
 2.22 compares the box tops of two cards side by side before the text inside them; CT8 asks for the plural only where the

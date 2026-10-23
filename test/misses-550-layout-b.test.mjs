@@ -150,6 +150,18 @@ try {
     await load(page, doc(caseCard(".case-card:hover{box-shadow:0 0 0 2px #186b54}")));
     assert.deepEqual((await check(page)).hard, []);
   });
+  await test("1.6 hover on a smooth-scrolling page: a shadow-only hover card does not 'move' while the page scrolls; a card that lifts 56px still does", async (page) => {
+    const check = need(B.hoverEdge);
+    const smooth = (hover, scrolling = true) => doc(`<style>html{scroll-behavior:smooth}.c{display:block;width:320px;height:140px;margin:40px;border:1px solid #ddd;border-radius:16px;box-shadow:0 1px 2px rgba(0,0,0,.1);transition:all .2s}${hover}</style><div style="height:2400px">Intro</div><a class="c" href="/x">Example card</a><div style="height:2400px"></div>
+      ${scrolling ? "" : "<!--"}<script>/* the page is still smooth-scrolling while the hover is measured (as after the hover scrolled it into view) */
+      document.querySelector(".c").addEventListener("pointerenter", () => document.scrollingElement.scrollBy({ top: 227, behavior: "smooth" }));</script>${scrolling ? "" : "-->"}`);
+    await load(page, smooth(".c:hover{box-shadow:0 12px 32px rgba(0,0,0,.18)}"));
+    const ok = await check(page);
+    assert.deepEqual(ok.soft.filter((f) => /moves the card/.test(f.what)), [], JSON.stringify(ok.soft));
+    await load(page, smooth(".c:hover{transform:translateY(-56px)}", false));
+    const bad = await check(page);
+    assert.ok(bad.soft.some((f) => /moves the card by 56px/.test(f.what)), JSON.stringify(bad.soft));
+  });
 
   /* ═════ 1.11 one brand mark — Kindred kytm39 (footer), bmlrc4 (tab icon, manifest) ═════ */
   const seal = '<svg width="32" height="32" viewBox="0 0 32 32"><circle cx="16" cy="16" r="14" fill="#186b54"/><path d="M11 9v14M11 16l8-7M11 16l8 7" stroke="#fff" stroke-width="3"/></svg>';

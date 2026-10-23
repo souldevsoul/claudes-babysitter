@@ -519,8 +519,16 @@ const edgesFn = (sel) => {
     if (h > 0 && h <= 6 && w >= 0.9 * r.width) { const top = parseFloat(ps.top); side[Number.isFinite(top) && top < r.height / 2 ? "top" : "bottom"] += h; }
     else if (w > 0 && w <= 6 && h >= 0.9 * r.height) { const left = parseFloat(ps.left); side[Number.isFinite(left) && left < r.width / 2 ? "left" : "right"] += w; }
   }
-  return { side, x: r.left, y: r.top };
+  // document coordinates: a page still scrolling (scroll-behavior: smooth after the hover scrolled it into view) does
+  // not move the card
+  return { side, x: r.left + scrollX, y: r.top + scrollY };
 };
+// the page at rest: smooth scrolling off for the check, then scrollY the same for 2 frames
+const settleScroll = (page) => page.evaluate(() => new Promise((done) => {
+  let last = scrollY, same = 0, n = 0;
+  const tick = () => { n++; if (scrollY === last) same++; else { same = 0; last = scrollY; } if (same >= 2 || n > 60) done(); else requestAnimationFrame(tick); };
+  requestAnimationFrame(tick);
+})).catch(() => { });
 export async function hoverEdge(page, { max = 10 } = {}) {
   const n = await page.evaluate((max) => {
     const W = window;
@@ -538,15 +546,18 @@ export async function hoverEdge(page, { max = 10 } = {}) {
     return i;
   }, max).catch(() => 0);
   const hard = [], soft = [];
+  const saved = await page.evaluate(() => { const h = document.documentElement, v = h.style.scrollBehavior; h.style.scrollBehavior = "auto"; return v; }).catch(() => null);
   for (let i = 0; i < n; i++) {
     const sel = `[data-bs-he="${i}"]`;
     const loc = page.locator(sel);
     await loc.scrollIntoViewIfNeeded({ timeout: 1500 }).catch(() => { });
     await page.mouse.move(1, 1);
     await page.waitForTimeout(150);
+    await settleScroll(page);
     const rest = await page.evaluate(edgesFn, sel).catch(() => null);
     await loc.hover({ timeout: 1500 }).catch(() => { });
     await page.waitForTimeout(400);
+    await settleScroll(page);
     const now = await page.evaluate(edgesFn, sel).catch(() => null);
     await page.mouse.move(1, 1);
     if (!rest || !now) continue;
@@ -559,6 +570,7 @@ export async function hoverEdge(page, { max = 10 } = {}) {
     const moved = Math.hypot(now.x - rest.x, now.y - rest.y);
     if (moved >= 2) soft.push({ ...where, what: `hover moves the card by ${Math.round(moved)}px (transform) — the pointer slips off its target; show hover with colour / ring instead [1.6]` });
   }
+  if (saved !== null) await page.evaluate((v) => { document.documentElement.style.scrollBehavior = v; }, saved).catch(() => { });
   // one finding per look-alike (a grid of cards that all lift is one cause)
   const group = (list) => { const m = new Map(); for (const f of list) { const k = `${f.what}|${String(f.where).replace(/"[^"]*"$/, "").replace(/li(\.[\w:-]+)?/g, "li")}`; if (!m.has(k)) m.set(k, { ...f, n: 0 }); m.get(k).n++; } return [...m.values()].map(({ n, ...f }) => (n > 1 ? { ...f, what: `${f.what} (and ${n - 1} more like it)` } : f)); };
   return { hard: group(hard), soft: group(soft) };

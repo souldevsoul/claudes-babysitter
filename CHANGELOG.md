@@ -2,6 +2,18 @@
 
 Earlier releases (4.11.1 and before) are described in the README under "What changed in …".
 
+## 5.5.6 — two false alarms: two sentences in a heading, hover on a smooth-scrolling page (2026-10-23)
+
+- **CT28 heading case: each sentence on its own.** A heading of two sentences ("Subtitles had a century. It's time to
+  be heard") was reported as mixing Title Case ("It's") with sentence case. A word after ". ", "! ", "? " or "…" starts a
+  new sentence, like a word after ":" or a dash, and its capital is sentence case. A capital inside a sentence still
+  mixes ("Subtitles Had a century. it's time").
+- **1.6 hover moves the card: the page scrolling is not the card moving.** On a page with `scroll-behavior: smooth`, a
+  card whose only hover change is its shadow was reported as "moves the card by 227px": the page was still scrolling
+  after the hover scrolled it into view, and the card was measured against the viewport. The card is now measured in
+  document coordinates, smooth scrolling is off while the check runs (and put back after), and each measurement waits
+  until the page stops scrolling. A card that really lifts (a 56px translate) is still reported.
+
 ## 5.5.5 — two false alarms: two cards side by side, plurals by the language's rule (2026-10-22)
 
 - **2.22 `twoColumnRule`: two cards side by side.** When the left column and the right column are both painted boxes,
