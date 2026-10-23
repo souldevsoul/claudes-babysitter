@@ -55,7 +55,7 @@ try {
   });
   await t("states FP: a fitting dialog, an eye per field, a separated total, an error next to its field, pagination that scrolls the list into view → nothing", async () => {
     const { page, ctx, reload } = await fresh("/states-ok.html");
-    const r = await run.stateChecks(page, { reload });
+    const r = await run.stateChecks(page, { reload, motion: false }); // window motion (6.12) has its own fixtures
     assert.deepEqual(r.findings.map((f) => f.what), []);
     assert.equal(await page.evaluate(() => window.__paid).catch(() => false), false);
     assert.ok(r.states.length >= 3, JSON.stringify(r.states));

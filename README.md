@@ -71,6 +71,12 @@ Or install it as a dev dependency: `npm i -D github:souldevsoul/claudes-babysitt
 | `docs/` | The guidelines the rules enforce |
 | `test/`, `fixtures/` | `npm test`: RuleTester, Stylelint fixtures, end-to-end cases |
 
+## What changed in 5.5.8 (windows open and close with motion)
+
+The states run measures each window it opens: the opening must animate for 180–600ms, and on close the window must stay
+mounted and animate out (≥ 100ms, with a visible change) instead of vanishing in the first frame. Skipped under reduced
+motion. Details: [`CHANGELOG.md`](CHANGELOG.md).
+
 ## What changed in 5.5.7 (dead buttons after a modal)
 
 6.14 closes what a click opened (Escape, else a reload) before it clicks the next button, and a click that cannot land is

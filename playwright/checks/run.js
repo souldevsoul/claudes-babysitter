@@ -769,6 +769,129 @@ export const authCtaSignedIn = (page) => page.evaluate(() => {
         .map((b) => ({ check: "A5", what: `"${(b.innerText || "").trim().replace(/\s+/g, " ").slice(0, 40)}" is offered to a signed-in user — show the next step for the account instead (A5) [A5]`, where: W.__uiDescribe(b), selector: W.__uiSelector(b) }));
 }).catch(() => []);
 
+/* ───────────────────────── 6.12 windows open and close with motion (5.5.8) ───────────────────────── */
+
+const WINDOW_SEL = "[role=dialog], [role=alertdialog], dialog[open], [aria-modal=true]";
+/** the sampler: each animation frame, the window's opacity (with its ancestors'), transform, clip and height */
+const winSampler = () => {
+    if (window.__bsWin) return;
+    const SEL = "[role=dialog], [role=alertdialog], dialog[open], [aria-modal=true]";
+    const look = (el) => {
+        let op = 1, tf = "";
+        for (let e = el, k = 0; e && e !== document.documentElement && k < 6; e = e.parentElement, k++) {
+            const c = getComputedStyle(e);
+            op *= parseFloat(c.opacity);
+            tf += `${c.transform}|${c.translate}|${c.scale}|${c.clipPath};`;
+        }
+        return { op: Math.round(op * 1000) / 1000, tf, h: Math.round(el.getBoundingClientRect().height) };
+    };
+    const shown = (el) => el.isConnected && getComputedStyle(el).display !== "none" && getComputedStyle(el).visibility !== "hidden";
+    const same = (a, b) => a && b && Math.abs(a.op - b.op) < 0.01 && a.tf === b.tf && Math.abs(a.h - b.h) < 2;
+    window.__bsWin = {
+        reduced: matchMedia("(prefers-reduced-motion: reduce)").matches,
+        open: null, close: null,
+        /** before the click: record the first window that appears and how it changes until it settles */
+        armOpen() {
+            const before = new Set(Array.from(document.querySelectorAll(SEL)).filter(shown));
+            const run = { t0: performance.now(), el: null, samples: [] };
+            this.open = run;
+            const tick = () => {
+                const now = performance.now();
+                if (!run.el) run.el = Array.from(document.querySelectorAll(SEL)).filter((d) => shown(d) && !before.has(d)).pop() || null;
+                if (run.el && shown(run.el)) run.samples.push({ t: now, ...look(run.el) });
+                if (now - run.t0 < 4000 && !(run.samples.length > 3 && now - run.samples[0].t > 1200)) requestAnimationFrame(tick);
+                else run.done = true;
+            };
+            requestAnimationFrame(tick);
+        },
+        /** the opening: from the first frame the window is shown to the last frame it still changed */
+        openResult() {
+            const r = this.open;
+            if (!r || !r.el || r.samples.length < 2) return null;
+            const s = r.samples, last = s[s.length - 1];
+            // settled: the first frame from which nothing changes any more
+            let settle = s[0].t;
+            for (let i = 1; i < s.length; i++) if (!same(s[i], s[i - 1])) settle = s[i].t;
+            r.el.setAttribute("data-bs-win", "");
+            return { ms: Math.round(settle - s[0].t), changed: s.some((x) => !same(x, last)) };
+        },
+        /** before the close: follow the window frame by frame until it is gone */
+        armClose() {
+            const el = document.querySelector("[data-bs-win]") || Array.from(document.querySelectorAll(SEL)).filter(shown).pop();
+            if (!el) return false;
+            const run = { el, t0: performance.now(), samples: [], rest: look(el) };
+            this.close = run;
+            const tick = () => {
+                const now = performance.now(), on = shown(el);
+                run.samples.push({ t: now, on, ...(on ? look(el) : {}) });
+                if (on && now - run.t0 < 3000) requestAnimationFrame(tick);
+                else run.done = true;
+            };
+            requestAnimationFrame(tick);
+            return true;
+        },
+        closeResult() {
+            const r = this.close;
+            if (!r) return null;
+            const gone = r.samples.findIndex((x) => !x.on);
+            if (gone < 0) return { closed: false };
+            const visible = r.samples.slice(0, gone);
+            const ms = Math.round(r.samples[gone].t - r.t0);
+            const moved = visible.some((x) => !same(x, r.rest));
+            return { closed: true, ms, frames: visible.length, moved };
+        },
+    };
+};
+
+/** 6.12 (5.5.8) — arm before the click that may open a window. */
+export const armWindowMotion = (page) => page.evaluate(winSampler).then(() => page.evaluate(() => window.__bsWin.armOpen())).catch(() => { });
+
+/**
+ * 6.12 entrance (5.5.8): the window a click opened animates in for 180–600 ms (measured frame by frame, so CSS, the
+ * Web Animations API and script all count). tailwindcss-animate's `animate-in` keeps 150 ms when a `duration-*`
+ * class cannot override it. Skipped under prefers-reduced-motion.
+ */
+export async function windowEntrance(page, { label = "" } = {}) {
+    await page.waitForFunction(() => !window.__bsWin?.open || window.__bsWin.open.done, null, { timeout: 5000 }).catch(() => { });
+    const r = await page.evaluate(() => (window.__bsWin && !window.__bsWin.reduced ? window.__bsWin.openResult() : null)).catch(() => null);
+    if (!r) return [];
+    const where = await page.evaluate(() => { const e = document.querySelector("[data-bs-win]"); return e ? { where: window.__uiDescribe(e), selector: window.__uiSelector(e) } : {}; }).catch(() => ({}));
+    if (!r.changed || r.ms < 180)
+        return [{ check: "6.12", ...where, what: `${label}the window opens abruptly: ${r.changed ? `its opening animation lasts ${r.ms}ms` : "it appears with no animation"} — give it 180–600ms (with tailwindcss-animate, set the duration on the animation itself: the animate-in default is 150ms) [6.12]` }];
+    if (r.ms > 600)
+        return [{ check: "6.12", ...where, what: `${label}the window opens slowly: its opening animation lasts ${r.ms}ms — keep it within 180–600ms [6.12]` }];
+    return [];
+}
+
+/**
+ * 6.12 exit (5.5.8): closed (Escape, then its close button, then a click on the scrim), the window must stay on screen
+ * ≥ 100 ms and change (opacity, transform, clip or height) before it goes. Removed within the first frames, or gone
+ * with no change, it was unmounted at once ({open && <Dialog/>}). Returns { findings, notTested }.
+ */
+export async function windowExit(page, { label = "" } = {}) {
+    const reduced = await page.evaluate(() => !window.__bsWin || window.__bsWin.reduced).catch(() => true);
+    if (reduced) return { findings: [], notTested: [] };
+    const where = await page.evaluate(() => { const e = document.querySelector("[data-bs-win]"); return e ? { where: window.__uiDescribe(e), selector: window.__uiSelector(e) } : null; }).catch(() => null);
+    if (!where) return { findings: [], notTested: [] };
+    const tries = [
+        () => page.keyboard.press("Escape"),
+        () => page.locator("[data-bs-win] :is(button, [role=button])").filter({ hasText: /^(close|cancel|×|✕|x|fermer|annuler|закрыть|отмена|bağla|жабу)$/i }).first().click({ timeout: 1000 })
+            .catch(() => page.locator("[data-bs-win] :is(button, [role=button])[aria-label*=close i], [data-bs-win] :is(button, [role=button])[aria-label*=fermer i]").first().click({ timeout: 1000 })),
+        () => page.mouse.click(4, 4),
+    ];
+    for (const act of tries) {
+        if (!(await page.evaluate(() => window.__bsWin.armClose()).catch(() => false))) break;
+        await act().catch(() => { });
+        await page.waitForFunction(() => window.__bsWin.close.done, null, { timeout: 4000 }).catch(() => { });
+        const r = await page.evaluate(() => window.__bsWin.closeResult()).catch(() => null);
+        if (!r || !r.closed) continue;
+        if (r.ms < 100 || r.frames <= 2 || !r.moved)
+            return { findings: [{ check: "6.12", ...where, what: `${label}the window closes with no animation: it is removed ${r.moved ? `after ${r.ms}ms` : "at once, with no change on screen"} — keep it mounted while it animates out (an exit animation of 150–300ms) [6.12]` }], notTested: [] };
+        return { findings: [], notTested: [] };
+    }
+    return { findings: [], notTested: [`${label}closing the window (Escape, its close button, the scrim): it stayed open, exit motion not measured [6.12]`] };
+}
+
 /* ───────────────────────── 6.14 a button does something (5.5.0) ───────────────────────── */
 
 /**
@@ -872,7 +995,7 @@ export async function deadButtons(page, { max = 12, deadline = Infinity, notTest
  * buttons are never pressed and card fields never filled. `reload()` brings the page back between states.
  * Returns { findings, notTested, states } — notTested lists, with reasons, what could not be reached; never dropped.
  */
-export async function stateChecks(page, { reload, opts = {}, maxOpeners = 15, maxForms = 3, maxSteps = 6, wallet = true, deadline = Infinity, allowPost = [], selections = true, deadButtons: dead = true, auth = false } = {}) {
+export async function stateChecks(page, { reload, opts = {}, maxOpeners = 15, maxForms = 3, maxSteps = 6, wallet = true, deadline = Infinity, allowPost = [], selections = true, deadButtons: dead = true, auth = false, motion = true } = {}) {
     const findings = [];
     const notTested = [];
     const states = [];
@@ -924,6 +1047,7 @@ export async function stateChecks(page, { reload, opts = {}, maxOpeners = 15, ma
             await h.scrollIntoViewIfNeeded({ timeout: 2000 }).catch(() => { });
             await c.uncover(h);
             await h.evaluate((el) => window.__bsIx.arm(el)).catch(() => { });
+            if (motion) await armWindowMotion(page);
             await h.click({ timeout: 2500 }).catch(() => { });
             await page.waitForFunction(() => window.__bsIx && window.__bsIx.run && window.__bsIx.run.done, null, { timeout: 6000 }).catch(() => { });
             if (page.url().split("#")[0] !== home.split("#")[0])
@@ -936,6 +1060,8 @@ export async function stateChecks(page, { reload, opts = {}, maxOpeners = 15, ma
             }
             const label = `after clicking "${pick.text.slice(0, 40)}": `;
             states.push(`clicked "${pick.text.slice(0, 40)}"`);
+            // 6.12 (5.5.8): the window's opening length, measured from the click
+            if (motion) findings.push(...(await windowEntrance(page, { label })));
             for (const f of newIn(base, await measure(page, opts)))
                 findings.push({ ...f, what: `${label}${f.what}`, where: f.where });
             // a dialog with steps of its own (Add credits: amount → Continue → card): walk it, never pay
@@ -945,6 +1071,12 @@ export async function stateChecks(page, { reload, opts = {}, maxOpeners = 15, ma
                 findings.push(...w.findings);
                 if (w.steps)
                     states.push(`${w.steps} step(s) inside "${pick.text.slice(0, 40)}" (${w.stopped})`);
+            }
+            // 6.12 (5.5.8): closed, the window animates out before it goes
+            if (motion && timeLeft() > 10_000) {
+                const x = await windowExit(page, { label });
+                findings.push(...x.findings);
+                notTested.push(...x.notTested);
             }
         }
         if (cands?.skipped?.destructive?.length)

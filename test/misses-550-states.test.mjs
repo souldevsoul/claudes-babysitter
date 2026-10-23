@@ -244,6 +244,59 @@ try {
     assert.ok(!hits.includes("POST /api/match"), "aborted without allowPost");
   }, { width: 390, height: 800 });
 
+  /* ═════ 6.12 windows open and close with motion (5.5.8) ═════ */
+  // open: a fade + rise of `inMs`; close: unmounted at once (outMs 0) or faded out for `outMs` and then removed
+  const win = (inMs, outMs) => doc(`<main style="padding:24px"><h1>Plans</h1><button id="open">Buy credits</button></main>
+    <style>@keyframes in{from{opacity:0;transform:translateY(12px)}to{opacity:1;transform:none}}
+      .scrim{position:fixed;inset:0;background:rgba(0,0,0,.4)}
+      @keyframes out{to{opacity:0;transform:translateY(12px)}}
+      .win{position:fixed;top:20%;left:30%;width:360px;padding:24px;background:#fff;animation:in ${inMs}ms ease-out both}
+      .win.out{animation:out ${outMs}ms ease-in both}</style>
+    <script>
+      document.getElementById("open").onclick = () => {
+        const s = document.createElement("div"); s.className = "scrim";
+        s.innerHTML = '<div class="win" role="dialog" aria-modal="true"><h2>Top up</h2><button class="x">Close</button></div>';
+        document.body.appendChild(s);
+        const close = () => { const w = s.querySelector(".win"); if (${outMs} === 0) return s.remove(); w.classList.add("out"); setTimeout(() => s.remove(), ${outMs}); };
+        s.querySelector(".x").onclick = close;
+        document.addEventListener("keydown", (e) => { if (e.key === "Escape") close(); }, { once: true });
+      };
+    </script>`);
+  const motion = async (page) => {
+    await run.armWindowMotion(page);
+    await page.click("#open");
+    const entrance = await run.windowEntrance(page);
+    const exit = await run.windowExit(page);
+    return { entrance, exit };
+  };
+  await test("6.12 windows: unmounted on close and a 150ms opening fail; a 180ms fade-out and a 240ms opening pass; nothing under reduced motion", async (page) => {
+    await load(page, win(150, 0));
+    let r = await motion(page);
+    assert.equal(r.entrance.length, 1, JSON.stringify(r.entrance));
+    assert.match(r.entrance[0].what, /opens abruptly: its opening animation lasts 1\d\dms/);
+    assert.equal(r.exit.findings.length, 1, JSON.stringify(r.exit));
+    assert.match(r.exit.findings[0].what, /closes with no animation: it is removed at once/);
+    await load(page, win(240, 180));
+    r = await motion(page);
+    assert.deepEqual(r.entrance, [], "240ms opening");
+    assert.deepEqual(r.exit, { findings: [], notTested: [] }, "180ms fade-out");
+    await page.emulateMedia({ reducedMotion: "reduce" });
+    await load(page, win(150, 0));
+    r = await motion(page);
+    assert.deepEqual([...r.entrance, ...r.exit.findings], [], "reduced motion: skipped");
+    await page.emulateMedia({ reducedMotion: "no-preference" });
+  });
+  await test("6.12 in the states run: the window a click opens is measured as it opens and as it closes", async (page) => {
+    await load(page, win(150, 0));
+    const res = await states(page);
+    const m = res.findings.filter((f) => f.check === "6.12");
+    assert.ok(m.some((f) => /after clicking "Buy credits": the window opens abruptly/.test(f.what)), JSON.stringify(res.findings.map((f) => f.what)));
+    assert.ok(m.some((f) => /closes with no animation/.test(f.what)), JSON.stringify(res.findings.map((f) => f.what)));
+    await load(page, win(240, 180));
+    const ok = await states(page);
+    assert.deepEqual(ok.findings.filter((f) => f.check === "6.12"), [], JSON.stringify(ok.findings.map((f) => f.what)));
+  });
+
   /* ═════ Compass tpag4h: "Talk to sales" does nothing (6.14) ═════ */
   await test("tpag4h 6.14: a button with no handler fails; a mailto link, a Copy button and a disabled button stay quiet", async (page) => {
     await load(page, doc(`<main style="padding:24px"><section><h2>Professional solutions</h2><button class="btn">Talk to sales</button><button id="cp">Copy link</button><button disabled>Soon</button><button id="m">More</button><p id="x"></p></section></main><script>cp.onclick=()=>navigator.clipboard.writeText('x').catch(()=>{});m.onclick=()=>{x.textContent='More details'}</script>`));

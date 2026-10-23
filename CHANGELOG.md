@@ -2,6 +2,22 @@
 
 Earlier releases (4.11.1 and before) are described in the README under "What changed in …".
 
+## 5.5.8 — 6.12 windows open and close with motion (2026-10-23)
+
+A miss: windows opened abruptly and closed with no animation at all, and no check said so. Two causes behind it: the
+window was unmounted the moment its state went empty (`{open && <Dialog open/>}`), so on close it vanished in the first
+frame; and tailwindcss-animate's `data-[state=open]:animate-in` keeps its 150ms animation-duration, which a `duration-*`
+class cannot override. The states run now measures every window it opens (`[role=dialog]`, `[role=alertdialog]`,
+`dialog[open]`, `[aria-modal=true]`, sheets):
+- **entrance:** sampled every animation frame from the click (CSS, the Web Animations API and script all count), the
+  opening must last 180–600ms. Shorter, or no change at all, is "opens abruptly"; longer is "opens slowly".
+- **exit:** closed with Escape, then its close button, then a click on the scrim, the window must stay on screen at least
+  100ms and change (opacity, transform, clip or height) before it goes. Removed within the first frames or with no change
+  is "closes with no animation: keep it mounted while it animates out". A window that none of these close is listed as
+  not tested.
+- skipped under `prefers-reduced-motion: reduce`; `stateChecks(page, { motion: false })` turns it off.
+- exports: `armWindowMotion`, `windowEntrance`, `windowExit` (playwright/checks/run.js).
+
 ## 5.5.7 — 6.14 dead buttons: what a click opened is closed before the next one (2026-10-23)
 
 6.14 clicks the page's buttons one after another, but never closed what a click opened. On a pricing page with four
