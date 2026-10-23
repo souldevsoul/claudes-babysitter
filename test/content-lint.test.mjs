@@ -86,6 +86,14 @@ await t("CT12 / CT28 look-alikes: a mailto / tel link labelled with its address;
   assert.ok(K.mixedCase("2. Company information And Terms", { lower }), "and after a number too");
 });
 
+await t("CT8 plural by the language's own rule (Intl.PluralRules): fr '0 message' passes, fr '2 message' and en '0 message' fail", () => {
+  const g = (text, locale) => R.grammar({ text, locale, collapsed: true }).filter((x) => /needs the plural/.test(x.what ?? x.message ?? JSON.stringify(x)));
+  assert.equal(g("0 message", "fr").length, 0, "French: 0 is singular");
+  assert.equal(g("2 message", "fr").length, 1);
+  assert.equal(g("0 message", "en").length, 1);
+  assert.equal(g("0 message", undefined).length, 1, "no language: English rules");
+});
+
 /* CT3 raw errors */
 await t("CT3 raw errors fire; prose and prices do not", () => {
   for (const s of ["[object Object]", "Total: NaN credits", "Hello, undefined", "Error: P2002 Unique constraint failed", "TypeError: Cannot read properties of undefined (reading 'map')", "500 Internal Server Error", "Invalid Date", "CredentialsSignin", "PrismaClientKnownRequestError", "at handler (/var/task/route.js:12:5)", "Balance: null"])

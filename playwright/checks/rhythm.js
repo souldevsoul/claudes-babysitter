@@ -573,6 +573,11 @@ export async function twoColumnRule(page) {
       const [left, right] = ks;
       if (!(left.innerText || "").trim() || (right.innerText || "").trim().length < 3) continue;
       if (/center/.test(R.cs(b).alignItems) || /center/.test(R.cs(right).alignSelf)) continue;
+      // two cards side by side: their boxes line up or they do not; the text inside the left card is not the measure
+      if (R.painted(left) && R.painted(right)) {
+        const d = Rt.top - L0.top;
+        if (Math.abs(d) <= 6) { rules.push({ rule: "box", name: "the box top", where: window.__uiDescribe(b), text: (left.innerText || "").trim().split("\n")[0].slice(0, 30) }); continue; }
+      }
       let col = left; while (R.kids(col).length === 1) col = R.kids(col)[0];
       // box to box, ink to ink: a left item that is a painted box (a card) is placed by its box top, like the right column
       // an unpainted wrapper (a grid of stat cards) is placed by its first painted box down the first-child path, when
@@ -601,7 +606,8 @@ export async function twoColumnRule(page) {
 }
 /** 2.22 site-wide / page-wide: more than one rule among the two-column blocks. [{ route, rules }] → findings */
 export function twoColumnRulesAcross(list) {
-  const all = list.flatMap((x) => x.rules.map((r) => ({ ...r, route: x.route })));
+  // two cards whose boxes line up ("box") are a different kind of block: not compared with text columns
+  const all = list.flatMap((x) => x.rules.filter((r) => r.rule !== "box").map((r) => ({ ...r, route: x.route })));
   const by = new Map(); for (const r of all) { if (!by.has(r.rule)) by.set(r.rule, []); by.get(r.rule).push(r); }
   if (by.size < 2) return [];
   const [main] = [...by].sort((a, b) => b[1].length - a[1].length)[0];

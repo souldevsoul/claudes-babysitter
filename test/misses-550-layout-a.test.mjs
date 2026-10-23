@@ -189,6 +189,14 @@ try {
     const grid = await ck(page);
     assert.deepEqual(grid.hard, [], "the right card starts on the first stat card's box");
     assert.equal(grid.rules.length, 1); assert.equal(grid.rules[0].rule, 0);
+    // both columns are cards (a 5-column grid: 3 + 2): the box tops line up, the left card's text is not the measure
+    const sect = (span, inner) => `<section class="rounded-card border bg-card p-8 shadow-card lg:col-span-${span}" style="grid-column:span ${span};background:#fff;border:1px solid #ddd;border-radius:16px;padding:32px;box-shadow:0 8px 24px rgba(0,0,0,.08)">${inner}</section>`;
+    const pair = (offset) => `<main><div class="grid lg:grid-cols-5" style="display:grid;grid-template-columns:repeat(5,1fr);gap:24px;width:1200px;margin:40px 0">${sect(3, '<p class="caption" style="font-size:12px;margin:0">EXAMPLE VIDEOS</p><ul style="margin:16px 0 0"><li>Interview, 4 min</li><li>Product demo, 2 min</li><li>Lecture, 12 min</li></ul>')}${sect(2, `<div style="margin-top:${offset}px"></div><h3 style="margin:0">Try it on your video</h3><p>Upload a file to start.</p>`)}</div></main>`;
+    await load(page, doc(pair(0)));
+    const cardsPair = await ck(page);
+    assert.deepEqual(cardsPair.hard, [], "two cards with one top");
+    assert.equal(cardsPair.rules.length, 1); assert.equal(cardsPair.rules[0].rule, "box");
+    assert.deepEqual(Rh.twoColumnRulesAcross([{ route: "/", rules: [...cardsPair.rules, ...grid.rules] }]), [], "a card pair is not compared with text columns");
   });
 
   /* ═════ 2.23 rhythm ═════ */

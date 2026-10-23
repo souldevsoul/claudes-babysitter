@@ -71,6 +71,11 @@ Or install it as a dev dependency: `npm i -D github:souldevsoul/claudes-babysitt
 | `docs/` | The guidelines the rules enforce |
 | `test/`, `fixtures/` | `npm test`: RuleTester, Stylelint fixtures, end-to-end cases |
 
+## What changed in 5.5.5 (two false alarms)
+
+2.22 compares the box tops of two cards side by side before the text inside them; CT8 asks for the plural only where the
+page language's plural rule does ("0 message" is right in French). Details: [`CHANGELOG.md`](CHANGELOG.md).
+
 ## What changed in 5.5.4 (three copy false alarms)
 
 CT12 accepts a mailto / tel link labelled with its own address; CT11 no longer calls a person's name in a data row, or

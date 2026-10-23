@@ -2,6 +2,16 @@
 
 Earlier releases (4.11.1 and before) are described in the README under "What changed in …".
 
+## 5.5.5 — two false alarms: two cards side by side, plurals by the language's rule (2026-10-22)
+
+- **2.22 `twoColumnRule`: two cards side by side.** When the left column and the right column are both painted boxes,
+  their box tops are compared first: within 6px the block passes and its rule is "the box top". Before, the left card was
+  measured by the text inside it ("EXAMPLE VIDEOS"), 34px below its own top, and two cards with one top were reported.
+  A card pair is not compared with text columns in the site-wide "different rules" check.
+- **CT8 plural: the language's own rule.** "0 message" was reported as needing the plural on a French page, where 0 and
+  1 take the singular (CLDR `fr`). The count's form now comes from `Intl.PluralRules(<page language>)`: a count the rule
+  calls "one" takes the singular. French "0 message" passes; French "2 message" and English "0 message" still fail.
+
 ## 5.5.4 — three copy false alarms: email links, names in data rows, numbered headings (2026-10-22)
 
 - **CT12 a link labelled with its path:** a `mailto:` or `tel:` link labelled with its own address or number
