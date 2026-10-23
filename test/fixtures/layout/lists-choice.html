@@ -1,0 +1,13 @@
+<!doctype html><html><head><title>Profile | Acme</title>
+<style>.chips{display:flex;flex-wrap:wrap;gap:8px}.chip{border:1px solid #ccc;border-radius:16px;padding:4px 10px}.grid{display:grid;grid-template-columns:repeat(3,1fr);gap:12px}</style></head>
+<body style="margin:0;font-family:sans-serif">
+<main>
+  <form>
+    <fieldset><legend>Languages</legend><div id="langs" class="chips">{LANGS}</div></fieldset>
+    <div role="group" aria-label="Topics"><div id="topics" class="chips">{TOPICS}</div></div>
+    <div id="toggles" class="chips">{TOGGLES}</div>
+  </form>
+  <section><h2>People</h2><div id="cards" class="grid">{CARDS}</div></section>
+  <section><h2>Inbox</h2><table><tbody id="rows">{ROWS}</tbody></table></section>
+</main>
+</body></html>

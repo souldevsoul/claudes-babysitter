@@ -2,6 +2,15 @@
 
 Earlier releases (4.11.1 and before) are described in the README under "What changed in …".
 
+## 5.5.10 — 4.3 a set of choices is not an unpaged list (2026-10-23)
+
+A false alarm: a form's fieldset of 27 language chips, each a checkbox, was reported as "a list of 27 items with no
+pagination". A choice set is part of a form, not a feed. 4.3 now leaves a candidate out when every repeated item is a
+choice control (`input[type=checkbox|radio]`, `[role=checkbox|radio|switch]`, `[aria-pressed]`) or a chip that wraps
+exactly one (no link, heading, image or other control of its own), and when it sits in a `fieldset`, `[role=group]` or
+`[role=radiogroup]` and every item holds a choice control. Long lists of content are reported as before, rows with a
+select checkbox and a link among them.
+
 ## 5.5.9 — two false alarms: app navigation in 3.7, bordered cards in 2.6 (2026-10-23)
 
 - **3.7 nav-mismatch:** a header link into a signed-in role area (a `/workspace` that is not one of the sign-in, account

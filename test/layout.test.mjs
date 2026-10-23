@@ -260,6 +260,18 @@ try {
     r = await L.longLists(page);
     assert.deepEqual(r.soft, [], JSON.stringify(r.soft.map((f) => f.selector)));
   });
+  await test("4.3 long lists: a choice set (27 checkbox chips in a fieldset, pressed toggles, a role=group) passes; 27 cards and 27 rows with a select box are soft", async (page) => {
+    const rep = (n, f) => Array.from({ length: n }, (_, i) => f(i)).join("");
+    await load(page, "lists-choice.html", { vars: {
+      LANGS: rep(27, (i) => `<label class="chip"><input type="checkbox" name="lang" value="l${i}"> Language ${i}</label>`),
+      TOPICS: rep(27, (i) => `<span class="chip"><input type="radio" name="topic" id="t${i}"><label for="t${i}">Topic ${i}</label></span>`),
+      TOGGLES: rep(27, (i) => `<button type="button" class="chip" aria-pressed="${i % 2 ? "true" : "false"}">Tag ${i}</button>`),
+      CARDS: rep(27, (i) => `<div class="card"><h3>Name ${i}</h3><p>Role</p></div>`),
+      ROWS: rep(27, (i) => `<tr><td><input type="checkbox" aria-label="select"></td><td><a href="/m/${i}">Message ${i}</a></td></tr>`),
+    } });
+    const r = await L.longLists(page);
+    assert.deepEqual(sel(r.soft).sort(), ["#cards", "#rows"], JSON.stringify(r.soft.map((f) => f.selector + " " + f.what)));
+  });
   await test("6.11 favicon: missing, unserved, framework default and another product's icon are hard; the product's own icon passes", async (page) => {
     const reg = mkdtempSync(join(tmpdir(), "bs-fav-"));
     const registry = join(reg, "favicons.json");

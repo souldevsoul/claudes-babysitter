@@ -783,7 +783,8 @@ export async function stickyHeader(page, distance = 1000) {
 /**
  * Soft. A list (ul/ol/tbody/role=list/role=rowgroup, or a grid/flex container of same-shaped children) with more than
  * `max` (20) visible items and no pagination, "load more"/"show more", next-page link or virtualization near it.
- * Left out: nav/header/footer/menus/selects, prose lists (bullets of plain text), marquees and carousels, logo walls.
+ * Left out: nav/header/footer/menus/selects, prose lists (bullets of plain text), marquees and carousels, logo walls, and
+ * choice sets (checkbox/radio/switch/pressed chips, or any items of a fieldset or [role=group] holding one).
  */
 export async function longLists(page, max = 20) {
   await ensure(page);
@@ -798,6 +799,12 @@ export async function longLists(page, max = 20) {
     const pager = (scope) => !!scope.querySelector("nav[aria-label*=pagina i], [class*=paginat i], [aria-label*=pagination i], [aria-label*='next page' i], [aria-label*='previous page' i], a[rel=next], [data-pagination]")
       || Array.from(scope.querySelectorAll("a, button")).some((b) => W.__uiVisible(b) && PAGER.test(L.clean(b.innerText || b.getAttribute("aria-label"))))
       || Array.from(scope.querySelectorAll("button, a")).filter((b) => /^\d{1,3}$/.test(L.clean(b.innerText))).length >= 3;
+    // a set of choices (language chips, toggles) is part of a form, not a feed: each item is a choice control or a
+    // chip that wraps exactly one (no link, heading, image or other control of its own); inside a fieldset or a
+    // [role=group|radiogroup] every item holding a choice control is enough
+    const CHOICE = "input[type=checkbox], input[type=radio], [role=checkbox], [role=radio], [role=switch], [aria-pressed]";
+    const chip = (k) => k.matches(CHOICE) || (k.querySelectorAll(CHOICE).length === 1 && !k.querySelector("a[href], h1, h2, h3, h4, h5, h6, img, video, select, textarea, input:not([type=checkbox]):not([type=radio]), button:not([aria-pressed]):not([role=checkbox]):not([role=radio]):not([role=switch])"));
+    const choiceSet = (c, items) => items.every(chip) || (!!c.closest("fieldset, [role=group], [role=radiogroup]") && items.every((k) => k.matches(CHOICE) || !!k.querySelector(CHOICE)));
     const cands = new Set([...document.querySelectorAll("ul, ol, tbody, [role=list], [role=rowgroup], [role=grid]")]);
     for (const e of document.querySelectorAll("main div, main section")) { const d = getComputedStyle(e).display; if (/grid|flex/.test(d) && e.children.length > max) cands.add(e); }
     const seen = new Set();
@@ -811,6 +818,7 @@ export async function longLists(page, max = 20) {
       const items = kids.filter((k) => counts.get(shape(k)) === n);
       if (/^(UL|OL)$/.test(c.tagName) && prose(items)) continue;
       if (moving(c) || items.every((k) => W.__uiMediaTile(k))) continue;
+      if (choiceSet(c, items)) continue;
       if (virtual(c)) continue;
       if ([...seen].some((s) => s.contains(c) || c.contains(s))) continue;
       seen.add(c);

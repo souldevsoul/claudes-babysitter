@@ -71,6 +71,11 @@ Or install it as a dev dependency: `npm i -D github:souldevsoul/claudes-babysitt
 | `docs/` | The guidelines the rules enforce |
 | `test/`, `fixtures/` | `npm test`: RuleTester, Stylelint fixtures, end-to-end cases |
 
+## What changed in 5.5.10 (choice sets are not long lists)
+
+4.3 no longer asks for pagination on a set of checkbox, radio, switch or pressed-toggle chips (a fieldset of 27
+languages); lists of cards, rows and links are checked as before. Details: [`CHANGELOG.md`](CHANGELOG.md).
+
 ## What changed in 5.5.9 (two false alarms)
 
 3.7 leaves out header links into the signed-in areas the config declares (`authRoutes`, `roles[].authRoutes`): app
