@@ -71,6 +71,12 @@ Or install it as a dev dependency: `npm i -D github:souldevsoul/claudes-babysitt
 | `docs/` | The guidelines the rules enforce |
 | `test/`, `fixtures/` | `npm test`: RuleTester, Stylelint fixtures, end-to-end cases |
 
+## What changed in 5.5.4 (three copy false alarms)
+
+CT12 accepts a mailto / tel link labelled with its own address; CT11 no longer calls a person's name in a data row, or
+the text of a row that shows an email, untranslated copy; CT28 reads "2. Company information" as sentence case.
+Details: [`CHANGELOG.md`](CHANGELOG.md).
+
 ## What changed in 5.5.3 (two false alarms)
 
 1.22 treats one kit component in another variant (a neutral badge beside success badges) as the same card part. 2.22

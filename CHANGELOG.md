@@ -2,6 +2,19 @@
 
 Earlier releases (4.11.1 and before) are described in the README under "What changed in …".
 
+## 5.5.4 — three copy false alarms: email links, names in data rows, numbered headings (2026-10-22)
+
+- **CT12 a link labelled with its path:** a `mailto:` or `tel:` link labelled with its own address or number
+  (`<a href="mailto:hello@…">hello@…</a>`) is the right label for an email link (CT10 asks for mailto links); it is no
+  longer reported. A link labelled with a real path still is.
+- **CT11 untranslated, data is not copy:** a person's name ("Theo Martin", "Anne-Marie Dubois": 2–3 capitalised words,
+  none of them a function word or a common UI word in English or French) in a table row, a list row, a card heading or
+  another record is the same in every language; so is the text of a row or card that shows an email address, outside
+  its controls (buttons, links, labels, table headers). UI phrases stay caught: "Add professional" left on a French
+  page, a button in that row, Title Case UI ("Video Library") and a name outside any record.
+- **CT28 heading case:** a numbering prefix ("2.", "2)", "2.1", "II.", "A.") is set aside before the case is judged:
+  "2. Company information" is sentence case. "Company information And Terms" is still mixed, with or without a number.
+
 ## 5.5.3 — two false alarms: kit variants as card parts, a grid of cards in a column (2026-10-22)
 
 - **1.22 `siblingParts`: one kit component in another variant is the same part.** A part was keyed by its tag and its

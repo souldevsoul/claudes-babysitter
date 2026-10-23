@@ -66,7 +66,16 @@ export const collectCopy = (page) => page.evaluate(() => {
     // 5.5.0 (Compass, issue #5): what a user wrote (a brief, a chat message) is shown back as they wrote it — not copy
     // to translate. [data-user-content] marks it; chat logs, quotes and text kept with its line breaks (pre-wrap) count.
     const user = !!el.closest("[data-user-content], [data-ugc], [role=log], blockquote, q") || (pre && !/^h[1-6]$/.test(tag) && !btn && text.length > 20);
-    segs.push({ i, text, kind, user, collapsed: !pre, footer: !!el.closest("footer, [role=contentinfo]"), table: !!el.closest("table, [role=grid], [role=table], [role=row]"), ownLang });
+    // a record (a table row, a list row, a card): a person's name in it is data; so is the text of a row that shows an email
+    const EMAIL = /[A-Za-z0-9._%+-]+@[A-Za-z0-9-]+(?:\.[A-Za-z0-9-]+)*\.[A-Za-z]{2,}/;
+    let row = el.closest("tr, [role=row], li, [role=listitem], article, dd");
+    // or the card around it: the nearest painted box (background, border or shadow) within 4 levels, of short text
+    const paintedBox = (e) => { const c = getComputedStyle(e); return window.__uiRGBA(c.backgroundColor)[3] > 0.05 || c.boxShadow !== "none" || ["Top", "Right", "Bottom", "Left"].every((x) => parseFloat(c[`border${x}Width`]) > 0); };
+    if (!row) for (let e = el.parentElement, k = 0; e && e !== document.body && !/^(MAIN|SECTION|BODY)$/.test(e.tagName) && k < 4; e = e.parentElement, k++) { if ((e.innerText || "").length > 400) break; if (paintedBox(e)) { row = e; break; } }
+    const record = !!row || /^h[2-6]$/.test(tag) && !!el.closest("[class*=card i], [class*=profile i]");
+    const rowEmail = !!row && EMAIL.test(row.innerText || "");
+    const control = !!el.closest("button, a[href], [role=button], [role=tab], [role=menuitem], label, th, select, option, input");
+    segs.push({ i, text, kind, user, collapsed: !pre, footer: !!el.closest("footer, [role=contentinfo]"), table: !!el.closest("table, [role=grid], [role=table], [role=row]"), ownLang, record, rowEmail, control });
   }
   // emails in text: linked by a mailto with the same address?
   const emails = [];
@@ -311,7 +320,7 @@ export async function languageFindings(page, { cfg = {}, copy = null, locale = n
     }
     for (const s of copy.segs) {
       if (s.user) continue;
-      const r = untranslatedReason(s.text, code, { brand, defaults: def, keep, ownLang: s.ownLang, legal: cc.legalIdentity });
+      const r = untranslatedReason(s.text, code, { brand, defaults: def, keep, ownLang: s.ownLang, legal: cc.legalIdentity, record: s.record, rowEmail: s.rowEmail, control: s.control });
       if (!r) continue;
       out.push({ i: s.i, x: { id: "CT11", what: untranslatedWhat(r, s.text, code), fix: `translate it (the ${code} messages file, or the CMS / database field; locales.keep / content.brandTerms for names that stay as they are)` } });
     }

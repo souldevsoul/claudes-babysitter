@@ -61,6 +61,31 @@ await t("CT2/CT11 the studio legal identity placeholder is required copy, not te
   assert.equal(R.untranslatedReason("New Company 1", "kk", { defaults: def, legal: [] })?.kind, "same", "with legalIdentity off it is ordinary copy again");
 });
 
+await t("CT11 names and data rows: a person's name in a record and the text of a row with an email are not untranslated copy", () => {
+  const def = new Set(["Theo Martin", "Add professional", "Video Library", "Sign In Now"]); def.locale = "en";
+  assert.equal(R.looksLikeName("Theo Martin"), true);
+  assert.equal(R.looksLikeName("Anne-Marie Dubois"), true);
+  for (const s of ["Add professional", "Video Library", "Sign In Now", "theo martin", "Theo"]) assert.equal(R.looksLikeName(s), false, s);
+  assert.equal(R.untranslatedReason("Theo Martin", "fr", { defaults: def, record: true }), null, "a name in a row");
+  assert.equal(R.untranslatedReason("Theo Martin", "fr", { defaults: def })?.kind, "same", "outside a record it is still compared");
+  assert.equal(R.untranslatedReason("Video Library", "fr", { defaults: def, record: true })?.kind, "same", "Title Case UI words are not a name");
+  assert.equal(R.untranslatedReason("Add professional", "fr", { defaults: def, record: true })?.kind, "same");
+  assert.equal(R.untranslatedReason("Theo Martin", "fr", { defaults: def, rowEmail: true }), null, "a row with an email is data");
+  assert.equal(R.untranslatedReason("Add professional", "fr", { defaults: def, rowEmail: true, control: true })?.kind, "same", "a control in that row is still copy");
+});
+
+await t("CT12 / CT28 look-alikes: a mailto / tel link labelled with its address; a numbered sentence-case heading", async () => {
+  const K = await import("../lib/copy-rules.js");
+  assert.equal(K.pathLabel("hello@x.example", "mailto:hello@x.example"), null);
+  assert.equal(K.pathLabel("+44 20 7946 0000", "tel:+442079460000"), null);
+  assert.equal(K.pathLabel("/pricing", "/pricing"), "/pricing", "a real path label still fires");
+  const lower = new Set(["company", "information", "terms"]);
+  for (const h of ["2. Company information", "2) Company information and terms", "2.1 Company information and terms", "II. Company information and terms", "A. Company information and terms"])
+    assert.equal(K.mixedCase(h, { lower }), null, h);
+  assert.ok(K.mixedCase("Company information And Terms", { lower }), "true mixed case still fires");
+  assert.ok(K.mixedCase("2. Company information And Terms", { lower }), "and after a number too");
+});
+
 /* CT3 raw errors */
 await t("CT3 raw errors fire; prose and prices do not", () => {
   for (const s of ["[object Object]", "Total: NaN credits", "Hello, undefined", "Error: P2002 Unique constraint failed", "TypeError: Cannot read properties of undefined (reading 'map')", "500 Internal Server Error", "Invalid Date", "CredentialsSignin", "PrismaClientKnownRequestError", "at handler (/var/task/route.js:12:5)", "Balance: null"])

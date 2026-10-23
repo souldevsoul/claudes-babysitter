@@ -108,6 +108,21 @@ try {
     for (const id of ["brand", "kept", "cookie", "quote", "tn", "az"]) silent(ct11, id);
   });
 
+  await test("CT11 data is not copy: a person's name in a table row or a card, and the text of a row that shows an email, pass; UI phrases and controls in that row are still caught", async (page) => {
+    const html = (h) => page.goto("data:text/html;charset=utf-8," + encodeURIComponent(h));
+    const body = (lang, add, cells) => `<html lang="${lang}"><body><main><button id="add">${add}</button><table><tr><td id="name">Theo Martin</td><td id="mail">theo@x.example</td><td><button id="act">More actions</button></td></tr></table>
+      <ul><li id="li">Anne-Marie Dubois</li></ul><div class="profile-card"><h3 id="card">Lucas Bernard</h3></div><p id="free">Theo Martin</p>${cells}</main></body></html>`;
+    await html(body("en", "Add professional", ""));
+    const defaults = await k.collectCopy(page);
+    await html(body("fr", "Add professional", ""));
+    const { hard } = await k.languageFindings(page, { locale: "fr", defaults, defaultLocale: "en" });
+    const ct11 = hard.filter((f) => f.id === "CT11");
+    fired(ct11, "add", /untranslated in "fr": "Add professional"/);
+    fired(ct11, "act", /untranslated in "fr": "More actions"/);
+    for (const id of ["name", "li", "card"]) silent(ct11, id);
+    fired(ct11, "free", /"Theo Martin" is the same text/);
+  });
+
   await test("B1 = CT1: acceptance's build-note check reports with the CT1 rules (one source of truth), defensive copy included", async (page) => {
     await page.goto("data:text/html;charset=utf-8," + encodeURIComponent(`<html lang="en"><body><p id="leak">No mailbox is connected to this build.</p><p id="def">We would rather say so plainly.</p><p id="host">Open qa-preview.vercel.app to try it</p><p id="ok">We answer within a day.</p></body></html>`));
     await checks.install(page);
