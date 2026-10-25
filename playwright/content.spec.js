@@ -159,7 +159,10 @@ test.describe("content site-wide", () => {
         }
         // legal pages the footer links to but the crawl did not reach
         const seen = new Set(recs.map((x) => x.route.replace(/\/$/, "") || "/"));
-        const missing = [...new Set(recs.flatMap((x) => x.legal.map((l) => l.path)))].filter((p) => !seen.has(p));
+        // 5.6.1: a link on a French page reads /fr/terms; the route is /terms (open() adds the language again: /fr/fr/terms
+        // answered 404 once French legal names were known)
+        const bare = (p) => (loc?.code ? p.replace(new RegExp(`^/${loc.code}(?=/|$)`, "i"), "") || "/" : p);
+        const missing = [...new Set(recs.flatMap((x) => x.legal.map((l) => bare(l.path))))].filter((p) => !seen.has(p));
         for (const p of missing) {
             const ctx = await ctxFor(browser, null);
             const page = await ctx.newPage();

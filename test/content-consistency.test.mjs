@@ -270,7 +270,7 @@ await t("cross-rule: a refund sentence is a CT20 fact, not a CT19 drift; a legal
 });
 
 /* ───────── the fixture repo, statically ───────── */
-await t("fixture site: every planted problem is found at its file:line, the look-alikes are not; admin pages and French copy stay out", async () => {
+await t("fixture site: every planted problem is found at its file:line, the look-alikes are not; admin pages stay out, French copy is compared with French", async () => {
   const dir = mkdtempSync(join(tmpdir(), "bs-site-"));
   cpSync(join(here, "fixtures/content/site"), dir, { recursive: true });
   execSync("git init -q && git add -A", { cwd: dir });
@@ -308,6 +308,8 @@ await t("fixture site: every planted problem is found at its file:line, the look
     ["CT22", "app/[locale]/docs/page.tsx", /is never shown: next\.config\.mjs:5 redirects "\/:locale\(en\|fr\)\?\/docs" to \/help/],
     ["CT22", "components/Footer.tsx", /go to \/docs, which redirects to \/help \(next\.config\.mjs:5\)/],
     ["CT22", "app/[locale]/page.tsx", /go to \/old-pricing, which redirects to \/pricing/],
+    // 5.6.1: the French copy has its own currency naming — "en USD" next to "en dollars", against the French uses only
+    ["CT19", "messages/fr.json", /currency: dollar américain: "USD" here — the site mostly says "dollars" \("dollars" 3×\)/],
   ];
   for (const [id, file, re] of expect) assert.ok(has(id, file, re), `missing ${id} ${file} ${re}\n${mine.map((p) => `${p.id} ${p.file}:${p.line} ${p.message}`).join("\n")}`);
   assert.equal(mine.length, expect.length, `exactly the planted problems:\n${mine.map((p) => `${p.id} ${p.file}:${p.line} ${p.message.slice(0, 140)}`).join("\n")}`);
@@ -315,7 +317,8 @@ await t("fixture site: every planted problem is found at its file:line, the look
   const all = mine.map((p) => p.message).join("\n");
   for (const re of [/expert review|Pro plan|pros and cons|contractors|“experts”|expert@|Professional and friendly/, /suspend or close/, /chargeback/i, /guide\.pdf|pricing#faq|\/fr\/pricing|\/blog|dashboard\/settings.*never shown/, /"(Settings|English|Sign)" here names/, /price list/, /Stripe|This Agreement|Help Center|Refund Policy" but/, /Terms of Service/, /Professionals|admin/, /withdrawal|5 years|business days/, /Become a specialist/])
     assert.ok(!re.test(all), `false positive ${re}:\n${all}`);
-  assert.ok(!mine.some((p) => p.file === "messages/fr.json"), "French copy is checked against French only");
+  // French copy is checked against French only: the one French finding counts the French "dollars" (3), not the English
+  assert.deepEqual(mine.filter((p) => p.file === "messages/fr.json").map((p) => p.line), [33], "French copy is checked against French only");
   assert.ok(!problems.some((p) => p.id === "CT8" && p.file === "messages/fr.json"), `French spacing is right: ${JSON.stringify(problems.filter((p) => p.id === "CT8"))}`);
   assert.ok(consistency.every((g) => g.fix && g.report.length), "every group says what to do and where");
   void soft;

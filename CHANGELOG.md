@@ -2,6 +2,34 @@
 
 Earlier releases (4.11.1 and before) are described in the README under "What changed in …".
 
+## 5.6.1 — one name, one fact, one label in French too (2026-10-25)
+
+Business QA on a bilingual product: "the same thing is said differently between pages and inside one page (card payment,
+refunds, deleting the account, prices in different currencies, the role Specialist / Expert / executor); buttons and
+pages are named differently; links to pages that do not exist (Specialist Service Terms)". The rules existed (CT19–CT22),
+but facts, labels and named pages were read on the English pages only.
+
+- **CT19** French groups for the refund (remboursement / restitution des fonds / récupérer votre argent / avoir), the card
+  (carte bancaire / carte de crédit / carte de débit / carte de paiement / carte de crédit ou de débit) and currency names
+  (euros / EUR, livres / GBP, dollars / USD), next to the role and deleting the account.
+- **CT20** reads French: durations ("14 jours", "5 à 10 jours ouvrés", semaines → days, mois, ans), the refund window vs
+  the processing time vs the right of withdrawal (rétractation), the account deletion time, retention per kind of data,
+  "nous acceptons" / "moyens de paiement" / "uniquement", the currencies ("livres sterling", "prix affichés en …", open
+  lists "et autres devises"). Facts are one pool for every language: "14 days" on the English refund page against
+  "30 jours" on the French one is one conflict. Amounts in a currency the site does not offer count on French pages.
+- **CT21 / CT22** run per language with a lexicon: French labels are compared with French labels ("Centre d'aide" /
+  "Assistance" → /help; "Acheter des crédits" / "Recharger"; "Nous contacter" / "Contacter le support"), never with the
+  English ones; French calls to action, "Retour à …", "dans Mes vidéos" mentions; French document names in their own
+  word order ("Politique de remboursement", "Conditions de service des Spécialistes") — a name nothing on the site
+  carries is CT22. Languages without a lexicon are read with English, as before.
+- **CT15** knows the French legal families (Conditions générales d'utilisation, Politique de confidentialité, Politique
+  relative aux cookies, Politique de remboursement / d'annulation / de livraison / de paiement, lutte contre le
+  blanchiment). Opening a French footer's legal links no longer doubles the language prefix (`/fr/fr/terms` answered 404).
+- The site-wide copy leaves out what a user wrote (`data-user-content`, chat, quotes) and text kept as written
+  (`translate="no"`, another `lang`): a customer's script saying "carte de crédit" is not the site's name for the card.
+- Tests: `test/content-fr-561.test.mjs` (every case fails on 5.6.0); the fixture site's French copy is now compared with
+  French (`test/content-consistency.test.mjs`).
+
 ## 5.6.0 — express runs: one load per page, only what a change touches (2026-10-24)
 
 Every check opened its page again: ~117 page loads per route × viewport × locale × role, a few milliseconds of checking

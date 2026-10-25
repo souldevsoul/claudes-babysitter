@@ -9,7 +9,7 @@ import {
   looksLikeKey, isRtl, LEGAL_FAMILIES, legalFamily, normName, AUTO_VARIANTS, numericFacts, factConflicts, ruleId,
 } from "../../lib/content-rules.js";
 import { checkEmails } from "../../lib/email-dns.js";
-import { consistencyFindings, normLabel, listOrders } from "../../lib/content-consistency.js";
+import { consistencyFindings, normLabel, listOrders, labelLanguages } from "../../lib/content-consistency.js";
 
 export { contentConfig };
 
@@ -334,7 +334,8 @@ export function pageRecord(route, copy, locale = null) {
   return {
     route, locale, title: copy.title, h1: copy.h1, legal: copy.legal.map((l) => ({ ...l, text: l.text.replace(/[\s\u2190-\u21FF\u2794-\u27BF›»↗]+$/u, "") })).filter((l) => l.internal && legalFamily(l.text)).map((l) => ({ text: l.text, path: l.path, family: legalFamily(l.text) })),
     copyright: copy.copyright?.text || null, lastUpdated: lastUpdatedDates(copy.segs).map((d) => ({ kind: d.kind, iso: d.iso, text: d.text })),
-    segs: copy.segs.filter((s) => !s.footer).map((s) => ({ text: s.text, kind: s.kind })), footerSegs: copy.segs.filter((s) => s.footer).map((s) => s.text),
+    // 5.6.1: user / ownLang ride along, so the site-wide checks leave what a user wrote and text kept as written out
+    segs: copy.segs.filter((s) => !s.footer).map((s) => ({ text: s.text, kind: s.kind, ...(s.user ? { user: true } : {}), ...(s.ownLang ? { ownLang: s.ownLang } : {}) })), footerSegs: copy.segs.filter((s) => s.footer).map((s) => s.text),
     lang: copy.lang || "", brand: copy.brand || [], links: (copy.links || []).map(({ path, label, region, kind }) => ({ path, label, region, kind })),
     marks: typeof copy.marks === "boolean" ? copy.marks : undefined,
   };
@@ -436,7 +437,12 @@ export function siteOf(records, defaultLocale = null) {
   for (const r of records) {
     const locale = r.locale || r.lang || defaultLocale || "en";
     const route = r.route.replace(/\/$/, "") || "/";
-    for (const s of [...r.segs, ...r.footerSegs.map((t) => ({ text: t, kind: "body" }))]) texts.push({ text: s.text, kind: s.kind, locale, where: `${route} "${String(s.text).replace(/\s+/g, " ").slice(0, 60)}"`, route });
+    for (const s of [...r.segs, ...r.footerSegs.map((t) => ({ text: t, kind: "body" }))]) {
+      // 5.6.1: what a user wrote (a script, a chat line, a bio) and text kept as written (translate=no, another lang) is
+      // not the site's copy: its words are never one of the site's names for a thing
+      if (s.user || s.ownLang === "zxx" || (s.ownLang && String(s.ownLang).toLowerCase().split(/[-_]/)[0] !== String(locale).toLowerCase().split(/[-_]/)[0])) continue;
+      texts.push({ text: s.text, kind: s.kind, locale, where: `${route} "${String(s.text).replace(/\s+/g, " ").slice(0, 60)}"`, route });
+    }
     if (r.title) texts.push({ text: r.title, kind: "title", locale, where: `${route} <title>`, route });
     for (const l of r.links || []) links.push({ ...l, label: normLabel(l.label), locale, where: `${route} ${l.region}`, route });
     if (!seen.has(`${locale}|${route}`)) { seen.add(`${locale}|${route}`); pages.push({ path: route, names: r.h1 || [], title: r.title || "", where: `${route} <h1>`, locale, marks: r.marks }); }
@@ -445,8 +451,9 @@ export function siteOf(records, defaultLocale = null) {
 }
 
 /**
- * CT19–CT22 on the rendered site. `byLocale`: Map(locale → records). Terms (CT19) are compared per language; facts
- * (CT20), labels (CT21) and named pages (CT22) on the English pages (the default language when it is English).
+ * CT19–CT22 on the rendered site. `byLocale`: Map(locale → records). Terms (CT19), labels (CT21) and named pages (CT22)
+ * are compared per language (5.6.1: French has its own lexicon for CT21 / CT22); facts (CT20) across every language
+ * that has one (English, French).
  * `deadLinks`: [{ path, label, where, status }] the run found (CT22 a). Hard findings, one per concept / variant.
  */
 export function consistencyRendered(byLocale, cfg = {}, { defaultLocale = null, deadLinks = [], redirects = null } = {}) {
@@ -457,10 +464,14 @@ export function consistencyRendered(byLocale, cfg = {}, { defaultLocale = null, 
   // is a link to a redirected path (CT22)
   if (redirects) for (const l of site.links) { const to = redirects.get(l.path); if (to && to !== l.path) { l.dest = to; l.redirect = { to, kind: "redirect", rules: [] }; } }
   const en = (x) => !x.locale || /^en\b/i.test(x.locale);
+  const lexed = (x) => !en(x) && labelLanguages().includes(String(x.locale).toLowerCase().split(/[-_]/)[0]);
   const brand = [...new Set(all.flatMap((r) => r.brand || []))];
   const groups = [
     ...consistencyFindings({ texts: site.texts, links: [], pages: [] }, { ...cc, skip: [...(cc.skip || []), "CT20", "CT21", "CT22", "CT15", "CT23", "CT27", "F5", "M3"] }, cfg),
-    ...consistencyFindings({ texts: site.texts.filter(en), links: site.links.filter(en), pages: site.pages.filter(en), deadLinks }, { ...cc, skip: [...(cc.skip || []), "CT19"] }, cfg, { brand, skipLegal: true }),
+    // CT20 facts are one pool for every language the site has (5.6.1: "14 days" against "30 jours")
+    ...consistencyFindings({ texts: site.texts.filter(en), links: site.links.filter(en), pages: site.pages.filter(en), deadLinks }, { ...cc, skip: [...(cc.skip || []), "CT19"] }, cfg, { brand, skipLegal: true, factsTexts: site.texts }),
+    // 5.6.1: CT21 / CT22 in each other language with a lexicon (labels, page names and documents named in its copy)
+    ...consistencyFindings({ texts: site.texts.filter(lexed), links: site.links.filter(lexed), pages: site.pages.filter(lexed) }, { ...cc, skip: [...(cc.skip || []), "CT19", "CT20", "CT15", "CT23", "CT27", "F5", "M3"] }, cfg, { brand, skipLegal: true }),
   ];
   // 5.5.0 (Compass ey1511): CT31 one order for one list — soft, a person decides
   if (!(cc.skip || []).includes("CT31")) groups.push(...listOrders(site.texts.filter(en)));
