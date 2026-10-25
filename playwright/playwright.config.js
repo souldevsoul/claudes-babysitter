@@ -26,7 +26,9 @@ export default defineConfig({
     use: {
         baseURL: process.env.BASE_URL || cfg.baseURL || "http://localhost:3000",
         channel: process.env.PW_CHANNEL || "chrome",
-        screenshot: "only-on-failure",
+        // express: a screenshot of whatever page the last check of a page test left open says nothing about the check
+        // that failed (playwright/express.js)
+        screenshot: process.env.BABYSITTER_EXPRESS === "1" ? "off" : "only-on-failure",
     },
     projects: [
         ...schemes.flatMap((scheme) => viewports(cfg).map((v) => ({

@@ -2,7 +2,7 @@
 //   node playwright/prepare.mjs   # optional: login + crawl → .babysitter/routes.json
 //   npx playwright test -c playwright/playwright.config.js
 //   STRICT=0 turns the heuristic checks into warnings.
-import { test, expect } from "@playwright/test";
+import { test, expect, describeRoute, opener } from "./express.js";
 import * as c from "./checks.js";
 import * as fit from "./checks/fit.js";
 import * as looks from "./checks/looks.js";
@@ -23,7 +23,7 @@ async function goto(page, route, idleCap = 8_000) {
     await c.gotoStable(page, route);
     await page.waitForLoadState("networkidle", { timeout: idleCap }).catch(() => { });
 }
-async function open(page, route) {
+const open = opener("babysitter", async function open(page, route) {
     await c.install(page);
     await goto(page, route);
     await page.waitForTimeout(800); // late fonts / hydration
@@ -32,7 +32,7 @@ async function open(page, route) {
     await c.revealLazy(page); // reveal-on-scroll sections render as a reader sees them
     // a modal open on arrival hides the page from every check behind it (parallel: ~75 failures from one notice): close it, report it once
     await c.dismissArrivalModal(page);
-}
+});
 const hard = (list) => expect(list, fmt(list)).toEqual([]);
 function soft(list, label) {
     if (!list.length)
@@ -43,7 +43,7 @@ function soft(list, label) {
         test.info().annotations.push({ type: "warning", description: `${label}\n${fmt(list)}` });
 }
 for (const route of ROUTES) {
-    test.describe(`${route.auth ? `[signed-in${route.role ? `: ${route.role}` : ""}] ` : ""}${route.path}`, () => {
+    describeRoute(route, `${route.auth ? `[signed-in${route.role ? `: ${route.role}` : ""}] ` : ""}${route.path}`, () => {
         if (route.auth)
             test.use({ storageState: storageFor(route.role) });
         const r = route.path;
@@ -244,6 +244,12 @@ test.describe("site-wide interactions", () => {
             notTested.push(line);
             budgetHits.push(line);
         }
+        // pages are checked in parallel lanes: report them in route order, so two runs of the same site read the same
+        const order = (path) => { const i = ROUTES.findIndex((r) => r.path === path); return i < 0 ? ROUTES.length : i; };
+        for (const g of [hardG, softG]) for (const e of g.values()) e.pages.sort((x, y) => order(x) - order(y));
+        const lineRoute = (l) => order(l.split(":")[0]);
+        notTested.sort((x, y) => lineRoute(x) - lineRoute(y));
+        budgetHits.sort((x, y) => lineRoute(x) - lineRoute(y));
         test.info().annotations.push({ type: "timing", description: timings.join(", ") });
         if (budgetHits.length)
             console.log(`6.12 [${info.project.name}] time budget hit — not every control was clicked:\n${budgetHits.map((x) => `  ${x}`).join("\n")}`);

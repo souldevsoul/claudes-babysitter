@@ -48,6 +48,8 @@ npm run babysitter -- fingerprint . --register         # theme fingerprint / loo
 npm run babysitter -- content                          # static copy lint (every locale, JSX copy, email MX)
 npm run babysitter -- e2e                              # the full runtime run (every suite, viewport, language, role)
 npm run babysitter -- e2e --quick                      # fast profile while iterating: 390 + 1440
+npm run babysitter -- e2e --express                    # one page load per route × viewport × locale × role runs every check — same findings (docs/express.md)
+npm run babysitter -- e2e --express --changed          # only the routes your change reaches through the import graph (global inputs → every route)
 npm run babysitter -- fix-plan                         # the last run's findings grouped by cause, with files to change
 npm run babysitter -- update                           # re-vendor the latest release; keeps babysitter.config.json and .babysitter/
 npm run babysitter -- version-check                    # this copy vs the latest release: minor behind warns, major behind fails
@@ -70,6 +72,25 @@ Or install it as a dev dependency: `npm i -D github:souldevsoul/claudes-babysitt
 | `templates/` | Config, CI workflow, agent instructions, Claude settings |
 | `docs/` | The guidelines the rules enforce |
 | `test/`, `fixtures/` | `npm test`: RuleTester, Stylelint fixtures, end-to-end cases |
+
+## What changed in 5.6.0 (express runs: one load per page, only what a change touches)
+
+- **`e2e --express`**: every per-route describe of the tool's specs runs as one Playwright test per route × project
+  that loads the page once and runs every check against it, in turn — read-only checks first, the ones that act on the
+  page last, a fresh context and load whenever a check acted on the page or left any difference in its fingerprint
+  (DOM, attributes, form values, scroll, focus, storage, cookies, stylesheets, transitions, images, fonts). Every check
+  is still reported as its own result (status, message, annotations), so findings.json, fix-plan, `--last-failed`, the
+  Stop hook and the "did NOT run" summary are unchanged. A check that needs a page of its own gets one and says so.
+  The release gate runs a fixture product in both modes and requires identical results and findings.
+- **Result cache** (express): a pass or a skip is reused when the render hash (DOM, every stylesheet rule, the scripts
+  and stylesheets loaded, image sizes, fonts) and every input (viewport, scheme, locale, role, version, check code,
+  config, env) are unchanged — "cached (unchanged render)". Failures are never reused; checks that touch the network,
+  another page or sample over time are never stored. `--no-cache` turns it off.
+- **`e2e --changed` / `--since <ref>`**: the git change → the routes whose page or layout imports it (aliases,
+  barrels, dynamic imports, nested layouts as subtrees, i18n namespaces), widened to every route for global inputs and
+  anything the graph cannot place. The run prints every selected route and why; findings of the routes not opened are
+  kept. See [docs/express.md](docs/express.md); the full run (`e2e` without flags) is unchanged and stays the reference.
+- findings.json: a finding's `error` is the check's message without the spec's code frame and stack.
 
 ## What changed in 5.5.10 (choice sets are not long lists)
 

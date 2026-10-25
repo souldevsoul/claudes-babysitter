@@ -1781,7 +1781,17 @@ export const collectSignatures = (page, route) => page.evaluate((route) => {
         const chip = el.matches("button, [role=combobox]:not(input)") && parseFloat(cs.borderTopLeftRadius) >= r.height / 2 - 1 && r.height <= 36;
         if (chip)
             continue;
-        sigs.push({ kind: "input", radius: underline ? null : Math.round(parseFloat(cs.borderTopLeftRadius)), height: el.tagName === "TEXTAREA" ? 0 : Math.round(r.height), font: font(cs), size: Math.round(parseFloat(cs.fontSize)), weight: Number(cs.fontWeight), route, where: W.__uiDescribe(el), selector: W.__uiSelector(el), human: W.__uiHuman(el) });
+        // 5.6.0: a bare field (no edge, no fill of its own) drawn inside a frame — the pill of a chat composer with its
+        // send button, a search box with an icon — is seen as the frame: its height and corners are the field's
+        let bcs = cs, br = r;
+        if (!["Top", "Right", "Bottom", "Left"].some(edge) && !(fill[3] > 0.08 && fill.join() !== parentBg(el)) && (!cs.boxShadow || cs.boxShadow === "none")) {
+            for (let p = el.parentElement, d = 0; p && d < 3; p = p.parentElement, d++) {
+                const pcs = getComputedStyle(p), pr = p.getBoundingClientRect();
+                const framed = ["Top", "Right", "Bottom", "Left"].every((k) => parseFloat(pcs[`border${k}Width`]) > 0 && W.__uiRGBA(pcs[`border${k}Color`])[3] > 0.15) || (W.__uiRGBA(pcs.backgroundColor)[3] > 0.08 && W.__uiRGBA(pcs.backgroundColor).join() !== parentBg(p));
+                if (framed && pr.height - r.height <= 24 && pr.height >= r.height) { bcs = pcs; br = pr; break; }
+            }
+        }
+        sigs.push({ kind: "input", radius: underline ? null : Math.round(parseFloat(bcs.borderTopLeftRadius)), height: el.tagName === "TEXTAREA" ? 0 : Math.round(br.height), font: font(cs), size: Math.round(parseFloat(cs.fontSize)), weight: Number(cs.fontWeight), route, where: W.__uiDescribe(el), selector: W.__uiSelector(el), human: W.__uiHuman(el) });
     }
     for (const el of Array.from(document.querySelectorAll("main *, body > div *"))) {
         if (!W.__uiVisible(el))
@@ -3031,6 +3041,24 @@ const ixProbe = () => {
     for (const t of ["pointerdown", "mousedown", "keydown", "click"])
         document.addEventListener(t, () => { const R = P.run; if (R && !R.done && R.tAct == null) R.tAct = performance.now(); }, true);
     const writes = new Map();
+    // 5.6.0: what changes on its own between clicks (a word typed letter by letter, a ticking counter): its last change
+    // with no click running. A click's result never counts such an element as shown or hidden by the click.
+    const restless = new WeakMap();
+    new MutationObserver((list) => {
+        const R = P.run;
+        if (R && !R.done && R.tAct != null)
+            return;
+        const now = performance.now();
+        // text only: an element whose own text changed (a text node edited, or text nodes added / removed) — never a
+        // parent that gained or lost elements (the body a dialog is portalled into)
+        const textOnly = (m) => m.type === "characterData" || [...m.addedNodes, ...m.removedNodes].every((n) => n.nodeType === 3);
+        for (const m of list) {
+            if (!textOnly(m)) continue;
+            const el = m.type === "characterData" ? m.target.parentElement : m.target;
+            if (el && el.nodeType === 1) restless.set(el, now);
+        }
+    }).observe(document.documentElement, { childList: true, subtree: true, characterData: true });
+    P.restless = (el, t0) => { const t = restless.get(el); return t != null && t0 - t < 5000; };
     new MutationObserver((list) => {
         const R = P.run;
         if (!R || R.done)
@@ -3110,8 +3138,9 @@ const ixProbe = () => {
                 after.set(el, { a: area(el.getBoundingClientRect()), h: Math.round(el.getBoundingClientRect().height) });
         const mine = (el) => el === t || t.contains(el) || el.contains(t);
         const outer = (list) => list.filter((el) => !list.some((o) => o !== el && o.contains(el)));
-        const appeared = outer([...after.keys()].filter((el) => !R.before.has(el) && after.get(el).a >= 1500 && !mine(el)));
-        const disappeared = outer([...R.before.keys()].filter((el) => !after.has(el) && R.before.get(el).a >= 1500 && !mine(el)));
+        const own = (el) => P.restless(el, R.t0);
+        const appeared = outer([...after.keys()].filter((el) => !R.before.has(el) && after.get(el).a >= 1500 && !mine(el) && !own(el)));
+        const disappeared = outer([...R.before.keys()].filter((el) => !after.has(el) && R.before.get(el).a >= 1500 && !mine(el) && !own(el)));
         // sizes from before the click when known: a panel that animated out and was then removed has no box any more
         const size = (x) => (R.before.get(x) || after.get(x) || { a: x.isConnected && x.getBoundingClientRect ? area(x.getBoundingClientRect()) : 0 }).a;
         const related = (s, x) => x === s || (x.contains && x.contains(s) && chain(s).includes(x)) || (s.contains(x) && size(x) >= 0.5 * size(s));

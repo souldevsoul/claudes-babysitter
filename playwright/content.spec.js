@@ -7,7 +7,7 @@
 // content.locales (prefix / cookie / localStorage), or the page's <link rel=alternate hreflang> when none are set.
 //   npm run babysitter -- e2e --only content
 // content.skip: ["CT5", …] turns a rule off (content.skipReasons says why).
-import { test, expect } from "@playwright/test";
+import { test, expect, describeRoute, opener } from "./express.js";
 import * as c from "./checks.js";
 import * as k from "./checks/content.js";
 import * as cp from "./checks/copy.js";
@@ -50,7 +50,7 @@ const hard = (list) => expect(list, fmt(list)).toEqual([]);
 const note = (list, label) => { if (list.length)
     test.info().annotations.push({ type: "check by eye", description: `${label}\n${fmt(list)}` }); };
 const once = () => test.skip(!/desktop-1440/.test(test.info().project.name), "copy is the same at every width: runs once, at desktop width");
-async function open(page, route, loc = null) {
+const open = opener("content", async function open(page, route, loc = null) {
     await c.install(page);
     const baseURL = test.info().project.use.baseURL;
     let path = route;
@@ -66,7 +66,7 @@ async function open(page, route, loc = null) {
     await c.revealLazy(page);
     // a modal open on arrival hides the page from every check behind it (parallel: ~75 failures from one notice): close it, report it once
     await c.dismissArrivalModal(page);
-}
+});
 /** a context signed in as the route's own role (storage-<role>.json), or signed out for a public route */
 async function ctxFor(browser, route) {
     const info = test.info();
@@ -74,7 +74,7 @@ async function ctxFor(browser, route) {
 }
 /* ───────── every page ───────── */
 for (const route of ROUTES) {
-    test.describe(`content ${authTag(route)}${route.path}`, () => {
+    describeRoute(route, `content ${authTag(route)}${route.path}`, () => {
         if (route.auth)
             test.use({ storageState: storageFor(route.role) });
         test.beforeEach(() => once());
@@ -107,7 +107,7 @@ for (const route of ROUTES) {
 /* ───────── each configured locale ───────── */
 for (const loc of LOCALES) {
     for (const route of ROUTES) {
-        test.describe(`content [${loc.code}] ${authTag(route)}${route.path}`, () => {
+        describeRoute(route, `content [${loc.code}] ${authTag(route)}${route.path}`, () => {
             if (route.auth)
                 test.use({ storageState: storageFor(route.role) });
             test.beforeEach(() => once());

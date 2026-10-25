@@ -1,0 +1,21 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8"><title>Typewriter</title>
+<style>
+  body { font-family: sans-serif; margin: 40px; }
+  #word { display: inline-block; font-size: 40px; min-height: 48px; }
+  #panel { margin-top: 20px; width: 400px; height: 120px; background: #eee; }
+  button { font-size: 16px; padding: 10px 16px; cursor: pointer; }
+</style></head>
+<body>
+<main>
+  <h1>Hear yourself in <span><span id="word">Bonjour</span></span></h1>
+  <!-- the word is typed and erased on its own, every 90 ms: never what a click shows or hides -->
+  <script>
+    const w = document.getElementById("word").firstChild;
+    let on = true;
+    setInterval(() => { on = !on; w.nodeValue = on ? "Bonjour" : ""; }, 90);
+  </script>
+  <section><button id="open" type="button" aria-expanded="false" aria-controls="panel" onclick="const o = this.getAttribute('aria-expanded') === 'true'; this.setAttribute('aria-expanded', String(!o)); document.getElementById('panel').hidden = o;">Show details</button>
+  <div id="panel" hidden>Details that jump in.</div></section>
+</main>
+</body></html>

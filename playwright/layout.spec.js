@@ -1,7 +1,7 @@
 // Layout / navigation / money runtime checks (playwright/checks/layout.js). Same projects and routes as
 // babysitter.spec.ts; site-wide comparisons (names vs pages, heading styles, favicon) live in "site-wide layout".
 //   STRICT=0 turns the soft (heuristic) checks into warnings.
-import { test, expect } from "@playwright/test";
+import { test, expect, describeRoute, opener } from "./express.js";
 import * as c from "./checks.js";
 import * as L from "./checks/layout.js";
 import * as boxes from "./checks/boxes.js";
@@ -33,7 +33,7 @@ async function goto(page, route, idleCap = 8_000) {
     return resp;
 }
 /** Opens the route as a reader sees it; returns the HTTP status (0 when unknown). */
-async function open(page, route) {
+const open = opener("layout", async function open(page, route) {
     await c.install(page);
     const resp = await goto(page, route);
     await page.waitForTimeout(800);
@@ -43,7 +43,7 @@ async function open(page, route) {
     // a modal open on arrival hides the page from every check behind it (parallel: ~75 failures from one notice): close it, report it once
     await c.dismissArrivalModal(page);
     return resp ? resp.status() : 0;
-}
+});
 const hard = (list) => expect(list, fmt(list)).toEqual([]);
 function soft(list, label) {
     if (!list.length)
@@ -54,7 +54,7 @@ function soft(list, label) {
         test.info().annotations.push({ type: "warning", description: `${label}\n${fmt(list)}` });
 }
 for (const route of ROUTES) {
-    test.describe(`${authTag(route)}${route.path} layout`, () => {
+    describeRoute(route, `${authTag(route)}${route.path} layout`, () => {
         if (route.auth)
             test.use({ storageState: storageFor(route.role) });
         const r = route.path;

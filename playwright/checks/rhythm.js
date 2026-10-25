@@ -580,6 +580,12 @@ export async function twoColumnRule(page) {
         const d = Rt.top - L0.top;
         if (Math.abs(d) <= 6) { rules.push({ rule: "box", name: "the box top", where: window.__uiDescribe(b), text: (left.innerText || "").trim().split("\n")[0].slice(0, 30) }); continue; }
       }
+      // 5.6.0: a card on the left beside a column of cards (an unpainted list whose first child is a card): the left box
+      // and the first card on the right are the two edges that line up
+      if (R.painted(left) && !R.painted(right)) {
+        let first = right; while (first && !R.painted(first) && R.kids(first).length) first = R.kids(first)[0];
+        if (first && first !== right && R.painted(first) && Math.abs(first.getBoundingClientRect().top - L0.top) <= 6) { rules.push({ rule: "box", name: "the box top", where: window.__uiDescribe(b), text: (left.innerText || "").trim().split("\n")[0].slice(0, 30) }); continue; }
+      }
       let col = left; while (R.kids(col).length === 1) col = R.kids(col)[0];
       // box to box, ink to ink: a left item that is a painted box (a card) is placed by its box top, like the right column
       // an unpainted wrapper (a grid of stat cards) is placed by its first painted box down the first-child path, when

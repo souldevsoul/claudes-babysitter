@@ -1,0 +1,42 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8"><title>FP 5.6.0</title>
+<style>
+  body { font-family: sans-serif; margin: 0; padding: 24px; }
+  .sheet { width: 300px; height: 208px; border-radius: 24px; overflow: hidden; border: 1px solid #ccc; display: flex; flex-direction: column; }
+  .scroller { flex: 1; min-height: 0; overflow-y: auto; padding: 8px; }
+  .row { height: 44px; display: flex; align-items: center; gap: 8px; }
+  .clip { width: 120px; height: 30px; overflow: hidden; border: 1px solid #ccc; border-radius: 4px; }
+  .pill { display: flex; align-items: center; gap: 8px; height: 48px; box-sizing: border-box; border: 1px solid #999; border-radius: 9999px; padding: 0 4px 0 20px; width: 320px; }
+  .pill input { height: 40px; border: 0; background: transparent; outline: none; flex: 1; min-width: 0; }
+  .grid { display: grid; grid-template-columns: 1.65fr 1fr; gap: 8px; margin-top: 24px; width: 1100px; }
+  .panel { border: 1px solid #ddd; background: #fff; border-radius: 24px; padding: 24px; box-shadow: 0 1px 4px rgba(0,0,0,.1); }
+  .panel h2 { margin: 0; font-size: 24px; }
+  .cards { display: flex; flex-direction: column; gap: 8px; position: relative; }
+  .card { display: block; border: 1px solid #ddd; background: #fff; border-radius: 24px; padding: 16px; box-shadow: 0 1px 4px rgba(0,0,0,.1); }
+  .sr { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0,0,0,0); }
+</style></head>
+<body>
+<main>
+  <!-- a menu sheet: rounded, clipping; its list scrolls, the last row's icon is below the fold -->
+  <div class="sheet"><div class="scroller">
+    <div class="row">Home</div><div class="row">Videos</div><div class="row">Credits</div><div class="row">Settings</div>
+    <div class="row" id="signout"><svg id="scrolled-icon" width="16" height="16" viewBox="0 0 16 16"><rect width="16" height="16" fill="#333"/></svg> Sign out</div>
+  </div></div>
+  <!-- a plain clipping box that cuts its icon: still a finding -->
+  <div class="clip"><div style="padding-top:20px"><svg id="cut-icon" width="16" height="16" viewBox="0 0 16 16"><rect width="16" height="16" fill="#333"/></svg></div></div>
+
+  <!-- a chat composer: a bare field inside its 48px pill -->
+  <form class="pill" style="margin-top:24px"><input id="bare" placeholder="Write a message" aria-label="Message"><button type="submit">Send</button></form>
+
+  <!-- two columns: a card beside a column of cards, box tops in line -->
+  <div class="grid" id="aligned">
+    <section class="panel"><h2>Recent activity</h2><p>Your latest videos.</p><p>More text here.</p></section>
+    <section class="cards"><h2 class="sr">Quick actions</h2><a class="card" href="#a">New translation<br>Start translating a video</a><a class="card" href="#b">My videos<br>Download your dubbed files</a></section>
+  </div>
+  <!-- the same, with the cards 30px lower: still a finding -->
+  <div class="grid" id="offset">
+    <section class="panel"><h2>Recent activity</h2><p>Your latest videos.</p><p>More text here.</p></section>
+    <section class="cards" style="margin-top:50px"><a class="card" href="#c">New translation<br>Start translating a video</a><a class="card" href="#d">My videos<br>Download your dubbed files</a></section>
+  </div>
+</main>
+</body></html>

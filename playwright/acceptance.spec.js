@@ -3,7 +3,7 @@
 // (write the reason in acceptance.skipReasons). Owner decisions (2FA, footer "Manage cookies", company line,
 // currencies) live in babysitter.config.json → acceptance.
 //   npm run babysitter -- e2e            # prepare (login + crawl) + this suite + the UI checks + e2e/*.spec.ts
-import { test, expect } from "@playwright/test";
+import { test, expect, describeRoute, opener } from "./express.js";
 import * as c from "./checks.js";
 import * as a from "./acceptance.js";
 import * as stg from "./checks/stage.js";
@@ -36,7 +36,7 @@ function soft(list, label) {
     else
         test.info().annotations.push({ type: "warning", description: `${label}\n${fmt(list)}` });
 }
-async function open(page, route, { keepModal = false } = {}) {
+const open = opener("acceptance", async function open(page, route, { keepModal = false } = {}) {
     await c.install(page);
     await c.gotoStable(page, route, { waitUntil: "networkidle", fallback: "load" });
     await page.waitForTimeout(700);
@@ -47,7 +47,7 @@ async function open(page, route, { keepModal = false } = {}) {
     // A7 judges the pop-up itself: it opens the page with the modal left as it is
     if (!keepModal)
         await c.dismissArrivalModal(page);
-}
+});
 async function ctxFor(browser, auth, role) {
     const info = test.info();
     return browser.newContext({ ...info.project.use, storageState: auth ? storageFor(role) : undefined, baseURL: info.project.use.baseURL });
@@ -56,7 +56,7 @@ const twoWidths = () => test.skip(!/mobile-390|desktop-1440/.test(test.info().pr
 const desktopOnce = () => test.skip(!/desktop-1440/.test(test.info().project.name), "site-wide: runs once, at desktop width");
 /* ───────── every page ───────── */
 for (const route of ROUTES) {
-    test.describe(`acceptance ${route.auth ? `[signed-in${route.role ? `: ${route.role}` : ""}] ` : ""}${route.path}`, () => {
+    describeRoute(route, `acceptance ${route.auth ? `[signed-in${route.role ? `: ${route.role}` : ""}] ` : ""}${route.path}`, () => {
         if (route.auth)
             test.use({ storageState: storageFor(route.role) });
         const r = route.path;

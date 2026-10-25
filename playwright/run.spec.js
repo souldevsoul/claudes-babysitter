@@ -6,7 +6,7 @@
 //     top-up dialogs opened in "no-pay" mode, pagination — the same checks re-run in each (checks/run.js);
 //   • 3.8: in-app navigation and #anchor links land at the top / below the sticky header.
 // Nothing is sent, created or paid: every non-GET request is aborted while states are driven.
-import { test, expect } from "@playwright/test";
+import { test, expect, describeRoute, contextOpener } from "./express.js";
 import * as c from "./checks.js";
 import * as a from "./acceptance.js";
 import * as run from "./checks/run.js";
@@ -50,7 +50,7 @@ async function goto(page, url) {
     await c.dismissArrivalModal(page);
 }
 /** A page of `route` in locale `loc` (the default when null), signed in as the route's role when it needs one. */
-async function openIn(browser, route, loc) {
+const openIn = contextOpener("run", async function openIn(browser, route, loc) {
     const info = test.info();
     const baseURL = info.project.use.baseURL;
     const ctx = await browser.newContext({ ...info.project.use, ...(loc && !loc.default ? { locale: loc.code } : {}), storageState: route.auth ? storageFor(route.role) : undefined, baseURL });
@@ -60,10 +60,10 @@ async function openIn(browser, route, loc) {
     const url = new URL(localize(route.path, loc, DEFAULT), loc?.origin || baseURL).href;
     await goto(page, url);
     return { ctx, page, url, reload: async () => { await goto(page, url); } };
-}
+});
 const tag = (loc) => (loc && !loc.default ? ` [${loc.code}]` : "");
 for (const route of ROUTES) {
-    test.describe(`run ${route.auth ? `[signed-in${route.role ? `: ${route.role}` : ""}] ` : ""}${route.path}`, () => {
+    describeRoute(route, `run ${route.auth ? `[signed-in${route.role ? `: ${route.role}` : ""}] ` : ""}${route.path}`, () => {
         /* languages: every check whose result depends on the words, at every viewport */
         for (const loc of OTHERS) {
             test(`i18n [${loc.code}] 2.1/2.10/2.14/6.4/B4/N6/2.5: the page in ${loc.code} fits and reads (untranslated text: CT11, content.spec) [P15 P16]`, async ({ browser }) => {

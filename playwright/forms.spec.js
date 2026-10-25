@@ -3,7 +3,7 @@
 // SAFETY: every submit runs inside checks/forms.js sandbox() — non-GET requests are answered in the browser and
 // never reach the server; payment and destructive forms are typed into, never submitted. Service workers are
 // blocked so they cannot carry a request past the sandbox.
-import { test, expect } from "@playwright/test";
+import { test, expect, describeRoute, opener } from "./express.js";
 import { existsSync } from "node:fs";
 import { resolve } from "node:path";
 import * as c from "./checks.js";
@@ -41,13 +41,13 @@ function report(list, label = "forms") {
     const fail = STRICT ? [...hard, ...soft] : hard;
     expect(fail, fmt(fail)).toEqual([]);
 }
-async function open(page, route) {
+const open = opener("forms", async function open(page, route) {
     await c.install(page);
     await c.gotoStable(page, route);
     await page.waitForLoadState("networkidle", { timeout: 8_000 }).catch(() => { });
     await page.waitForTimeout(700);
     await fm.lib(page);
-}
+});
 async function ctxFor(browser, storage) {
     const info = test.info();
     return browser.newContext({ ...info.project.use, serviceWorkers: "block", storageState: storage || undefined, baseURL: info.project.use.baseURL });
@@ -57,7 +57,7 @@ test.use({ serviceWorkers: "block" });
 const desktopOnce = () => test.skip(!/desktop-1440/.test(test.info().project.name), "forms: runs once, at desktop width");
 /* ───────── every page ───────── */
 for (const route of ROUTES) {
-    test.describe(`forms ${authTag(route)}${route.path}`, () => {
+    describeRoute(route, `forms ${authTag(route)}${route.path}`, () => {
         if (route.auth)
             test.use({ storageState: storageFor(route.role) });
         const r = route.path;

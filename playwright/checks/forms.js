@@ -571,6 +571,14 @@ export async function gibberish(page) {
   return out;
 }
 
+/** waits (≤ 1.5 s) for every finite animation and transition on the page to finish; true when one was running */
+const settleAnimations = (page) => page.evaluate(() => new Promise((res) => {
+  const busy = () => document.getAnimations().some((a) => { try { return (a.playState === "running" || a.playState === "pending") && Number.isFinite(a.effect.getComputedTiming().endTime); } catch { return false; } });
+  const was = busy(), t0 = performance.now();
+  const tick = () => (busy() && performance.now() - t0 < 1500 ? requestAnimationFrame(tick) : res(was));
+  requestAnimationFrame(tick);
+})).catch(() => false);
+
 /* ───────────────────────── FM3 / FM4 submit outcomes ───────────────────────── */
 
 // what a client prints when it parses an HTML error page as JSON, or shows the raw reply
@@ -614,6 +622,9 @@ export async function submitOutcomes(page, { failStatus = 500 } = {}) {
         if (how !== "disabled") {
           let o = null;
           for (let t = 0; t < 10; t++) { await page.waitForTimeout(300); o = await page.evaluate((i) => window.__bsf.outcome(i), f.index).catch(() => null); if (o && o.success.length) break; }
+          // 5.6.0: a message that fades in was read half-faded (its contrast measured through its opacity): read it again
+          // once its entrance has finished
+          if (o && o.success.length && (await settleAnimations(page))) o = (await page.evaluate((i) => window.__bsf.outcome(i), f.index).catch(() => null)) || o;
           const mailto = await page.evaluate(() => Array.from(document.querySelectorAll("form[action^='mailto:' i]")).length > 0).catch(() => false);
           if (o && o.success.length && !o.errors.length && !o.invalid && !o.nativeInvalid && !mailto && !sb.sent().length) {
             out.push({ id: "FM4", what: `${formName(f)} says "${o.success[0]}" but sent no request — it is not connected to anything, and the visitor believes the message arrived. Send it (an API route / e-mail provider), or show the support e-mail instead of the form [FM4, submit-feedback]`, where: f.where, selector: f.selector });
@@ -680,6 +691,9 @@ export async function submitOutcomes(page, { failStatus = 500 } = {}) {
         if (o && (o.urlChanged || o.formGone || o.lines.length || o.invalid)) seen = o;
       }
       if (seen) {
+        // 5.6.0: seen within 100 ms of appearing, a message that fades in was measured through its opacity — measure it
+        // once its entrance has finished (≤ 1.5 s; the 2 s to confirm counts from the submit, not from here)
+        await settleAnimations(page);
         const oks = await page.evaluate((i) => window.__bsf.messages(i, window.__bsf.OK), f.index).catch(() => []);
         out.push(...lowContrast(f, oks, "success"));
         // FM13 (5.5.0, Parallel s6dz59): the success line took the place of the text that was there, in its look

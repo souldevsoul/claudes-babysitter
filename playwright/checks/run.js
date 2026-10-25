@@ -769,6 +769,115 @@ export const authCtaSignedIn = (page) => page.evaluate(() => {
         .map((b) => ({ check: "A5", what: `"${(b.innerText || "").trim().replace(/\s+/g, " ").slice(0, 40)}" is offered to a signed-in user — show the next step for the account instead (A5) [A5]`, where: W.__uiDescribe(b), selector: W.__uiSelector(b) }));
 }).catch(() => []);
 
+/* ───────────────────────── 5.6.0 putting the page back without a reload ───────────────────────── */
+
+/** the babysitter marks (data-bs-*) on the page at rest: a soft return removes every other one */
+const markRest = () => {
+    const keep = new WeakMap();
+    for (const el of document.querySelectorAll("*")) {
+        const names = el.getAttributeNames().filter((n) => n.startsWith("data-bs-"));
+        if (names.length) keep.set(el, new Set(names));
+    }
+    window.__bsRestMarks = keep;
+};
+/** the page's layout as a reader sees it: every visible element's box, opacity, colours and own text, plus the URL and scroll */
+const layoutPrint = () => {
+    const out = [location.href, Math.round(scrollX), Math.round(scrollY), innerWidth, innerHeight, document.documentElement.scrollHeight, document.title];
+    for (const el of document.body ? document.body.querySelectorAll("*") : []) {
+        const r = el.getBoundingClientRect();
+        if (!r.width && !r.height) continue;
+        const cs = getComputedStyle(el);
+        if (cs.visibility === "hidden" || cs.display === "none") continue;
+        // an element that animates for ever (a blinking caret, a spinner, a waveform) is never at rest: only its tag counts
+        if (el.getAnimations().some((x) => { try { return !Number.isFinite(x.effect.getComputedTiming().endTime); } catch { return false; } })) { out.push(`${el.tagName}|∞`); continue; }
+        let own = "";
+        for (const n of el.childNodes) if (n.nodeType === 3) own += n.nodeValue;
+        out.push([el.tagName, Math.round(r.left), Math.round(r.top), Math.round(r.width), Math.round(r.height), cs.opacity, cs.transform, cs.backgroundColor, cs.color, cs.borderTopColor, cs.boxShadow, cs.outlineStyle, el.getAttribute("aria-expanded"), el.getAttribute("data-state"), el.getAttribute("aria-hidden"), own.trim().slice(0, 80)].join("|"));
+        if (out.length > 20000) break;
+    }
+    for (const f of document.querySelectorAll("input, textarea, select")) out.push(`v:${f.type === "checkbox" || f.type === "radio" ? f.checked : f.value}`);
+    return out.join("\n");
+};
+/**
+ * Back to the page at rest without a reload: the pointer where it rested, focus dropped, scrolled to the top, our
+ * marks cleared — then the layout must match the one at rest exactly (after Escape, when something is still open).
+ * Returns false, and the caller reloads, on any difference.
+ */
+async function softBack(page, rest, home) {
+    if (page.url() !== home) return false;
+    const same = async () => {
+        await page.mouse.move(0, 0).catch(() => { });
+        await page.evaluate(([x, y]) => { document.activeElement?.blur?.(); window.scrollTo({ top: y, left: x, behavior: "instant" }); }, rest.scroll).catch(() => { });
+        await quiet(page);
+        // a closing window hands focus back to its trigger when it is gone: drop it again until nothing holds it
+        for (let k = 0; k < 3 && (await page.evaluate(() => { const e = document.activeElement; if (!e || e === document.body) return false; e.blur?.(); return true; }).catch(() => false)); k++) await quiet(page);
+        // scrolled again: a scroll lock released at the end of a closing window
+        await page.evaluate(([x, y]) => window.scrollTo({ top: y, left: x, behavior: "instant" }), rest.scroll).catch(() => { });
+        return matches(rest, await page.evaluate(layoutPrint).catch(() => null));
+    };
+    let ok = await same();
+    if (!ok) {
+        await page.keyboard.press("Escape").catch(() => { });
+        ok = await same();
+    }
+    if (!ok) return false;
+    await page.evaluate(() => {
+        const keep = window.__bsRestMarks || new WeakMap();
+        for (const el of document.querySelectorAll("*"))
+            for (const n of el.getAttributeNames())
+                if (n.startsWith("data-bs-") && !(keep.get(el) || new Set()).has(n)) el.removeAttribute(n);
+    }).catch(() => { });
+    // a second look once our marks are gone (a style keyed on one of them would show here)
+    await quiet(page);
+    return matches(rest, await page.evaluate(layoutPrint).catch(() => null));
+}
+/** until no finite animation or transition runs (≤ 2 s), then two frames */
+const quiet = (page) => page.evaluate(() => new Promise((res) => {
+    const t0 = performance.now();
+    const busy = () => document.getAnimations().some((a) => { try { return (a.playState === "running" || a.playState === "pending") && Number.isFinite(a.effect.getComputedTiming().endTime); } catch { return false; } });
+    const tick = () => (busy() && performance.now() - t0 < 2000 ? requestAnimationFrame(tick) : requestAnimationFrame(() => requestAnimationFrame(() => res())));
+    requestAnimationFrame(tick);
+})).catch(() => { });
+/**
+ * The print of the page at rest, taken twice 600 ms apart: lines that change on their own (a word typed letter by
+ * letter, a ticking counter) are left out of the comparison. A page whose element count itself changes at rest is
+ * never put back softly.
+ */
+async function restPrint(page) {
+    const a = await page.evaluate(layoutPrint).catch(() => null);
+    await page.waitForTimeout(600);
+    const b = await page.evaluate(layoutPrint).catch(() => null);
+    if (!a || !b) return null;
+    const A = a.split("\n"), B = b.split("\n");
+    if (A.length !== B.length || A[0] !== B[0] || A[1] !== B[1] || A[2] !== B[2]) return null;
+    const live = new Set();
+    A.forEach((l, k) => { if (l !== B[k]) live.add(k); });
+    if (live.size > Math.max(40, A.length * 0.1)) return null;
+    return { lines: B, live, scroll: [Number(B[1]), Number(B[2])] };
+}
+/**
+ * The print after a reload. Lines that differ from the last rest print with the same elements differ between two loads
+ * of the page (a rotating word, an animated chart): they join the lines left out. A page with other elements now is
+ * printed afresh.
+ */
+async function reprint(page, rest) {
+    const now = await page.evaluate(layoutPrint).catch(() => null);
+    if (!now) return null;
+    const N = now.split("\n");
+    if (!rest || N.length !== rest.lines.length || N[0] !== rest.lines[0]) return restPrint(page);
+    const live = new Set(rest.live);
+    N.forEach((l, k) => { if (l !== rest.lines[k]) live.add(k); });
+    if (live.size > Math.max(40, N.length * 0.1)) return null;
+    return { lines: N, live, scroll: [Number(N[1]), Number(N[2])] };
+}
+const matches = (rest, now) => {
+    if (!now) return false;
+    const N = now.split("\n");
+    if (N.length !== rest.lines.length) return false;
+    for (let k = 0; k < N.length; k++) if (!rest.live.has(k) && N[k] !== rest.lines[k]) return false;
+    return true;
+};
+
 /* ───────────────────────── 6.12 windows open and close with motion (5.5.8) ───────────────────────── */
 
 const WINDOW_SEL = "[role=dialog], [role=alertdialog], dialog[open], [aria-modal=true]";
@@ -799,7 +908,8 @@ const winSampler = () => {
                 const now = performance.now();
                 if (!run.el) run.el = Array.from(document.querySelectorAll(SEL)).filter((d) => shown(d) && !before.has(d)).pop() || null;
                 if (run.el && shown(run.el)) run.samples.push({ t: now, ...look(run.el) });
-                if (now - run.t0 < 4000 && !(run.samples.length > 3 && now - run.samples[0].t > 1200)) requestAnimationFrame(tick);
+                if (run.stop && !run.el) run.done = true;
+                else if (now - run.t0 < 4000 && !(run.samples.length > 3 && now - run.samples[0].t > 1200)) requestAnimationFrame(tick);
                 else run.done = true;
             };
             requestAnimationFrame(tick);
@@ -852,6 +962,9 @@ export const armWindowMotion = (page) => page.evaluate(winSampler).then(() => pa
  * class cannot override it. Skipped under prefers-reduced-motion.
  */
 export async function windowEntrance(page, { label = "" } = {}) {
+    // 5.6.0: called once the click has settled (the interaction probe saw 700 ms with no change): when no new window is
+    // on screen by then, none opened — stop the sampler instead of letting it run out its 4 s
+    await page.evaluate(() => { const r = window.__bsWin?.open; if (r && !r.done && !r.el) r.stop = true; }).catch(() => { });
     await page.waitForFunction(() => !window.__bsWin?.open || window.__bsWin.open.done, null, { timeout: 5000 }).catch(() => { });
     const r = await page.evaluate(() => (window.__bsWin && !window.__bsWin.reduced ? window.__bsWin.openResult() : null)).catch(() => null);
     if (!r) return [];
@@ -1005,15 +1118,33 @@ export async function stateChecks(page, { reload, opts = {}, maxOpeners = 15, ma
     const closePopup = (p) => p.close().catch(() => { });
     page.on("popup", closePopup);
     const home = page.url();
-    const back = async () => {
+    // 5.6.0: the page at rest, as a fingerprint of its layout. Between states the page is put back without a reload when
+    // it already looks exactly as it did at rest (a menu closed, nothing moved); a page that differs in any element is
+    // reloaded as before. BABYSITTER_SOFT_BACK=0 always reloads.
+    let rest = null;
+    const reloadBack = async () => {
         if (reload)
             await within(reload(), 30_000, undefined);
         else
             await page.goto(home, { waitUntil: "load", timeout: 30_000 }).catch(() => { });
         await page.waitForTimeout(300);
     };
+    const back = async () => {
+        if (rest && (await softBack(page, rest, home))) return;
+        await reloadBack();
+        // the page after a reload is the page at rest again: remember its marks, so a later soft return clears ours, and
+        // take its print as the new rest (a cookie choice made by an earlier state stays made)
+        if (rest) {
+            await page.evaluate(markRest).catch(() => { });
+            rest = await reprint(page, rest);
+        }
+    };
     try {
         const base = await measure(page, opts);
+        if (process.env.BABYSITTER_SOFT_BACK !== "0") {
+            await page.evaluate(markRest).catch(() => { });
+            rest = await restPrint(page);
+        }
         /* 1. openers */
         await within(page.evaluate(c.ixProbe), 10_000);
         const cands = await within(page.evaluate(() => window.__bsIx.candidates(true)), 15_000, null);

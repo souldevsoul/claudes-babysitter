@@ -1,8 +1,8 @@
 {
   "name": "claudes-babysitter",
-  "version": "5.5.10",
+  "version": "5.6.0",
   "private": true,
-  "description": "Claude's Babysitter — keeps AI code generators inside a product's UI system: AST lint rules, static WCAG contrast of theme tokens, component-reuse audit, Claude Code + git hooks and Playwright micro-checks. Enforces the UI Architecture & Consistency Guidelines (58 recurring UI bug patterns).",
+  "description": "Claude's Babysitter \u2014 keeps AI code generators inside a product's UI system: AST lint rules, static WCAG contrast of theme tokens, component-reuse audit, Claude Code + git hooks and Playwright micro-checks. Enforces the UI Architecture & Consistency Guidelines (58 recurring UI bug patterns).",
   "type": "module",
   "bin": {
     "babysitter": "bin/babysitter.mjs",
@@ -29,8 +29,8 @@
     "node": ">=22.18"
   },
   "scripts": {
-    "test": "npm run test:eslint && npm run test:stylelint && npm run test:check && npm run test:tt && npm run test:team && npm run test:acceptance && npm run test:run && npm run test:content && npm run test:layout && npm run test:studio && npm run test:forms && npm run test:fp && npm run test:misses && npm run test:issues && npm run test:misses550 && npm run test:update && npm run test:package",
-    "test:fp": "node test/fp-510.test.mjs",
+    "test": "npm run test:eslint && npm run test:stylelint && npm run test:check && npm run test:tt && npm run test:team && npm run test:acceptance && npm run test:run && npm run test:content && npm run test:layout && npm run test:studio && npm run test:forms && npm run test:fp && npm run test:misses && npm run test:issues && npm run test:misses550 && npm run test:express && npm run test:update && npm run test:package",
+    "test:fp": "node test/fp-510.test.mjs && node test/fp-560.test.mjs",
     "test:update": "node test/update.test.mjs",
     "test:package": "node test/package-mode.test.mjs && node test/husky.test.mjs",
     "test:eslint": "node rules/eslint/test.mjs && node rules/eslint/test-forms.mjs",
@@ -52,7 +52,8 @@
     "test:forms": "node test/forms.test.mjs",
     "test:misses": "node test/misses.test.mjs && node test/misses-520.test.mjs && node test/misses-521.test.mjs && node test/stage.test.mjs",
     "test:issues": "node test/issues-550.test.mjs && node test/issues-550-browser.test.mjs",
-    "test:misses550": "for f in layout-a layout-b content-a content-b money states; do node test/misses-550-$f.test.mjs || exit 1; done"
+    "test:misses550": "for f in layout-a layout-b content-a content-b money states; do node test/misses-550-$f.test.mjs || exit 1; done",
+    "test:express": "node test/affected-routes.test.mjs && node test/express-cache.test.mjs && node test/express-order.test.mjs && node test/express-parity.test.mjs"
   },
   "dependencies": {
     "@clack/prompts": "^1.8.1",

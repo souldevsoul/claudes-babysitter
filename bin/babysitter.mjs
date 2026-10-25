@@ -19,11 +19,16 @@
 //   prepare          → playwright/prepare.mjs (login + crawl)
 //   test-ui [...]    → playwright test with the bundled config
 //   content [repo] [--offline] → static copy lint: i18n files of every locale, JSX copy, email addresses (MX)
-//   e2e [--skip-prepare] [--quick] [--only ui|acceptance|content|product] [--last-failed] [...playwright args]
+//   e2e [--skip-prepare] [--quick] [--only ui|acceptance|content|product] [--last-failed] [--express [--no-cache]]
+//       [--changed | --since <ref>] [...playwright args]
 //                    → prepare (login per role + crawl + languages) + the UI checks + states / languages / scroll
 //                      (run.spec.js) + business acceptance (acceptance.spec.js) + the product's own e2e/*.spec.ts, in one
 //                      Playwright run at 360/390/768/1280/1440 (--quick: 390 + 1440). --only is a partial run and says so.
 //                      Ends with a summary of what did not run and the command that re-checks only the failures.
+//                    --express: one page load per route × viewport × locale × role runs every check of it (same
+//                      findings, see docs/express.md); a result cache reuses passes on an unchanged render (--no-cache).
+//                    --changed / --since <ref>: only the routes the git change reaches through the import graph
+//                      (global inputs → every route); the run prints which and why.
 //   fix-plan [--format md|agent|json]  → the last run's findings grouped into a fix list with the files to change
 //   misses [--project slug]… [--since ISO] [--findings findings.json]… [--dry-run]
 //                    → the miss loop: people's Nexus cards since the last run → CAUGHT / MISSED / OUT OF SCOPE,
@@ -173,8 +178,44 @@ switch (cmd) {
     const flag = (f) => { const i = args.indexOf(f); if (i < 0) return false; args.splice(i, 1); return true; };
     const skipPrepare = flag("--skip-prepare");
     const only = take("--only");
+    let express = flag("--express");
+    const noCache = flag("--no-cache");
+    const changedFlag = flag("--changed");
+    const since = take("--since");
     if (flag("--quick")) env.BABYSITTER_PROFILE = "quick";
     const lastFailed = args.includes("--last-failed");
+    const { readFileSync: rf, writeFileSync: wf, mkdirSync: md } = await import("node:fs");
+    const modeFile = join(ROOT, ".babysitter/run-mode.json");
+    let lastMode = {};
+    try { lastMode = JSON.parse(rf(modeFile, "utf8")); } catch { }
+    // --last-failed re-runs the failures of the last run in the mode that found them: an express run's failed tests are
+    // its page tests (they do not exist in a normal run)
+    if (lastFailed && !express && lastMode.express) { express = true; console.error("babysitter e2e: the last run was --express — --last-failed re-runs its failed checks in express mode."); }
+    if (express) {
+      env.BABYSITTER_EXPRESS = "1";
+      if (noCache) env.BABYSITTER_EXPRESS_CACHE = "0";
+      if (lastFailed) env.BABYSITTER_EXPRESS_ONLY = join(ROOT, ".babysitter/express-failed.json");
+      // -g / --grep picks checks, not page tests: the page tests run and keep only the checks that match
+      const { CONTAINER_TITLE } = await import("../lib/express-title.js");
+      const esc = CONTAINER_TITLE.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+      for (let i = 0; i < args.length; i++) {
+        const m = args[i].match(/^(-g|--grep|-gv|--grep-invert)(?:=(.*))?$/);
+        if (!m) continue;
+        const inline = m[2] !== undefined;
+        const val = inline ? m[2] : args[i + 1];
+        if (val === undefined) continue;
+        const invert = m[1] === "-gv" || m[1] === "--grep-invert";
+        if (invert) env.BABYSITTER_EXPRESS_GREP_INVERT = val;
+        else {
+          env.BABYSITTER_EXPRESS_GREP = val;
+          const rm = val.match(/^\/(.*)\/([gi]*)$/);
+          const next = rm ? `/(?:${rm[1]})|${esc}/${rm[2]}` : `(?:${val})|${esc}`;
+          if (inline) args[i] = `${m[1]}=${next}`; else args[i + 1] = next;
+        }
+        if (!inline) i++;
+      }
+      console.error(`babysitter e2e --express: one page load serves every check of a route${noCache ? " (result cache off)" : " (result cache on: --no-cache to measure everything again)"}.`);
+    }
     const { wiringBanner } = await import("../lib/wiring.js");
     const banner = wiringBanner(ROOT, { context: "e2e" });
     if (banner) console.error(banner);
@@ -197,6 +238,28 @@ switch (cmd) {
       const st = await forward(process.execPath, [join(root, "playwright/prepare.mjs")], { stdio: "inherit", env });
       if (st !== 0) { console.error("babysitter e2e: prepare failed (set BASE_URL or baseURL in babysitter.config.json; LOGIN_EMAIL / LOGIN_PASSWORD for signed-in pages). --skip-prepare to run on the last crawl."); process.exit(st ?? 1); }
     }
+    // --changed / --since: the routes the change reaches (after prepare: the crawl is fresh)
+    let selection = null;
+    if (changedFlag || since) {
+      const { affectedRoutes, explainSelection, defaultBase } = await import("../lib/affected-routes.js");
+      const { loadConfig: lc, loadRoutes: lr } = await import("../playwright/project.js");
+      process.env.BABYSITTER_ROOT = ROOT;
+      const cfg0 = lc();
+      const base = since && since !== true ? since : defaultBase(ROOT);
+      const res = affectedRoutes(ROOT, { base, routes: lr(cfg0), ignore: cfg0.changed?.ignore || [] });
+      console.error(explainSelection(res));
+      selection = { all: res.all, routes: res.routes.map((r) => r.key), of: res.of, since: base };
+      if (!res.all) {
+        md(join(ROOT, ".babysitter"), { recursive: true });
+        const f = join(ROOT, ".babysitter/selected-routes.json");
+        wf(f, JSON.stringify({ at: new Date().toISOString(), base, routes: selection.routes, why: res.routes }, null, 2));
+        env.BABYSITTER_SELECTED = f;
+        if (!res.routes.length) {
+          console.log("\nNothing to check: the change reaches no page (the findings of the last run stand). Run without --changed for a full check.");
+          process.exit(0);
+        }
+      }
+    }
     // a --reporter on the command line replaces the config's reporters: keep the JSON report the summary, findings.json,
     // fix-plan and the Stop hook read (a live run with --reporter=line once left nothing to summarise)
     for (let i = 0; i < args.length; i++) {
@@ -214,8 +277,10 @@ switch (cmd) {
     const { statSync } = await import("node:fs");
     const mtime = () => { try { return statSync(reportFile).mtimeMs; } catch { return null; } };
     const before = mtime();
+    const t0 = Date.now();
     let status = await playwright(args, env);
     const fresh = mtime() !== null && mtime() !== before;
+    try { md(join(ROOT, ".babysitter"), { recursive: true }); wf(modeFile, JSON.stringify({ express, at: new Date().toISOString(), ms: Date.now() - t0 })); } catch { }
     if (!fresh) {
       console.error(`\n${"✗".repeat(3)} babysitter e2e: Playwright stopped before it wrote a report (exit ${status}) — nothing was checked.\n    The error is printed above. Common causes: a browser that is not installed (npx playwright install chrome), a\n    BASE_URL that does not answer, a Node version the installed @playwright/test does not support.`);
       if (banner) console.error(banner);
@@ -230,7 +295,7 @@ switch (cmd) {
       const vps = viewports(cfg, env).map((v) => v.name);
       const full = viewports(cfg, { ...env, BABYSITTER_PROFILE: "", VIEWPORTS: "" }).map((v) => v.name);
       const RUN = existsSync(join(ROOT, "node_modules/claudes-babysitter/bin/babysitter.mjs")) ? "npx --no babysitter" : `node ${relative(ROOT, join(root, "bin/babysitter.mjs")) || join(root, "bin/babysitter.mjs")}`;
-      const sum = summarize({ root: ROOT, only, args, cfg, configured: { viewports: full }, lastFailed, rerun: `${RUN} e2e --skip-prepare --last-failed${only ? ` --only ${only}` : ""}${env.BABYSITTER_PROFILE === "quick" ? " --quick" : ""}` });
+      const sum = summarize({ root: ROOT, only, args, cfg, configured: { viewports: full }, lastFailed, selection, rerun: `${RUN} e2e --skip-prepare --last-failed${only ? ` --only ${only}` : ""}${env.BABYSITTER_PROFILE === "quick" ? " --quick" : ""}${express ? " --express" : ""}` });
       console.log(`\n${sum.text}`);
       if (!status && sum.rolesNotChecked?.length) status = 1;
       if (vps.length < full.length) console.log(`(--quick / VIEWPORTS: ${vps.join(", ")} of ${full.join(", ")})`);
@@ -243,6 +308,6 @@ switch (cmd) {
   case "after-merge": node("bin/after-merge.mjs", rest); break;
   case "misses": node("bin/misses.mjs", rest); break;
   default:
-    console.log("usage: babysitter <init|update|check|version-check|doctor|audit|content|prepare|test-ui|e2e|fix-plan|after-merge|misses> [...]\n  e2e [--skip-prepare] [--quick] [--only ui|acceptance|content|product] [--last-failed]\n  init [repo] [--new|--existing] [--link|--vendor] [--ci] [--url URL] [--dev-url URL] [--dry-run] [--no-install] [--yes] [--force]");
+    console.log("usage: babysitter <init|update|check|version-check|doctor|audit|content|prepare|test-ui|e2e|fix-plan|after-merge|misses> [...]\n  e2e [--skip-prepare] [--quick] [--only ui|acceptance|content|product] [--last-failed] [--express [--no-cache]] [--changed | --since <ref>]\n  init [repo] [--new|--existing] [--link|--vendor] [--ci] [--url URL] [--dev-url URL] [--dry-run] [--no-install] [--yes] [--force]");
     process.exit(cmd ? 2 : 0);
 }

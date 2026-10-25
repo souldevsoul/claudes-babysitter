@@ -69,7 +69,9 @@ export const iconClipped = (page) => page.evaluate(() => {
     const declared = parseFloat(el.getAttribute("width") || "");
     const vb = el.tagName.toLowerCase() === "svg" ? (el.getAttribute("viewBox") || "").trim().split(/[\s,]+/).map(Number) : null;
     const parentFlex = /flex/.test(getComputedStyle(el.parentElement || document.body).display);
-    if (parentFlex && parseFloat(cs.flexShrink) > 0) {
+    // 5.6.0: a spinner turns for ever — its box grows and shrinks with the turn, which is no squeeze
+    const spinning = el.getAnimations().some((x) => { try { return !Number.isFinite(x.effect.getComputedTiming().endTime); } catch { return false; } });
+    if (parentFlex && parseFloat(cs.flexShrink) > 0 && !spinning) {
       const vbAspect = vb && vb.length === 4 && vb[2] > 0 && vb[3] > 0 ? vb[2] / vb[3] : null;
       const squeezedW = Number.isFinite(declared) && declared > 0 && r.width < declared - 1;
       const squeezedA = vbAspect && Math.abs(r.width / r.height - vbAspect) / vbAspect > 0.1 && r.width < r.height;
@@ -89,8 +91,10 @@ export const iconClipped = (page) => page.evaluate(() => {
     // (a) cut by an ancestor that clips (not a scroller), while partly visible
     for (let a = el.parentElement; a && a !== document.body; a = a.parentElement) {
       const as = getComputedStyle(a);
-      if (!/hidden|clip/.test(as.overflowX) && !/hidden|clip/.test(as.overflowY)) continue;
+      // 5.6.0: inside a scroller the icon is scrolled to, not cut — the clipping box further out (a rounded sheet
+      // around its scrolling list) never sees it at rest. Checked first: a scroller has no hidden/clip of its own.
       if (/auto|scroll/.test(as.overflowX + as.overflowY)) break;
+      if (!/hidden|clip/.test(as.overflowX) && !/hidden|clip/.test(as.overflowY)) continue;
       const b = a.getBoundingClientRect();
       // a round mask (an avatar) cuts its picture on purpose
       if (parseFloat(as.borderTopLeftRadius) >= Math.min(b.width, b.height) / 2 - 1) break;

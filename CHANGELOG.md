@@ -2,6 +2,69 @@
 
 Earlier releases (4.11.1 and before) are described in the README under "What changed in …".
 
+## 5.6.0 — express runs: one load per page, only what a change touches (2026-10-24)
+
+Every check opened its page again: ~117 page loads per route × viewport × locale × role, a few milliseconds of checking
+each. A product with 70 routes ran for hours.
+
+- **`babysitter e2e --express`** (playwright/express.js). The per-route describes of babysitter, acceptance, layout,
+  forms, content and run.spec become one Playwright test per route × project. The page is loaded once; every check of
+  the describe runs against it with its own budget, skips, soft / hard failures and annotations, and is reported as its
+  own result (lib/express-results.js expands the page test in the run summary). Checks keep each other out: the spec's
+  open function is served from the shared page only while it is pristine (same route, open function and arguments,
+  nothing done since); any Page / Locator / ElementHandle / Mouse / Keyboard / BrowserContext call that is not a read
+  marks it dirty, and so does any difference in a fingerprint after the check (DOM and attributes, form values, scroll
+  positions, focus, selection, overlays, storage, cookies, stylesheets, running transitions, images, fonts, URL,
+  viewport); the next check then gets a fresh context and load. Stamp attributes (`data-bs-*`, `data-bsf*`, `data-ui-*`)
+  are restored, listeners removed, contexts closed, a scroll left behind put back. Read-only checks run first; the last
+  run's observations (`.babysitter/express-profile.json`) refine the order. A check that touches its page before opening
+  it is run again on its own fresh page, and says so. run.spec's states / languages / 3.8 tests share one context per
+  route and locale. Site-wide tests run as before. `-g` selects checks inside the page tests; `--last-failed` re-runs
+  only the checks that failed (`.babysitter/express-failed.json`) and stays in express mode after an express run.
+- **Result cache** (lib/express-cache.js, `.babysitter/express-cache/`): passes and skips are reused when the render
+  hash of the pristine page and the key (project, route, role, locale, open arguments, version, check-code hash, config,
+  languages, stage, verdict-changing env) are unchanged — "cached (unchanged render)". Failures are never stored or
+  reused; a check that went to the network, opened another page or context, used the request fixture, opened its page
+  twice, or samples over time is never stored. `--no-cache` measures everything.
+- **`babysitter e2e --changed` / `--since <ref>`** (lib/affected-routes.js): changed files (since the merge-base with
+  main, plus staged, unstaged and untracked) are followed up the app's import graph — imports, re-exports, `import()`,
+  `next/dynamic`, `require()`, template-path imports, tsconfig / jsconfig `paths`, `baseUrl` and `extends` — to the
+  `app/` and `pages/` pages and layouts; a nested layout selects its subtree; message files select the routes using the
+  namespaces whose keys changed. Global CSS, theme / tokens, tailwind / postcss, the UI kit, root and group layouts,
+  header / footer / navigation, middleware, next.config, package.json / lockfiles, babysitter.config.json, tsconfig,
+  env, the database schema, API route handlers and anything the graph cannot place select every route. The selection
+  and the import chain behind each route are printed; findings of routes not opened are carried over in findings.json.
+  New config: `changed.ignore` (globs that do not render).
+- **findings.json** `error`: the check's message without Playwright's code frame and stack lines of the spec (they
+  differ between a test of its own and an express page test; fix-plan reads the first line, unchanged).
+- 6.12 site-wide interactions lists pages and "not tested" lines in route order (parallel lanes made two runs of the
+  same site read differently).
+- **States, about twice as fast** (run.spec states, both modes): after a menu or dialog a page was reloaded before the
+  next opener (~3 s each, more than half of the states time). It is now put back without a reload when it already looks
+  exactly as it did at rest: pointer back, focus dropped (again once a closing window hands it back), scroll restored,
+  our marks cleared, every finite animation finished — then a print of every visible element (box, opacity, transform,
+  colours, borders, outline, aria-expanded / data-state / aria-hidden, own text, field values, URL, scroll) must match the
+  print at rest. Elements that change on their own (a blinking caret, a waveform, a word typed letter by letter, learned
+  from two prints at rest and from each reload) are left out; anything else that differs is reloaded as before. The rest
+  print is taken again after every reload (a cookie choice made by one state stays made). `BABYSITTER_SOFT_BACK=0`
+  always reloads. 6.12's entrance sampler stops when the click settled with no window instead of running out its 4 s.
+  On a real product (7 routes × 2 widths × 2 languages × 4 roles): 1845 s normal → 967 s express, 1288 check results and
+  every finding identical.
+- **express:** a page whose open did not finish (no pristine print) no longer fails every other check of its page test
+  with `Cannot read properties of undefined (reading 'scroll')`; the next check gets a fresh page.
+- **Four false alarms** (test/fp-560.test.mjs, each next to the real defect that still fires):
+  - 2.14: an icon in the scrolling list of a rounded, clipping menu sheet was "cut by the sheet" — inside a scroller it is
+    scrolled to; the walk up now stops at the first scroller.
+  - 1.3/1.16: a bare field inside its frame (a chat composer's pill with the send button) was measured as a 40px square
+    input; a field with no edge or fill of its own is measured as the bordered / filled box around it (≤ 24px taller).
+  - 2.22: a card beside a column of cards was compared with the heading inside the card; when the left column is a card
+    and the right one's first box is a card, the two box tops are what lines up.
+  - 6.12: a word typed and erased on its own was "hidden in one frame" by whatever was clicked at that moment; an element
+    whose own text changed with no click running in the 5 s before is never what a click showed or hid.
+- Tests: `test/express-parity.test.mjs` (a fixture product in both modes: identical results and findings, then a warm
+  cache), `test/express-order.test.mjs` (checks that act on the page before read-only ones), `test/express-cache.test.mjs`,
+  `test/affected-routes.test.mjs` — `npm run test:express`; `test/fp-560.test.mjs` — `npm run test:fp`.
+
 ## 5.5.10 — 4.3 a set of choices is not an unpaged list (2026-10-23)
 
 A false alarm: a form's fieldset of 27 language chips, each a checkbox, was reported as "a list of 27 items with no
