@@ -108,6 +108,18 @@ try {
     for (const id of ["brand", "kept", "cookie", "quote", "tn", "az"]) silent(ct11, id);
   });
 
+  // 5.6.1 (a bilingual product: 27 French pages had their English <title> — "Contact Us - Resonate Support" on /fr/contact)
+  await test("CT11 the browser tab: an English <title> on a French page fails; a French one and a brand-only one pass", async (page) => {
+    const html = (h) => page.goto("data:text/html;charset=utf-8," + encodeURIComponent(h));
+    await html(`<html lang="en"><head><title>Contact Us - Resonate Support</title></head><body><h1>Get in touch</h1><p>We reply within a working day.</p></body></html>`);
+    const defaults = await k.collectCopy(page);
+    const run = async (title) => { await html(`<html lang="fr"><head><title>${title}</title></head><body><h1>Écrivez à l'équipe</h1><p>Nous répondons sous un jour ouvré.</p></body></html>`); return (await k.languageFindings(page, { cfg: { content: { brandTerms: ["Resonate"] } }, locale: "fr", defaults, defaultLocale: "en" })).hard.filter((f) => f.id === "CT11"); };
+    const bad = await run("Contact Us - Resonate Support");
+    assert.ok(bad.some((f) => /^the browser tab: /.test(f.what) && f.where === "<title>"), JSON.stringify(bad));
+    assert.deepEqual(await run("Contacter le support - Resonate"), []);
+    assert.deepEqual(await run("Resonate"), []);
+  });
+
   await test("CT11 data is not copy: a person's name in a table row or a card, and the text of a row that shows an email, pass; UI phrases and controls in that row are still caught", async (page) => {
     const html = (h) => page.goto("data:text/html;charset=utf-8," + encodeURIComponent(h));
     const body = (lang, add, cells) => `<html lang="${lang}"><body><main><button id="add">${add}</button><table><tr><td id="name">Theo Martin</td><td id="mail">theo@x.example</td><td><button id="act">More actions</button></td></tr></table>

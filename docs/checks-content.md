@@ -47,7 +47,7 @@ the base version; translation files trigger the edit hook too.
 account, the refund, the card, currency names). CT21 and CT22 read each language with a lexicon on its own — French
 labels against French labels ("Centre d'aide" / "Assistance" → /help, "Acheter des crédits" / "Recharger"), French
 document names in their own word order ("les Conditions de service des Spécialistes" with no such page); a French link is
-never compared with an English one. Other languages are read with English, as before. What a user wrote
+never compared with an English one. Other languages are read with English, as before. The browser tab is copy too (5.6.2): a `<title>` left as the default language's, or in English, is CT11. What a user wrote
 (`data-user-content`, a chat log, a quote) and text kept as written (`translate="no"`, another `lang`) is never the
 site's copy.
 

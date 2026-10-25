@@ -97,6 +97,10 @@ await t("CT21 fr: the help page linked as 'Centre d'aide' and 'Assistance', and 
     L("/help", "Centre d'aide", "fr", "footer", "/fr footer"), L("/help", "Centre d'aide", "fr", "nav", "/fr nav"), L("/help", "Help Centre", "en", "footer", "/ footer"),
   ], texts: [T("Acheter des crédits", "fr", "/fr/dashboard", "button"), T("Acheter des crédits", "fr", "/fr/pricing", "button"), T("Buy credits", "en", "/pricing", "button")] }, ["CT21"]);
   assert.deepEqual(good, [], say(good));
+  // the defined terms of a French contract ("le Service", "la Plateforme") are not pages the copy sends readers to
+  const terms = run({ pages: [P("/terms", ["Conditions d'utilisation"], "fr", "Conditions du Service · Acme"), P("/platform", ["Plateforme"], "fr", "Plateforme · Acme"), P("/pricing", ["Tarifs"], "fr", "Tarifs · Acme")], links: [L("/terms", "Conditions d'utilisation", "fr", "footer", "/fr footer")],
+    texts: [T("En cas de changement, nous vous prévenons par e-mail ou dans le Service.", "fr", "/fr/faq"), T("Votre accès dans la Plateforme peut être suspendu.", "fr", "/fr/faq")] }, ["CT21"]);
+  assert.deepEqual(terms, [], say(terms));
 });
 
 await t("CT22 fr: 'les Conditions de service des Spécialistes' named in French copy with no such page is caught; the page's own name, a legal family and a link to it are not", () => {

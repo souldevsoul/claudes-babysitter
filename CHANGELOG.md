@@ -2,6 +2,16 @@
 
 Earlier releases (4.11.1 and before) are described in the README under "What changed in …".
 
+## 5.6.2 — the browser tab in every language; French contract terms (2026-10-25)
+
+- **CT11 the browser tab.** A page's `<title>` is checked like its copy: on a French page, the tab title the same as on
+  the English page ("Contact Us - Resonate Support" on /fr/contact) or English is untranslated. Titles are noun phrases
+  with few function words, so the strong signal is the default language's own title left unchanged. On a real
+  bilingual product this found 35 routes whose French tab, search result and shared link were in English.
+- **CT21 fr:** a French contract's defined terms ("le Service", "la Plateforme") are not pages the copy sends readers to
+  — the English rule had "the Service"; "dans le Service" was read as a link to /terms.
+- Tests: `test/content-runtime.test.mjs` (the tab), `test/content-fr-561.test.mjs` (the defined terms; fails on 5.6.1).
+
 ## 5.6.1 — one name, one fact, one label in French too (2026-10-25)
 
 Business QA on a bilingual product: "the same thing is said differently between pages and inside one page (card payment,

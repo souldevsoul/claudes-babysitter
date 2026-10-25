@@ -324,9 +324,19 @@ export async function languageFindings(page, { cfg = {}, copy = null, locale = n
       if (!r) continue;
       out.push({ i: s.i, x: { id: "CT11", what: untranslatedWhat(r, s.text, code), fix: `translate it (the ${code} messages file, or the CMS / database field; locales.keep / content.brandTerms for names that stay as they are)` } });
     }
+    // 5.6.1: the browser tab — "Contact Us - Resonate Support" on the French contact page (the page's metadata)
+    if (copy.title) {
+      // a title is a noun phrase with few function words: the strong signal is the default language's own title, unchanged
+      const defTitle = defaults && !Array.isArray(defaults) ? String(defaults.title || "") : "";
+      const norm = (t) => String(t).replace(/\s+/g, " ").trim().toLowerCase();
+      const words = (t) => (String(t).match(/\p{L}{3,}/gu) || []).filter((w) => !brand.some((b) => b.toLowerCase() === w.toLowerCase()));
+      const same = defTitle && norm(defTitle) === norm(copy.title) && words(copy.title).length >= 1 && !keep.includes(copy.title.trim());
+      const r = same ? { kind: "same", sample: copy.title } : untranslatedReason(copy.title, code, { brand, defaults: def, keep, legal: cc.legalIdentity });
+      if (r) out.push({ i: null, where: "<title>", x: { id: "CT11", what: `the browser tab: ${untranslatedWhat(r, copy.title, code)}`, fix: `translate the page's <title> and description (its metadata / generateMetadata for ${code}; the tab, search results and shared links show it)` } });
+    }
   }
-  const loc = await locate(page, out.map((o) => o.i));
-  return { hard: out.map((o) => finding(o.x, o.i == null ? { where: "<html>" } : loc.get(o.i))) };
+  const loc = await locate(page, out.map((o) => o.i).filter((i) => i != null));
+  return { hard: out.map((o) => finding(o.x, o.i == null ? { where: o.where || "<html>" } : loc.get(o.i))) };
 }
 
 /** A compact record of one page for the site-wide checks. */
