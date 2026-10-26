@@ -1,0 +1,1299 @@
+{
+ "version": "5.7.0",
+ "about": "Text rules Jev answers on the rendered copy (YES means a violation). scope: line | page | pair | site. profile \"house\": the house rules of a product fleet (prepaid credits, one card scheme list, fixed top-up range …), on with jev.profile: \"house\". facts: needs a facts file (jev.facts) and is skipped without one. Vendored from a factory rule catalog without its sources and examples.",
+ "rules": [
+  {
+   "id": "f/claim-spec-false",
+   "scope": "line",
+   "pageTypes": [
+    "any"
+   ],
+   "question": "Does any line in LINES state a product specification (hardware, model, chip, cores, memory, storage, software version, capacity) that differs from the FACTS?",
+   "facts": true,
+   "min": 0.9
+  },
+  {
+   "id": "f/claim-included-false",
+   "scope": "line",
+   "pageTypes": [
+    "any"
+   ],
+   "question": "Does any line in LINES say that a tool, preset, configuration, service or item is included, installed or ready to use when the FACTS say it is not?",
+   "facts": true,
+   "min": 0.9
+  },
+  {
+   "id": "f/claim-feature-missing",
+   "scope": "line",
+   "pageTypes": [
+    "any"
+   ],
+   "question": "Does any line in LINES describe a feature, tool, tracking or reporting capability, integration or AI function that the FACTS say does not exist or is not available yet, as if it works today?",
+   "facts": true,
+   "min": 0.9
+  },
+  {
+   "id": "f/claim-process-false",
+   "scope": "line",
+   "pageTypes": [
+    "any"
+   ],
+   "question": "Does any line in LINES describe how the service works (how and when it is charged, when a service starts or ends, what happens to the customer's files or data, what happens when credit runs out) differently from the FACTS?",
+   "facts": true,
+   "min": 0.9
+  },
+  {
+   "id": "f/claim-number-unbacked",
+   "scope": "line",
+   "pageTypes": [
+    "any"
+   ],
+   "question": "Does any line in LINES promise a specific number, speed, duration or time frame (build time, review time, reply time, payout time, delivery time, refund processing days, uptime, 'within N hours/days') that the FACTS do not state?",
+   "facts": true,
+   "min": 0.9
+  },
+  {
+   "id": "f/claim-security-unbacked",
+   "scope": "line",
+   "pageTypes": [
+    "any"
+   ],
+   "question": "Does any line in LINES make a security or privacy claim (a named encryption such as AES-256, 'end-to-end', 'bank-grade', 'encrypted at rest', 'never stored', 'fully isolated') that the FACTS do not confirm?",
+   "facts": true,
+   "min": 0.9
+  },
+  {
+   "id": "f/claim-message-promise",
+   "scope": "line",
+   "pageTypes": [
+    "any"
+   ],
+   "question": "Does any line in LINES promise that the customer will receive an email, receipt, confirmation, notification, newsletter or reply by email, when the FACTS say no such message is sent?",
+   "facts": true,
+   "min": 0.9
+  },
+  {
+   "id": "f/claim-response-promise",
+   "scope": "line",
+   "pageTypes": [
+    "any"
+   ],
+   "question": "Does any line in LINES promise how often or how fast messages, applications or requests are read, reviewed or answered (for example 'we reply within one business day', 'applications are reviewed promptly', 'approved within days') without the FACTS stating it?",
+   "facts": true,
+   "min": 0.9
+  },
+  {
+   "id": "f/claim-access-promise",
+   "scope": "line",
+   "pageTypes": [
+    "any"
+   ],
+   "question": "Does any line in LINES promise a person access to a resource, machine, account or benefit (for example free equipment, a free account, or access to a resource provided to customers or specialists) that the FACTS do not describe?",
+   "facts": true,
+   "min": 0.9
+  },
+  {
+   "id": "f/claim-price-rule-false",
+   "scope": "line",
+   "pageTypes": [
+    "any"
+   ],
+   "question": "Does any line in LINES state a price, credit rate, pack, bundle, expiry rule or purchase rule that differs from the FACTS?",
+   "facts": true,
+   "min": 0.9
+  },
+  {
+   "id": "f/claim-company-false",
+   "scope": "line",
+   "pageTypes": [
+    "any"
+   ],
+   "question": "Does any line in LINES give a company name, company number, registered address, registration country or support email that differs from the FACTS?",
+   "facts": true,
+   "min": 0.9
+  },
+  {
+   "id": "f/claim-sibling-brand",
+   "scope": "line",
+   "pageTypes": [
+    "any"
+   ],
+   "question": "Does any line in LINES mention a product or brand name other than this product's own name (from the FACTS) as if it were this product, such as a leftover name from another site?",
+   "facts": true,
+   "min": 0.9
+  },
+  {
+   "id": "f/proof-ratings",
+   "scope": "line",
+   "pageTypes": [
+    "any"
+   ],
+   "question": "Does any line in LINES show or mention ratings, stars, review scores, testimonials, customer quotes or reviews of people or of the product (including 'clients see your rating')?",
+   "profile": "house"
+  },
+  {
+   "id": "f/proof-badge",
+   "scope": "line",
+   "pageTypes": [
+    "any"
+   ],
+   "question": "Does any line in LINES carry a popularity or value badge such as 'Popular', 'Most popular', 'Best value', 'Best for …' or 'Recommended' on an option?",
+   "profile": "house"
+  },
+  {
+   "id": "f/proof-counts",
+   "scope": "line",
+   "pageTypes": [
+    "any"
+   ],
+   "question": "Does any line in LINES claim a number of customers, users, experts, teams, completed tasks or projects, or name client companies, as social proof ('trusted by', '500+ developers', 'used by teams at')?",
+   "profile": "house"
+  },
+  {
+   "id": "f/forbid-vat",
+   "scope": "line",
+   "pageTypes": [
+    "any"
+   ],
+   "question": "Does any line in LINES mention VAT, tax, taxes, 'incl. VAT', 'excl. tax' or sales tax?",
+   "profile": "house"
+  },
+  {
+   "id": "f/forbid-provider-name",
+   "scope": "line",
+   "pageTypes": [
+    "any"
+   ],
+   "question": "Does any line in LINES name a payment provider, payment gateway or card processor company? Visa and Mastercard are card schemes, not providers.",
+   "profile": "house"
+  },
+  {
+   "id": "f/forbid-sanctions-list",
+   "scope": "line",
+   "pageTypes": [
+    "any"
+   ],
+   "question": "Does any line in LINES describe sanctioned or blocked countries in a way other than naming exactly Russia, Belarus, Iran, North Korea, Syria and Cuba together (for example a longer or shorter list, or a general reference to sanctions regimes without naming these six)?",
+   "profile": "house"
+  },
+  {
+   "id": "f/forbid-topup-limits",
+   "scope": "line",
+   "pageTypes": [
+    "any"
+   ],
+   "question": "Does any line in LINES state a minimum or maximum amount for topping up, adding credit or buying credits other than 1 to 20,000, or claim there is no minimum or maximum? (Specialist payout limits are not top-ups.)",
+   "profile": "house"
+  },
+  {
+   "id": "f/forbid-subscription",
+   "scope": "line",
+   "pageTypes": [
+    "any"
+   ],
+   "question": "Does any line in LINES present what is sold as a subscription or recurring plan (subscribe, per month, /mo, auto-renews, cancel anytime, free trial) when the FACTS say it is prepaid credits?",
+   "profile": "house",
+   "facts": true
+  },
+  {
+   "id": "f/forbid-enterprise",
+   "scope": "line",
+   "pageTypes": [
+    "any"
+   ],
+   "question": "Does any line in LINES offer an enterprise tier, company package, SLA, custom contract, dedicated account manager or white-label option?",
+   "profile": "house"
+  },
+  {
+   "id": "f/forbid-legal-boilerplate",
+   "scope": "line",
+   "pageTypes": [
+    "legal-terms",
+    "legal-privacy",
+    "legal-cookies",
+    "legal-refund",
+    "legal-payment",
+    "legal-aml",
+    "legal-other",
+    "about",
+    "faq"
+   ],
+   "question": "Does any line in LINES contain CCPA or California privacy rights, SOC 2 or ISO certification claims, HMRC references, or a Data Protection Officer section?",
+   "profile": "house"
+  },
+  {
+   "id": "f/forbid-odr-link",
+   "scope": "line",
+   "pageTypes": [
+    "legal-terms",
+    "legal-privacy",
+    "legal-cookies",
+    "legal-refund",
+    "legal-payment",
+    "legal-aml",
+    "legal-other",
+    "faq"
+   ],
+   "question": "Does any line in LINES refer customers to the EU Online Dispute Resolution (ODR) platform or ec.europa.eu/odr?",
+   "profile": "house"
+  },
+  {
+   "id": "f/forbid-governing-law",
+   "scope": "line",
+   "pageTypes": [
+    "legal-terms",
+    "legal-refund",
+    "legal-privacy",
+    "legal-other"
+   ],
+   "question": "Does any line in LINES set the governing law or courts as 'the laws of the European Union', a US state, or any country other than the registration country of the company in the FACTS?",
+   "profile": "house",
+   "facts": true
+  },
+  {
+   "id": "f/forbid-other-payment-methods",
+   "scope": "line",
+   "pageTypes": [
+    "any"
+   ],
+   "question": "Does any line in LINES say that payment methods other than Visa and Mastercard cards are accepted (wallets, other card brands, bank transfer, crypto) or offer bank transfer as a refund method?",
+   "profile": "house"
+  },
+  {
+   "id": "f/forbid-support-channel",
+   "scope": "line",
+   "pageTypes": [
+    "any"
+   ],
+   "question": "Does any line in LINES offer a phone number, live chat, WhatsApp or Telegram chat as a customer support channel?",
+   "profile": "house"
+  },
+  {
+   "id": "f/money-format",
+   "scope": "line",
+   "pageTypes": [
+    "any"
+   ],
+   "question": "Does any line in LINES write a money amount with a currency code instead of a symbol ('25 EUR', 'EUR 50', 'USD 10'), or as a bare number with no currency?",
+   "profile": "house"
+  },
+  {
+   "id": "f/money-credits-only",
+   "scope": "line",
+   "pageTypes": [
+    "any"
+   ],
+   "question": "Does any line in LINES give a price or cost only in credits (for example 'Starter plan: 120 credits') with no money amount beside it?",
+   "profile": "house"
+  },
+  {
+   "id": "f/money-approx",
+   "scope": "line",
+   "pageTypes": [
+    "any"
+   ],
+   "question": "Does any line in LINES show an approximate price with '≈', 'approx.' or 'about', or show the same amount in two currencies?",
+   "profile": "house",
+   "min": 0.88
+  },
+  {
+   "id": "f/money-one-currency-claim",
+   "scope": "line",
+   "pageTypes": [
+    "any"
+   ],
+   "question": "Does any line in LINES say that prices are set, shown or charged in only one currency (for example 'all prices in USD' or 'charged in euros'), when the FACTS say the customer can choose EUR or USD?",
+   "profile": "house",
+   "facts": true
+  },
+  {
+   "id": "f/money-discount",
+   "scope": "line",
+   "pageTypes": [
+    "pricing",
+    "home",
+    "faq",
+    "legal-payment"
+   ],
+   "question": "Does any line in LINES offer a discount below 3% or above 15%, or show a crossed-out 'was' price?",
+   "profile": "house"
+  },
+  {
+   "id": "f/money-units-unexplained",
+   "scope": "line",
+   "pageTypes": [
+    "any"
+   ],
+   "question": "Does any line in LINES use an unexplained abbreviation or unit for money or credits ('cr', 'cr.', 'pts', a bare ratio) that a new customer would not understand?"
+  },
+  {
+   "id": "f/money-thousands",
+   "scope": "line",
+   "pageTypes": [
+    "any"
+   ],
+   "question": "Does any line in LINES print a quantity of money or credits of 1,000 or more without a thousands separator (for example 20000 or 24345 credits)? Years, company numbers and postcodes do not count.",
+   "profile": "house"
+  },
+  {
+   "id": "f/copy-placeholder",
+   "scope": "line",
+   "pageTypes": [
+    "any"
+   ],
+   "question": "Does any line in LINES contain placeholder or test content: 'Select...', a bare '...', 'Lorem ipsum', 'TODO', 'TestProject', 'asdf', 'John Doe', 'test@example.com', '[Company Name]', or an obviously fake name, ID or value?"
+  },
+  {
+   "id": "f/copy-build-note",
+   "scope": "line",
+   "pageTypes": [
+    "any"
+   ],
+   "question": "Does any line in LINES expose an internal, developer or deployment fact to customers: 'this build', 'no mailbox is connected', 'MX record', 'a hosting provider's preview host', 'the domain is not registered', 'nothing on our side enforces one', 'seed data', 'placeholder identity', 'draft, not binding'?"
+  },
+  {
+   "id": "f/copy-self-defence",
+   "scope": "line",
+   "pageTypes": [
+    "any"
+   ],
+   "question": "Does any line in LINES justify a choice to the reader, argue with them, or explain what the product does not do and why (for example 'we would rather say so plainly than imply…', 'a switch for something we do not do would tell you…', 'it is listed here rather than left for a reader to discover', 'there is no third row because there is nothing to put in one')?"
+  },
+  {
+   "id": "f/copy-over-explain",
+   "scope": "line",
+   "pageTypes": [
+    "any"
+   ],
+   "question": "Does any line in LINES restate the same rule or number several times in one passage, or pile on explanation where one short sentence would do?",
+   "min": 0.88
+  },
+  {
+   "id": "f/copy-ai-cadence",
+   "scope": "line",
+   "pageTypes": [
+    "any"
+   ],
+   "question": "Does any button, link or call-to-action line in LINES use an em-dash aside or read as machine-written (for example 'Start free — 300 credits')?"
+  },
+  {
+   "id": "f/copy-typo",
+   "scope": "line",
+   "pageTypes": [
+    "any"
+   ],
+   "question": "Does any line in LINES contain a spelling mistake, a doubled word, two words run together, a wrong plural ('1 credits', '1 tasks') or broken grammar?"
+  },
+  {
+   "id": "f/copy-runtime-junk",
+   "scope": "line",
+   "pageTypes": [
+    "any"
+   ],
+   "question": "Does any line in LINES show runtime junk such as NaN, undefined, null, [object Object], {{…}}, %s, or an unformatted internal key (reason_topup, MINIMAL_WEAR)?"
+  },
+  {
+   "id": "f/copy-emoji",
+   "scope": "line",
+   "pageTypes": [
+    "any"
+   ],
+   "question": "Does any line in LINES use an emoji as decoration?",
+   "profile": "house"
+  },
+  {
+   "id": "f/copy-date-order",
+   "scope": "line",
+   "pageTypes": [
+    "any"
+   ],
+   "question": "Does any line in LINES write a date month-first (for example 'September 21, 2026' or 09/21/2026)?",
+   "profile": "house"
+  },
+  {
+   "id": "f/copy-coming-soon",
+   "scope": "line",
+   "pageTypes": [
+    "any"
+   ],
+   "question": "Does any line in LINES label a feature of the product 'Coming soon', other than a disabled pay button?"
+  },
+  {
+   "id": "f/copy-invented-names",
+   "scope": "line",
+   "pageTypes": [
+    "any"
+   ],
+   "question": "Does any line in LINES give a standard object or action an odd invented name (a purchase called 'Jobs', a cart called a 'ticket', 'Add to order' instead of 'Add to cart')?"
+  },
+  {
+   "id": "f/copy-self-evident",
+   "scope": "line",
+   "pageTypes": [
+    "any"
+   ],
+   "question": "Does any line in LINES state the obvious or repeat what a control already enforces ('enter a price above $0', 'not set', '0 means no limit')?"
+  },
+  {
+   "id": "f/copy-term-undefined",
+   "scope": "line",
+   "pageTypes": [
+    "faq",
+    "pricing",
+    "home",
+    "experts-or-specialists",
+    "legal-payment"
+   ],
+   "question": "Does any line in LINES use a product-specific term (payout, credit, session, slot, pot, treasury) that is not explained anywhere in LINES?",
+   "min": 0.88
+  },
+  {
+   "id": "f/copy-email-domain",
+   "scope": "line",
+   "pageTypes": [
+    "any"
+   ],
+   "question": "Does any line in LINES show an email address on a domain other than the product's own domain in the FACTS, or on a test or hosting domain (.example, a hosting provider's preview domain, a free mailbox domain)?",
+   "facts": true
+  },
+  {
+   "id": "f/copy-fake-access",
+   "scope": "line",
+   "pageTypes": [
+    "any"
+   ],
+   "question": "Does any line in LINES show access details that look made up: an IP address, a password, a remote-desktop ID or a machine login that looks invented (such as 192.168.1.100 or securepass)?"
+  },
+  {
+   "id": "f/copy-stale-state",
+   "scope": "line",
+   "pageTypes": [
+    "any"
+   ],
+   "question": "Does any line in LINES assume something about the reader that is not true for a brand-new visitor or account (greeting them as a returning user, referring to past activity they may not have, or calling something in progress when it has ended)?"
+  },
+  {
+   "id": "f/copy-unlinked-mention",
+   "scope": "line",
+   "pageTypes": [
+    "legal-terms",
+    "legal-privacy",
+    "legal-cookies",
+    "legal-refund",
+    "legal-payment",
+    "legal-aml",
+    "legal-other",
+    "faq",
+    "pricing",
+    "contact-support"
+   ],
+   "question": "Does any line in LINES mention another page or document of this site (a policy, 'the Pricing page', 'Settings → Account', 'Download my data') without that mention being marked as a [[link]]?"
+  },
+  {
+   "id": "f/copy-stat-useless",
+   "scope": "line",
+   "pageTypes": [
+    "home",
+    "pricing",
+    "product-feature",
+    "experts-or-specialists"
+   ],
+   "question": "Does any line in LINES show a statistic, counter or metric that answers no question a customer has (an average, a percentage or a count shown for decoration)?",
+   "profile": "house",
+   "min": 0.88
+  },
+  {
+   "id": "f/copy-unclear",
+   "scope": "line",
+   "pageTypes": [
+    "any"
+   ],
+   "question": "Is any line in LINES so unclear or confusing that a new customer could not tell what it means or what they should do?",
+   "min": 0.88
+  },
+  {
+   "id": "f/legal-implied-consent",
+   "scope": "line",
+   "pageTypes": [
+    "legal-terms",
+    "legal-privacy",
+    "legal-cookies",
+    "legal-refund",
+    "legal-payment",
+    "legal-aml",
+    "legal-other"
+   ],
+   "question": "Does any line in LINES say that using or continuing to use the site means agreeing to cookies or to non-essential tracking?"
+  },
+  {
+   "id": "f/legal-named-vendors",
+   "scope": "line",
+   "pageTypes": [
+    "legal-privacy",
+    "legal-cookies"
+   ],
+   "question": "Does any line in LINES name a third-party company that is not one of the site's data processors (for example a marketing partner or a tool that gets no personal data), or name a data processor without saying what data it receives or where it is located? Naming the hosting, database or analytics processor with its role and region is required, not a violation. (The payment provider is covered by another rule.)",
+   "profile": "house"
+  },
+  {
+   "id": "f/legal-discretion",
+   "scope": "line",
+   "pageTypes": [
+    "legal-terms",
+    "legal-privacy",
+    "legal-cookies",
+    "legal-refund",
+    "legal-payment",
+    "legal-aml",
+    "legal-other"
+   ],
+   "question": "Does any line in LINES reserve a decision 'at our discretion' or 'at our sole discretion' without saying the criteria?"
+  },
+  {
+   "id": "f/legal-unclear-sentence",
+   "scope": "line",
+   "pageTypes": [
+    "legal-terms",
+    "legal-privacy",
+    "legal-cookies",
+    "legal-refund",
+    "legal-payment",
+    "legal-aml",
+    "legal-other",
+    "faq"
+   ],
+   "question": "Is any line in LINES self-contradictory or so unclear that it cannot be understood on one reading (for example 'nothing is charged; it does not return on its own, because there is no hold')?"
+  },
+  {
+   "id": "f/legal-runon-list",
+   "scope": "line",
+   "pageTypes": [
+    "legal-terms",
+    "legal-privacy",
+    "legal-cookies",
+    "legal-refund",
+    "legal-payment",
+    "legal-aml",
+    "legal-other"
+   ],
+   "question": "Does any line in LINES run several categories or items together in one sentence that should be a list, one item per line?",
+   "profile": "house",
+   "min": 0.88
+  },
+  {
+   "id": "f/legal-stray-punctuation",
+   "scope": "line",
+   "pageTypes": [
+    "legal-terms",
+    "legal-privacy",
+    "legal-cookies",
+    "legal-refund",
+    "legal-payment",
+    "legal-aml",
+    "legal-other"
+   ],
+   "question": "Does any line in LINES end with leftover list punctuation ('; and', a stray semicolon or comma) or contain a stray symbol?",
+   "profile": "house"
+  },
+  {
+   "id": "f/legal-xref-midparagraph",
+   "scope": "line",
+   "pageTypes": [
+    "legal-terms",
+    "legal-privacy",
+    "legal-cookies",
+    "legal-refund",
+    "legal-payment",
+    "legal-aml",
+    "legal-other"
+   ],
+   "question": "Does any line in LINES put a 'see our … Policy' reference in the middle of a sentence instead of at the end of the point it supports?",
+   "profile": "house"
+  },
+  {
+   "id": "f/legal-aml-specifics",
+   "scope": "line",
+   "pageTypes": [
+    "legal-aml"
+   ],
+   "question": "Does any line in LINES name a specific regulator, statute or monetary threshold for checks, or describe what the product does not check instead of what it does?",
+   "profile": "house"
+  },
+  {
+   "id": "f/legal-feature-promise",
+   "scope": "line",
+   "pageTypes": [
+    "legal-terms",
+    "legal-privacy",
+    "legal-cookies",
+    "legal-refund",
+    "legal-payment",
+    "legal-aml",
+    "legal-other"
+   ],
+   "question": "Does any line in LINES promise a feature (download invoices, receipts in the dashboard, billing settings, data export page, notification settings) that the FACTS do not confirm exists?",
+   "facts": true
+  },
+  {
+   "id": "f/page-proposition",
+   "scope": "page",
+   "pageTypes": [
+    "home"
+   ],
+   "question": "After reading LINES, would a new visitor be unable to say in one sentence what this product is, who it is for and why they would pay for it?"
+  },
+  {
+   "id": "f/page-generic-copy",
+   "scope": "page",
+   "pageTypes": [
+    "home",
+    "about",
+    "product-feature",
+    "pricing"
+   ],
+   "question": "Is most of the copy in LINES generic filler that could describe almost any product, rather than specific to this product?"
+  },
+  {
+   "id": "f/page-audience",
+   "scope": "page",
+   "pageTypes": [
+    "any"
+   ],
+   "question": "Does this page address an audience or need this product does not have (press or journalists, investors, enterprise buyers, job seekers for roles the FACTS do not mention), or have no plausible reader in this product's world?",
+   "profile": "house",
+   "facts": true
+  },
+  {
+   "id": "f/page-thin",
+   "scope": "page",
+   "pageTypes": [
+    "any"
+   ],
+   "question": "Is this page too thin to stand on its own (a heading and only a few lines of real content) so it should be a section of another page?"
+  },
+  {
+   "id": "f/page-repeated-card-line",
+   "scope": "page",
+   "pageTypes": [
+    "any"
+   ],
+   "question": "Is any sentence listed in REPEATED_LINES a feature or note repeated on every card of a set, which should be said once above or below the set?",
+   "needs": "repeated",
+   "profile": "house"
+  },
+  {
+   "id": "f/page-closing-repeats-hero",
+   "scope": "page",
+   "pageTypes": [
+    "home",
+    "product-feature",
+    "pricing",
+    "about",
+    "contact-support",
+    "faq",
+    "experts-or-specialists",
+    "careers"
+   ],
+   "question": "Does the page end with a section that restates its opening section, or a closing call-to-action block that repeats buttons already offered above?",
+   "profile": "house"
+  },
+  {
+   "id": "f/page-two-currencies",
+   "scope": "page",
+   "pageTypes": [
+    "any"
+   ],
+   "question": "Does LINES show money amounts in two different currencies at the same time (for example € and $ amounts, or EUR and USD prices for the same thing)?",
+   "profile": "house"
+  },
+  {
+   "id": "f/page-price-unclear",
+   "scope": "page",
+   "pageTypes": [
+    "pricing",
+    "home"
+   ],
+   "question": "Could a customer reading LINES fail to work out what they would pay for the main thing they want to buy?"
+  },
+  {
+   "id": "f/page-no-custom-amount",
+   "scope": "page",
+   "pageTypes": [
+    "pricing"
+   ],
+   "question": "Does LINES lack any way to top up a custom amount of the customer's choosing (only fixed packs are offered)?",
+   "profile": "house"
+  },
+  {
+   "id": "f/page-topup-range-missing",
+   "scope": "page",
+   "pageTypes": [
+    "pricing",
+    "legal-payment"
+   ],
+   "question": "Does LINES fail to state the top-up range as 1 to 20,000 in the currency shown?",
+   "profile": "house"
+  },
+  {
+   "id": "f/page-legal-stub",
+   "scope": "page",
+   "pageTypes": [
+    "legal-terms",
+    "legal-privacy",
+    "legal-cookies",
+    "legal-refund",
+    "legal-payment",
+    "legal-aml",
+    "legal-other"
+   ],
+   "question": "Is this legal document a stub or template: fewer than about seven substantive sections (see PAGE.numberedSections), or text not specific to this product?",
+   "profile": "house"
+  },
+  {
+   "id": "f/page-legal-offtopic",
+   "scope": "page",
+   "pageTypes": [
+    "legal-terms",
+    "legal-privacy",
+    "legal-cookies",
+    "legal-refund",
+    "legal-payment",
+    "legal-aml",
+    "legal-other"
+   ],
+   "question": "Is a large part of this legal document about something other than its title (for example an AML policy that describes the product instead of its checks)?",
+   "profile": "house"
+  },
+  {
+   "id": "f/page-legal-opener",
+   "scope": "page",
+   "pageTypes": [
+    "legal-terms",
+    "legal-privacy",
+    "legal-cookies",
+    "legal-refund",
+    "legal-payment",
+    "legal-aml",
+    "legal-other"
+   ],
+   "question": "Does the document open with a paragraph or box that restates or summarises rules before its first numbered section?",
+   "profile": "house"
+  },
+  {
+   "id": "f/page-legal-date-missing",
+   "scope": "page",
+   "pageTypes": [
+    "legal-terms",
+    "legal-privacy",
+    "legal-cookies",
+    "legal-refund",
+    "legal-payment",
+    "legal-aml",
+    "legal-other"
+   ],
+   "question": "Does LINES lack a 'Last updated' or 'Effective' date, or show a placeholder instead of a real date?"
+  },
+  {
+   "id": "f/page-legal-toc",
+   "scope": "page",
+   "pageTypes": [
+    "legal-terms",
+    "legal-privacy",
+    "legal-cookies",
+    "legal-refund",
+    "legal-payment",
+    "legal-aml",
+    "legal-other"
+   ],
+   "question": "Is this a long policy (eight or more sections) with no in-page list of links to its sections?",
+   "profile": "house"
+  },
+  {
+   "id": "f/page-terms-audience",
+   "scope": "page",
+   "pageTypes": [
+    "legal-terms"
+   ],
+   "question": "Do these Terms fail to say who the service is for (individuals or consumers, and whether businesses may use it)?",
+   "profile": "house"
+  },
+  {
+   "id": "f/page-terms-business-clause",
+   "scope": "page",
+   "pageTypes": [
+    "legal-terms"
+   ],
+   "question": "Do these Terms lack a clause saying that a person buying for a company or organisation contracts for that organisation and that consumer-only rights apply to consumers?",
+   "profile": "house"
+  },
+  {
+   "id": "f/page-terms-delivery",
+   "scope": "page",
+   "pageTypes": [
+    "legal-terms"
+   ],
+   "question": "Do these Terms fail to state concretely how the paid service is delivered to the customer?",
+   "profile": "house"
+  },
+  {
+   "id": "f/page-terms-eligibility-law",
+   "scope": "page",
+   "pageTypes": [
+    "legal-terms"
+   ],
+   "question": "Do these Terms lack either an eligibility or minimum-age clause or a governing-law and disputes clause?",
+   "profile": "house"
+  },
+  {
+   "id": "f/page-terms-acceptable-use",
+   "scope": "page",
+   "pageTypes": [
+    "legal-terms"
+   ],
+   "question": "Do these Terms lack an acceptable-use or prohibited-use clause?",
+   "profile": "house"
+  },
+  {
+   "id": "f/page-terms-ai-output",
+   "scope": "page",
+   "pageTypes": [
+    "legal-terms"
+   ],
+   "question": "Do these Terms fail to say who owns AI-generated output and that AI output may be inaccurate?",
+   "requires": "ai_output",
+   "profile": "house"
+  },
+  {
+   "id": "f/page-refund-unused-credits",
+   "scope": "page",
+   "pageTypes": [
+    "legal-refund",
+    "legal-other",
+    "legal-terms"
+   ],
+   "question": "Does this refund or cancellation text fail to say what happens to unused credits?",
+   "match": "refund|cancel",
+   "profile": "house"
+  },
+  {
+   "id": "f/page-refund-method-right",
+   "scope": "page",
+   "pageTypes": [
+    "legal-refund"
+   ],
+   "question": "Does this refund policy fail to say that refunds go back to the original payment method, or fail to name the 14-day withdrawal right or the digital-content exception?",
+   "profile": "house"
+  },
+  {
+   "id": "f/page-privacy-retention",
+   "scope": "page",
+   "pageTypes": [
+    "legal-privacy"
+   ],
+   "question": "Does this privacy policy lack a concrete retention period per kind of data (saying only 'as long as necessary'), or fail to say where the data is stored?",
+   "profile": "house"
+  },
+  {
+   "id": "f/page-specialist-contract",
+   "scope": "page",
+   "pageTypes": [
+    "legal-other",
+    "experts-or-specialists"
+   ],
+   "question": "If LINES is a specialist, expert or contractor agreement: does it lack any of parties, term, payment, confidentiality, intellectual property, liability or termination?",
+   "requires": "specialists",
+   "match": "expert|specialist|contractor|coach|partner",
+   "profile": "house"
+  },
+  {
+   "id": "f/page-specialist-steps",
+   "scope": "page",
+   "pageTypes": [
+    "experts-or-specialists",
+    "careers"
+   ],
+   "question": "If this page invites people to become a specialist or expert: does it fail to list the concrete steps and what the work involves?",
+   "requires": "specialists",
+   "profile": "house"
+  },
+  {
+   "id": "f/page-specialist-names",
+   "scope": "page",
+   "pageTypes": [
+    "experts-or-specialists",
+    "product-feature"
+   ],
+   "question": "Does LINES show a specialist or expert by first name plus surname or surname initial?",
+   "requires": "specialists",
+   "profile": "house"
+  },
+  {
+   "id": "f/page-register-consent",
+   "scope": "page",
+   "pageTypes": [
+    "auth"
+   ],
+   "question": "If this is a sign-up or registration form: does it lack a consent line that links the Terms and Privacy Policy (and the other policies)?",
+   "match": "regist|sign.?up|join|apply",
+   "profile": "house"
+  },
+  {
+   "id": "f/page-register-confirm",
+   "scope": "page",
+   "pageTypes": [
+    "auth"
+   ],
+   "question": "If this is a sign-up form with a password: does it lack a confirm-password field?",
+   "match": "regist|sign.?up|join",
+   "profile": "house"
+  },
+  {
+   "id": "f/page-auth-excess-copy",
+   "scope": "page",
+   "pageTypes": [
+    "auth"
+   ],
+   "question": "Does this sign-in or sign-up page carry more than a line or two of explanation (marketing paragraphs, lists of benefits, repeated closing lines)?",
+   "profile": "house"
+  },
+  {
+   "id": "f/page-faq-offtopic",
+   "scope": "page",
+   "pageTypes": [
+    "faq",
+    "pricing",
+    "contact-support"
+   ],
+   "question": "Does LINES contain an FAQ question that is irrelevant to this product, duplicated, or whose answer does not answer it?"
+  },
+  {
+   "id": "f/page-disclaimer-advice",
+   "scope": "page",
+   "pageTypes": [
+    "any"
+   ],
+   "question": "Does this page present legal, tax, medical, financial or immigration output without a visible 'not professional advice' disclaimer?",
+   "requires": "advice_domain"
+  },
+  {
+   "id": "f/page-physical-disclaimer",
+   "scope": "page",
+   "pageTypes": [
+    "any"
+   ],
+   "question": "Does this page describe a product that is ingested or applied to the body without a clear 'recommendation only, not medical advice' disclaimer and full composition?",
+   "requires": "physical_product"
+  },
+  {
+   "id": "f/site-one-name",
+   "scope": "site",
+   "pageTypes": [
+    "any"
+   ],
+   "question": "In LINK_NAMES, is any destination reached by links with meaningfully different names (for example 'Studio' in the header and 'Create' in the footer for the same page, or two wordings of the same call to action), ignoring harmless variants such as 'Pricing' and 'See pricing'?"
+  },
+  {
+   "id": "f/site-label-vs-title",
+   "scope": "site",
+   "pageTypes": [
+    "any"
+   ],
+   "question": "In LINK_NAMES, does any link label name something different from the title of the page it opens?"
+  },
+  {
+   "id": "f/site-duplicate-destination",
+   "scope": "site",
+   "pageTypes": [
+    "any"
+   ],
+   "question": "In NAV_LINKS or FOOTER_LINKS, do two different links lead to the same page, or does a footer link only jump to a section of a policy?",
+   "profile": "house"
+  },
+  {
+   "id": "f/site-nav-order",
+   "scope": "site",
+   "pageTypes": [
+    "any"
+   ],
+   "question": "Do NAV_LINKS and FOOTER_LINKS list the links they share in a different order?",
+   "profile": "house"
+  },
+  {
+   "id": "f/site-legal-structure",
+   "scope": "site",
+   "pageTypes": [
+    "any"
+   ],
+   "question": "Across LEGAL_STRUCTURE, do the legal pages differ in title capitalisation (Title Case vs sentence case), in whether their sections are numbered, in their eyebrow label, or in how their closing section is named?",
+   "profile": "house"
+  },
+  {
+   "id": "f/site-legal-dates",
+   "scope": "site",
+   "pageTypes": [
+    "any"
+   ],
+   "question": "Does LEGAL_DATES show a legal page without a date, or more than one distinct 'Last updated' date across the legal pages?"
+  },
+  {
+   "id": "f/site-footer-identity",
+   "scope": "site",
+   "pageTypes": [
+    "any"
+   ],
+   "question": "Does FOOTER_LINES lack any of: the legal company name, company number, registered address, a support email, or a copyright line with the current year and 'All rights reserved'?",
+   "profile": "house"
+  },
+  {
+   "id": "f/site-footer-marks",
+   "scope": "site",
+   "pageTypes": [
+    "any"
+   ],
+   "question": "Does FOOTER_LINES lack a 'We accept' line with Visa and Mastercard marks?",
+   "profile": "house"
+  },
+  {
+   "id": "f/site-footer-last-updated",
+   "scope": "site",
+   "pageTypes": [
+    "any"
+   ],
+   "question": "Does FOOTER_LINES contain a 'Last updated' or 'Effective' date?",
+   "profile": "house"
+  },
+  {
+   "id": "f/site-footer-padding",
+   "scope": "site",
+   "pageTypes": [
+    "any"
+   ],
+   "question": "Does FOOTER_LINES contain marketing or operational statements (refresh rates, 'card top-ups open at launch', a payment explanation sentence) instead of links, company details and the accepted cards?",
+   "profile": "house"
+  },
+  {
+   "id": "f/site-footer-links",
+   "scope": "site",
+   "pageTypes": [
+    "any"
+   ],
+   "question": "Does FOOTER_LINKS lack links to About, Support or Contact, Pricing, and the legal pages (Terms, Privacy, Cookies, Refund, Payment)?",
+   "profile": "house"
+  },
+  {
+   "id": "f/site-cookie-reopen",
+   "scope": "site",
+   "pageTypes": [
+    "any"
+   ],
+   "question": "Is there no way named on the site to reopen cookie choices ('Manage cookies', 'Cookie settings') in FOOTER_LINKS or on the cookie policy page (COOKIE_POLICY_LINES)?",
+   "profile": "house"
+  },
+  {
+   "id": "f/site-expected-pages",
+   "scope": "site",
+   "pageTypes": [
+    "any"
+   ],
+   "question": "Is any page a customer would expect for this product missing from PAGES: Pricing, FAQ, About, Contact or Support, How it works, Terms, Privacy, Cookie policy, Refund policy, Payment policy, Cancellation policy?",
+   "profile": "house"
+  },
+  {
+   "id": "f/site-unneeded-pages",
+   "scope": "site",
+   "pageTypes": [
+    "any"
+   ],
+   "question": "Does PAGES include a page for an audience or purpose this product lacks, or a page that duplicates another (Press, Investors, a separate GDPR page, a separate Security page repeating policies, a Currency page)?",
+   "profile": "house"
+  },
+  {
+   "id": "f/site-specialist-terms",
+   "scope": "site",
+   "pageTypes": [
+    "any"
+   ],
+   "question": "The product has specialists or experts. Does PAGES lack a separate specialist or expert agreement page, or a page explaining how to become one?",
+   "requires": "specialists",
+   "profile": "house"
+  },
+  {
+   "id": "f/site-blog-thin",
+   "scope": "site",
+   "pageTypes": [
+    "any"
+   ],
+   "question": "If PAGES includes a blog, journal or academy, does it hold fewer than five real articles (see BLOG_POSTS)?",
+   "profile": "house"
+  },
+  {
+   "id": "f/site-social-links",
+   "scope": "site",
+   "pageTypes": [
+    "any"
+   ],
+   "question": "Does any link in SOCIAL_LINKS point to a social network's home page or a placeholder instead of a real profile?",
+   "profile": "house"
+  },
+  {
+   "id": "f/site-fields-vs-privacy",
+   "scope": "site",
+   "pageTypes": [
+    "any"
+   ],
+   "question": "Does any field in FORM_FIELDS collect personal data (for example ID documents, CV, bank details, phone, social handles) that PRIVACY_LINES do not mention?",
+   "withPages": [
+    "legal-privacy"
+   ]
+  },
+  {
+   "id": "f/site-earnings-covered",
+   "scope": "site",
+   "pageTypes": [
+    "any"
+   ],
+   "question": "The product pays people out. Do TERMS_AND_PAYMENT_LINES fail to describe who can earn, how earnings are withdrawn and how disputes work?",
+   "requires": "payouts",
+   "withPages": [
+    "legal-terms",
+    "legal-payment"
+   ]
+  },
+  {
+   "id": "f/pair-contradiction",
+   "scope": "pair",
+   "pageTypes": [
+    "any"
+   ],
+   "question": "Does statement {id} contradict another statement in STATEMENTS (a different number, rule, spec, name, date or process for the same thing)?"
+  },
+  {
+   "id": "f/pair-pricing-vs-payment",
+   "scope": "pair",
+   "pageTypes": [
+    "pricing",
+    "legal-payment"
+   ],
+   "question": "Do PAGE_A and PAGE_B state different prices, credit rates, currencies, top-up limits, packs or ways to pay?",
+   "pair": [
+    [
+     "pricing"
+    ],
+    [
+     "legal-payment",
+     "legal-terms",
+     "faq"
+    ]
+   ]
+  },
+  {
+   "id": "f/pair-faq-vs-policy",
+   "scope": "pair",
+   "pageTypes": [
+    "faq",
+    "legal-refund",
+    "legal-terms",
+    "legal-privacy"
+   ],
+   "question": "Does any answer in PAGE_A contradict a rule in PAGE_B?",
+   "pair": [
+    [
+     "faq",
+     "pricing",
+     "contact-support"
+    ],
+    [
+     "legal-refund",
+     "legal-terms",
+     "legal-privacy",
+     "legal-payment",
+     "legal-other"
+    ]
+   ]
+  },
+  {
+   "id": "f/pair-refund-vs-cancellation",
+   "scope": "pair",
+   "pageTypes": [
+    "legal-refund",
+    "legal-other"
+   ],
+   "question": "Does PAGE_B largely repeat the rules of PAGE_A, so that one of the two documents is redundant, or do they state different rules for the same case?",
+   "pair": [
+    [
+     "legal-refund"
+    ],
+    [
+     "legal-other"
+    ]
+   ],
+   "profile": "house"
+  },
+  {
+   "id": "f/pair-experts-vs-terms",
+   "scope": "pair",
+   "pageTypes": [
+    "experts-or-specialists",
+    "legal-other"
+   ],
+   "question": "Do PAGE_A and PAGE_B state different fees, payout amounts, payout timings or rules for specialists?",
+   "requires": "specialists",
+   "pair": [
+    [
+     "experts-or-specialists",
+     "careers"
+    ],
+    [
+     "legal-other",
+     "legal-terms",
+     "legal-payment"
+    ]
+   ],
+   "profile": "house"
+  },
+  {
+   "id": "f/pair-duplicate-pages",
+   "scope": "pair",
+   "pageTypes": [
+    "any"
+   ],
+   "question": "Do PAGE_A and PAGE_B cover the same subject with largely the same content, so one of them is redundant?",
+   "pair": "overlap"
+  },
+  {
+   "id": "f/legal-ending-company-block",
+   "scope": "page",
+   "pageTypes": [
+    "legal-terms",
+    "legal-privacy",
+    "legal-cookies",
+    "legal-refund",
+    "legal-payment",
+    "legal-aml",
+    "legal-other"
+   ],
+   "question": "Does this policy page end with a full contact section that repeats company data (company name, registered address, company number) instead of one short line with the support email or a contact link?",
+   "profile": "house"
+  },
+  {
+   "id": "f/auth-redundant-switch-copy",
+   "scope": "page",
+   "pageTypes": [
+    "auth"
+   ],
+   "question": "Does this sign-in or sign-up page offer a sign-in/sign-up switch or tabs AND also a line such as 'Already have an account? Log in' or 'Don't have an account? Sign up' that repeats it?",
+   "profile": "house"
+  },
+  {
+   "id": "f/cookie-third-party-unbacked",
+   "scope": "page",
+   "pageTypes": [
+    "legal-cookies",
+    "legal-privacy"
+   ],
+   "question": "Does the page describe third-party cookies (hosting, CDN, security, advertising, analytics) as being set, when the FACTS do not list those cookies or the only third party is analytics loaded after consent?",
+   "profile": "house",
+   "facts": true
+  }
+ ]
+}

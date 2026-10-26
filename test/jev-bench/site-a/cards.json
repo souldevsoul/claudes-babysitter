@@ -1,0 +1,1763 @@
+{
+ "about": "Site A: 140 text cards a human tester filed on one product in one day (copy, terms, contradictions, promises), labelled by kind with the pages and the key fragments a finding must quote. Anonymised: names replaced consistently in the cards and in pages.json.",
+ "cards": [
+  {
+   "id": "A001",
+   "kind": "internal",
+   "pages": [
+    "/"
+   ],
+   "keys": [
+    "CSRF",
+    "carry no switch",
+    "runs neither"
+   ],
+   "expect": "internal on /: 'CSRF' / 'carry no switch' / 'runs neither'"
+  },
+  {
+   "id": "A002",
+   "kind": "count",
+   "pages": [
+    "/"
+   ],
+   "keys": [
+    "six open models"
+   ],
+   "expect": "count on /: 'six open models'"
+  },
+  {
+   "id": "A003",
+   "kind": "not-yet",
+   "pages": [
+    "/"
+   ],
+   "keys": [
+    "not open yet"
+   ],
+   "expect": "not-yet on /: 'not open yet'"
+  },
+  {
+   "id": "A004",
+   "kind": "contradiction",
+   "pages": [
+    "/"
+   ],
+   "keys": [
+    "CSV or TXT",
+    "JSON Lines"
+   ],
+   "expect": "contradiction on /: 'CSV or TXT' / 'JSON Lines'"
+  },
+  {
+   "id": "A005",
+   "kind": "other",
+   "pages": [
+    "/"
+   ],
+   "keys": [
+    "182.83"
+   ],
+   "expect": "other on /: '182.83'"
+  },
+  {
+   "id": "A006",
+   "kind": "style",
+   "pages": [
+    "/"
+   ],
+   "keys": [
+    "Quickest way to a working fine-tune"
+   ],
+   "expect": "style on /: 'Quickest way to a working fine-tune'"
+  },
+  {
+   "id": "A010",
+   "kind": "negative",
+   "pages": [
+    "(header and footer)",
+    "/"
+   ],
+   "keys": [
+    "No telephone line"
+   ],
+   "expect": "negative on (header and footer), /: 'No telephone line'"
+  },
+  {
+   "id": "A011",
+   "kind": "not-yet",
+   "pages": [
+    "/recipes"
+   ],
+   "keys": [
+    "not open yet"
+   ],
+   "expect": "not-yet on /recipes: 'not open yet'"
+  },
+  {
+   "id": "A012",
+   "kind": "one-page",
+   "pages": [
+    "/recipes"
+   ],
+   "keys": [
+    "Fine-tune this model"
+   ],
+   "expect": "one-page on /recipes: 'Fine-tune this model'"
+  },
+  {
+   "id": "A013",
+   "kind": "one-page",
+   "pages": [
+    "/recipes"
+   ],
+   "keys": [
+    "smaller GPU tier",
+    "QLoRA"
+   ],
+   "expect": "one-page on /recipes: 'smaller GPU tier' / 'QLoRA'"
+  },
+  {
+   "id": "A014",
+   "kind": "unclear",
+   "pages": [
+    "/recipes"
+   ],
+   "keys": [
+    "rate ×1",
+    "×1.15",
+    "×1.6"
+   ],
+   "expect": "unclear on /recipes: 'rate ×1' / '×1.15' / '×1.6'"
+  },
+  {
+   "id": "A015",
+   "kind": "dash",
+   "pages": [
+    "/recipes"
+   ],
+   "keys": [
+    "—"
+   ],
+   "expect": "dash on /recipes: '—'",
+   "rules": [
+    "CT5"
+   ]
+  },
+  {
+   "id": "A016",
+   "kind": "not-yet",
+   "pages": [
+    "/pricing"
+   ],
+   "keys": [
+    "temporarily unavailable"
+   ],
+   "expect": "not-yet on /pricing: 'temporarily unavailable'"
+  },
+  {
+   "id": "A017",
+   "kind": "not-yet",
+   "pages": [
+    "/pricing"
+   ],
+   "keys": [
+    "open on this tier yet",
+    "not open yet"
+   ],
+   "expect": "not-yet on /pricing: 'open on this tier yet' / 'not open yet'"
+  },
+  {
+   "id": "A018",
+   "kind": "contradiction",
+   "pages": [
+    "/pricing"
+   ],
+   "keys": [
+    "while a replica is up",
+    "$0.40"
+   ],
+   "expect": "contradiction on /pricing: 'while a replica is up' / '$0.40'"
+  },
+  {
+   "id": "A021",
+   "kind": "contradiction",
+   "pages": [
+    "/pricing"
+   ],
+   "keys": [
+    "from $1",
+    "€1 ($1.15)",
+    "$1.15",
+    "minimum"
+   ],
+   "expect": "contradiction on /pricing: 'from $1' / '€1 ($1.15)' / '$1.15' / 'minimum'"
+  },
+  {
+   "id": "A022",
+   "kind": "different-words",
+   "pages": [
+    "/pricing"
+   ],
+   "keys": [
+    "orchestration fee",
+    "multiplier"
+   ],
+   "expect": "different-words on /pricing: 'orchestration fee' / 'multiplier'"
+  },
+  {
+   "id": "A025",
+   "kind": "contradiction",
+   "pages": [
+    "/pricing"
+   ],
+   "keys": [
+    "$1 to $20,000",
+    "20,000"
+   ],
+   "expect": "contradiction on /pricing: '$1 to $20,000' / '20,000'",
+   "reach": "EUR mode"
+  },
+  {
+   "id": "A026",
+   "kind": "other",
+   "pages": [
+    "/pricing"
+   ],
+   "keys": [
+    "US dollars and euros"
+   ],
+   "expect": "other on /pricing: 'US dollars and euros'"
+  },
+  {
+   "id": "A027",
+   "kind": "contradiction",
+   "pages": [
+    "/how-it-works",
+    "/"
+   ],
+   "keys": [
+    "4 MB",
+    "4.2 MB"
+   ],
+   "expect": "contradiction on /how-it-works, /: '4 MB' / '4.2 MB'"
+  },
+  {
+   "id": "A028",
+   "kind": "contradiction",
+   "pages": [
+    "/how-it-works",
+    "/"
+   ],
+   "keys": [
+    "JSON Lines",
+    "CSV or TXT"
+   ],
+   "expect": "contradiction on /how-it-works, /: 'JSON Lines' / 'CSV or TXT'"
+  },
+  {
+   "id": "A029",
+   "kind": "count",
+   "pages": [
+    "/how-it-works"
+   ],
+   "keys": [
+    "six open models",
+    "one of six"
+   ],
+   "expect": "count on /how-it-works: 'six open models' / 'one of six'"
+  },
+  {
+   "id": "A030",
+   "kind": "different-words",
+   "pages": [
+    "/how-it-works"
+   ],
+   "keys": [
+    "Full fine-tune — Max",
+    "Max quality"
+   ],
+   "expect": "different-words on /how-it-works: 'Full fine-tune — Max' / 'Max quality'"
+  },
+  {
+   "id": "A031",
+   "kind": "contradiction",
+   "pages": [
+    "/how-it-works",
+    "/"
+   ],
+   "keys": [
+    "four steps"
+   ],
+   "expect": "contradiction on /how-it-works, /: 'four steps'"
+  },
+  {
+   "id": "A032",
+   "kind": "dash",
+   "pages": [
+    "/how-it-works"
+   ],
+   "keys": [
+    "—"
+   ],
+   "expect": "dash on /how-it-works: '—'",
+   "rules": [
+    "CT5"
+   ]
+  },
+  {
+   "id": "A035",
+   "kind": "internal",
+   "pages": [
+    "/docs"
+   ],
+   "keys": [
+    "vercel.app"
+   ],
+   "expect": "internal on /docs: 'vercel.app'"
+  },
+  {
+   "id": "A036",
+   "kind": "not-yet",
+   "pages": [
+    "/docs"
+   ],
+   "keys": [
+    "Open today",
+    "not open"
+   ],
+   "expect": "not-yet on /docs: 'Open today' / 'not open'"
+  },
+  {
+   "id": "A037",
+   "kind": "different-words",
+   "pages": [
+    "/docs",
+    "/pricing"
+   ],
+   "keys": [
+    "routing fee",
+    "1,000 requests"
+   ],
+   "expect": "different-words on /docs, /pricing: 'routing fee' / '1,000 requests'"
+  },
+  {
+   "id": "A039",
+   "kind": "count",
+   "pages": [
+    "/features"
+   ],
+   "keys": [
+    "Six base models",
+    "six"
+   ],
+   "expect": "count on /features: 'Six base models' / 'six'"
+  },
+  {
+   "id": "A040",
+   "kind": "contradiction",
+   "pages": [
+    "/features"
+   ],
+   "keys": [
+    "quality ceiling",
+    "full fine-tune"
+   ],
+   "expect": "contradiction on /features: 'quality ceiling' / 'full fine-tune'"
+  },
+  {
+   "id": "A041",
+   "kind": "promise",
+   "pages": [
+    "/features"
+   ],
+   "keys": [
+    "step count"
+   ],
+   "expect": "promise on /features: 'step count'"
+  },
+  {
+   "id": "A042",
+   "kind": "not-yet",
+   "pages": [
+    "/faq"
+   ],
+   "keys": [
+    "temporarily unavailable"
+   ],
+   "expect": "not-yet on /faq: 'temporarily unavailable'"
+  },
+  {
+   "id": "A043",
+   "kind": "one-page",
+   "pages": [
+    "/faq"
+   ],
+   "keys": [
+    "a few cents"
+   ],
+   "expect": "one-page on /faq: 'a few cents'"
+  },
+  {
+   "id": "A044",
+   "kind": "contradiction",
+   "pages": [
+    "/faq"
+   ],
+   "keys": [
+    "positive balance",
+    "above zero",
+    "covers the estimate"
+   ],
+   "expect": "contradiction on /faq: 'positive balance' / 'above zero' / 'covers the estimate'"
+  },
+  {
+   "id": "A045",
+   "kind": "not-yet",
+   "pages": [
+    "/faq"
+   ],
+   "keys": [
+    "not open yet",
+    "Today:"
+   ],
+   "expect": "not-yet on /faq: 'not open yet' / 'Today:'"
+  },
+  {
+   "id": "A046",
+   "kind": "unclear",
+   "pages": [
+    "/faq"
+   ],
+   "keys": [
+    "from 1 to 20,000"
+   ],
+   "expect": "unclear on /faq: 'from 1 to 20,000'"
+  },
+  {
+   "id": "A047",
+   "kind": "other",
+   "pages": [
+    "/faq"
+   ],
+   "keys": [
+    "/contact"
+   ],
+   "expect": "other on /faq: '/contact'"
+  },
+  {
+   "id": "A048",
+   "kind": "not-yet",
+   "pages": [
+    "/about"
+   ],
+   "keys": [
+    "temporarily unavailable"
+   ],
+   "expect": "not-yet on /about: 'temporarily unavailable'"
+  },
+  {
+   "id": "A049",
+   "kind": "jargon",
+   "pages": [
+    "/about"
+   ],
+   "keys": [
+    "auto_stop_at_zero"
+   ],
+   "expect": "jargon on /about: 'auto_stop_at_zero'"
+  },
+  {
+   "id": "A050",
+   "kind": "different-words",
+   "pages": [
+    "/about",
+    "/"
+   ],
+   "keys": [
+    "dataset in, weights out",
+    "—"
+   ],
+   "expect": "different-words on /about, /: 'dataset in, weights out' / '—'"
+  },
+  {
+   "id": "A051",
+   "kind": "different-words",
+   "pages": [
+    "/about"
+   ],
+   "keys": [
+    "telephone line"
+   ],
+   "expect": "different-words on /about: 'telephone line'"
+  },
+  {
+   "id": "A054",
+   "kind": "dash",
+   "pages": [
+    "/blog"
+   ],
+   "keys": [
+    "—"
+   ],
+   "expect": "dash on /blog: '—'",
+   "rules": [
+    "CT5"
+   ]
+  },
+  {
+   "id": "A055",
+   "kind": "different-words",
+   "pages": [
+    "/blog"
+   ],
+   "keys": [
+    "vs.",
+    " vs "
+   ],
+   "expect": "different-words on /blog: 'vs.' / ' vs '"
+  },
+  {
+   "id": "A056",
+   "kind": "other",
+   "pages": [
+    "/blog"
+   ],
+   "keys": [
+    "Rows per page",
+    "per page"
+   ],
+   "expect": "other on /blog: 'Rows per page' / 'per page'"
+  },
+  {
+   "id": "A057",
+   "kind": "other",
+   "pages": [
+    "/blog/managed-vs-diy-fine-tuning",
+    "/blog/dataset-licensing-and-you",
+    "/blog/understanding-the-loss-curve",
+    "/blog/choosing-a-recipe",
+    "/blog/getting-started-with-acmerun",
+    "/blog"
+   ],
+   "keys": [],
+   "expect": "other on /blog/managed-vs-diy-fine-tuning, /blog/dataset-licensing-and-you, /blog/understanding-the-loss-curve, /blog/choosing-a-recipe, /blog/getting-started-with-acmerun, /blog: ",
+   "rules": [
+    "f/page-thin",
+    "jev/thin-post",
+    "f/site-blog-thin"
+   ]
+  },
+  {
+   "id": "A059",
+   "kind": "not-yet",
+   "pages": [
+    "/security"
+   ],
+   "keys": [
+    "temporarily unavailable",
+    "card details"
+   ],
+   "expect": "not-yet on /security: 'temporarily unavailable' / 'card details'"
+  },
+  {
+   "id": "A060",
+   "kind": "contradiction",
+   "pages": [
+    "/security"
+   ],
+   "keys": [
+    "never uploaded",
+    "never leave"
+   ],
+   "expect": "contradiction on /security: 'never uploaded' / 'never leave'"
+  },
+  {
+   "id": "A061",
+   "kind": "not-yet",
+   "pages": [
+    "/security"
+   ],
+   "keys": [
+    "not configured yet"
+   ],
+   "expect": "not-yet on /security: 'not configured yet'"
+  },
+  {
+   "id": "A062",
+   "kind": "negative",
+   "pages": [
+    "/security"
+   ],
+   "keys": [
+    "telephone line"
+   ],
+   "expect": "negative on /security: 'telephone line'"
+  },
+  {
+   "id": "A063",
+   "kind": "dash",
+   "pages": [
+    "/security"
+   ],
+   "keys": [
+    "—"
+   ],
+   "expect": "dash on /security: '—'",
+   "rules": [
+    "CT5"
+   ]
+  },
+  {
+   "id": "A065",
+   "kind": "legal",
+   "pages": [
+    "/terms"
+   ],
+   "keys": [
+    "company or other organisation",
+    "organisation"
+   ],
+   "expect": "legal on /terms: 'company or other organisation' / 'organisation'"
+  },
+  {
+   "id": "A066",
+   "kind": "not-yet",
+   "pages": [
+    "/terms"
+   ],
+   "keys": [
+    "temporarily unavailable",
+    "as soon as a payment is authorised"
+   ],
+   "expect": "not-yet on /terms: 'temporarily unavailable' / 'as soon as a payment is authorised'"
+  },
+  {
+   "id": "A067",
+   "kind": "one-page",
+   "pages": [
+    "/terms"
+   ],
+   "keys": [
+    "country restriction",
+    "Russia"
+   ],
+   "expect": "one-page on /terms: 'country restriction' / 'Russia'"
+  },
+  {
+   "id": "A068",
+   "kind": "contradiction",
+   "pages": [
+    "/terms",
+    "/security"
+   ],
+   "keys": [
+    "delete control",
+    "per-run delete"
+   ],
+   "expect": "contradiction on /terms, /security: 'delete control' / 'per-run delete'"
+  },
+  {
+   "id": "A069",
+   "kind": "contradiction",
+   "pages": [
+    "/terms",
+    "/security"
+   ],
+   "keys": [
+    "private storage",
+    "never uploaded"
+   ],
+   "expect": "contradiction on /terms, /security: 'private storage' / 'never uploaded'"
+  },
+  {
+   "id": "A070",
+   "kind": "other",
+   "pages": [
+    "/terms"
+   ],
+   "keys": [
+    "last-updated"
+   ],
+   "expect": "other on /terms: 'last-updated'"
+  },
+  {
+   "id": "A071",
+   "kind": "one-page",
+   "pages": [
+    "/terms"
+   ],
+   "keys": [
+    "per second",
+    "charged once"
+   ],
+   "expect": "one-page on /terms: 'per second' / 'charged once'"
+  },
+  {
+   "id": "A072",
+   "kind": "contradiction",
+   "pages": [
+    "/terms"
+   ],
+   "keys": [
+    "valid payment method"
+   ],
+   "expect": "contradiction on /terms: 'valid payment method'"
+  },
+  {
+   "id": "A073",
+   "kind": "not-yet",
+   "pages": [
+    "/terms"
+   ],
+   "keys": [
+    "no email yet"
+   ],
+   "expect": "not-yet on /terms: 'no email yet'"
+  },
+  {
+   "id": "A074",
+   "kind": "contradiction",
+   "pages": [
+    "/terms"
+   ],
+   "keys": [
+    "$1.15",
+    "rate shown when you pay"
+   ],
+   "expect": "contradiction on /terms: '$1.15' / 'rate shown when you pay'"
+  },
+  {
+   "id": "A075",
+   "kind": "dash",
+   "pages": [
+    "/terms"
+   ],
+   "keys": [
+    "—"
+   ],
+   "expect": "dash on /terms: '—'",
+   "rules": [
+    "CT5"
+   ]
+  },
+  {
+   "id": "A076",
+   "kind": "style",
+   "pages": [
+    "/terms"
+   ],
+   "keys": [
+    "Dataset & weights ownership",
+    "Dataset & Weights"
+   ],
+   "expect": "style on /terms: 'Dataset & weights ownership' / 'Dataset & Weights'",
+   "rules": [
+    "CT28"
+   ]
+  },
+  {
+   "id": "A077",
+   "kind": "negative",
+   "pages": [
+    "/terms"
+   ],
+   "keys": [
+    "telephone line"
+   ],
+   "expect": "negative on /terms: 'telephone line'"
+  },
+  {
+   "id": "A078",
+   "kind": "other",
+   "pages": [
+    "/terms",
+    "/privacy",
+    "/payment-policy",
+    "/cancellation",
+    "/refund",
+    "/cookies",
+    "/acceptable-use"
+   ],
+   "keys": [
+    "last-updated"
+   ],
+   "expect": "other on /terms, /privacy, /payment-policy, /cancellation, /refund, /cookies, /acceptable-use: 'last-updated'"
+  },
+  {
+   "id": "A079",
+   "kind": "not-yet",
+   "pages": [
+    "/privacy"
+   ],
+   "keys": [
+    "today",
+    "switched on",
+    "when they open"
+   ],
+   "expect": "not-yet on /privacy: 'today' / 'switched on' / 'when they open'"
+  },
+  {
+   "id": "A080",
+   "kind": "contradiction",
+   "pages": [
+    "/privacy",
+    "/security"
+   ],
+   "keys": [
+    "dataset file you upload",
+    "private storage",
+    "never uploaded"
+   ],
+   "expect": "contradiction on /privacy, /security: 'dataset file you upload' / 'private storage' / 'never uploaded'"
+  },
+  {
+   "id": "A081",
+   "kind": "contradiction",
+   "pages": [
+    "/privacy",
+    "/security"
+   ],
+   "keys": [
+    "delete them on the run page",
+    "per-run delete"
+   ],
+   "expect": "contradiction on /privacy, /security: 'delete them on the run page' / 'per-run delete'"
+  },
+  {
+   "id": "A082",
+   "kind": "negative",
+   "pages": [
+    "/privacy"
+   ],
+   "keys": [
+    "telephone line"
+   ],
+   "expect": "negative on /privacy: 'telephone line'"
+  },
+  {
+   "id": "A083",
+   "kind": "not-yet",
+   "pages": [
+    "/payment-policy"
+   ],
+   "keys": [
+    "Temporarily Unavailable",
+    "try again later"
+   ],
+   "expect": "not-yet on /payment-policy: 'Temporarily Unavailable' / 'try again later'"
+  },
+  {
+   "id": "A084",
+   "kind": "one-page",
+   "pages": [
+    "/payment-policy"
+   ],
+   "keys": [
+    "pass through our server",
+    "leave your browser"
+   ],
+   "expect": "one-page on /payment-policy: 'pass through our server' / 'leave your browser'"
+  },
+  {
+   "id": "A085",
+   "kind": "contradiction",
+   "pages": [
+    "/payment-policy",
+    "/terms",
+    "/pricing"
+   ],
+   "keys": [
+    "€1 to €20,000",
+    "$1 to $20,000"
+   ],
+   "expect": "contradiction on /payment-policy, /terms, /pricing: '€1 to €20,000' / '$1 to $20,000'"
+  },
+  {
+   "id": "A086",
+   "kind": "contradiction",
+   "pages": [
+    "/payment-policy"
+   ],
+   "keys": [
+    "$1.15",
+    "rate shown"
+   ],
+   "expect": "contradiction on /payment-policy: '$1.15' / 'rate shown'"
+  },
+  {
+   "id": "A087",
+   "kind": "contradiction",
+   "pages": [
+    "/payment-policy",
+    "/terms"
+   ],
+   "keys": [
+    "positive balance",
+    "covers"
+   ],
+   "expect": "contradiction on /payment-policy, /terms: 'positive balance' / 'covers'"
+  },
+  {
+   "id": "A088",
+   "kind": "contradiction",
+   "pages": [
+    "/payment-policy",
+    "/terms"
+   ],
+   "keys": [
+    "Running state",
+    "fetching the dataset"
+   ],
+   "expect": "contradiction on /payment-policy, /terms: 'Running state' / 'fetching the dataset'"
+  },
+  {
+   "id": "A089",
+   "kind": "one-page",
+   "pages": [
+    "/payment-policy",
+    "/terms"
+   ],
+   "keys": [
+    "per second",
+    "single charge",
+    "once"
+   ],
+   "expect": "one-page on /payment-policy, /terms: 'per second' / 'single charge' / 'once'"
+  },
+  {
+   "id": "A090",
+   "kind": "contradiction",
+   "pages": [
+    "/payment-policy",
+    "/terms"
+   ],
+   "keys": [
+    "country restriction"
+   ],
+   "expect": "contradiction on /payment-policy, /terms: 'country restriction'"
+  },
+  {
+   "id": "A091",
+   "kind": "not-yet",
+   "pages": [
+    "/payment-policy"
+   ],
+   "keys": [
+    "no email yet"
+   ],
+   "expect": "not-yet on /payment-policy: 'no email yet'"
+  },
+  {
+   "id": "A092",
+   "kind": "other",
+   "pages": [
+    "/payment-policy"
+   ],
+   "keys": [
+    "No Restriction on Disputes",
+    "Disputes"
+   ],
+   "expect": "other on /payment-policy: 'No Restriction on Disputes' / 'Disputes'"
+  },
+  {
+   "id": "A093",
+   "kind": "dash",
+   "pages": [
+    "/payment-policy"
+   ],
+   "keys": [
+    "—"
+   ],
+   "expect": "dash on /payment-policy: '—'",
+   "rules": [
+    "CT5"
+   ]
+  },
+  {
+   "id": "A094",
+   "kind": "negative",
+   "pages": [
+    "/payment-policy"
+   ],
+   "keys": [
+    "telephone line"
+   ],
+   "expect": "negative on /payment-policy: 'telephone line'"
+  },
+  {
+   "id": "A095",
+   "kind": "contradiction",
+   "pages": [
+    "/cancellation",
+    "/terms"
+   ],
+   "keys": [
+    "no subscriptions",
+    "recurring",
+    "renews"
+   ],
+   "expect": "contradiction on /cancellation, /terms: 'no subscriptions' / 'recurring' / 'renews'"
+  },
+  {
+   "id": "A096",
+   "kind": "contradiction",
+   "pages": [
+    "/cancellation",
+    "/terms",
+    "/privacy"
+   ],
+   "keys": [
+    "per-run delete",
+    "delete control",
+    "on the run page"
+   ],
+   "expect": "contradiction on /cancellation, /terms, /privacy: 'per-run delete' / 'delete control' / 'on the run page'"
+  },
+  {
+   "id": "A097",
+   "kind": "contradiction",
+   "pages": [
+    "/cancellation",
+    "/terms",
+    "/privacy"
+   ],
+   "keys": [
+    "never leaves your device",
+    "never stored",
+    "private storage"
+   ],
+   "expect": "contradiction on /cancellation, /terms, /privacy: 'never leaves your device' / 'never stored' / 'private storage'"
+  },
+  {
+   "id": "A098",
+   "kind": "contradiction",
+   "pages": [
+    "/cancellation",
+    "/terms"
+   ],
+   "keys": [
+    "in flight",
+    "running jobs are stopped",
+    "takes effect immediately"
+   ],
+   "expect": "contradiction on /cancellation, /terms: 'in flight' / 'running jobs are stopped' / 'takes effect immediately'"
+  },
+  {
+   "id": "A099",
+   "kind": "contradiction",
+   "pages": [
+    "/cancellation"
+   ],
+   "keys": [
+    "seconds",
+    "€1"
+   ],
+   "expect": "contradiction on /cancellation: 'seconds' / '€1'"
+  },
+  {
+   "id": "A100",
+   "kind": "contradiction",
+   "pages": [
+    "/cancellation",
+    "/privacy"
+   ],
+   "keys": [
+    "avatar"
+   ],
+   "expect": "contradiction on /cancellation, /privacy: 'avatar'"
+  },
+  {
+   "id": "A101",
+   "kind": "unclear",
+   "pages": [
+    "/cancellation"
+   ],
+   "keys": [
+    "export"
+   ],
+   "expect": "unclear on /cancellation: 'export'"
+  },
+  {
+   "id": "A102",
+   "kind": "dash",
+   "pages": [
+    "/cancellation"
+   ],
+   "keys": [
+    "—"
+   ],
+   "expect": "dash on /cancellation: '—'",
+   "rules": [
+    "CT5"
+   ]
+  },
+  {
+   "id": "A103",
+   "kind": "negative",
+   "pages": [
+    "/cancellation"
+   ],
+   "keys": [
+    "telephone line"
+   ],
+   "expect": "negative on /cancellation: 'telephone line'"
+  },
+  {
+   "id": "A104",
+   "kind": "one-page",
+   "pages": [
+    "/refund"
+   ],
+   "keys": [
+    "only charged for time",
+    "minimum"
+   ],
+   "expect": "one-page on /refund: 'only charged for time' / 'minimum'"
+  },
+  {
+   "id": "A105",
+   "kind": "contradiction",
+   "pages": [
+    "/refund",
+    "/terms"
+   ],
+   "keys": [
+    "in full",
+    "restart"
+   ],
+   "expect": "contradiction on /refund, /terms: 'in full' / 'restart'"
+  },
+  {
+   "id": "A106",
+   "kind": "unclear",
+   "pages": [
+    "/refund"
+   ],
+   "keys": [
+    "currency you paid in"
+   ],
+   "expect": "unclear on /refund: 'currency you paid in'"
+  },
+  {
+   "id": "A107",
+   "kind": "unclear",
+   "pages": [
+    "/refund"
+   ],
+   "keys": [
+    "unused part",
+    "sign-up credit"
+   ],
+   "expect": "unclear on /refund: 'unused part' / 'sign-up credit'"
+  },
+  {
+   "id": "A108",
+   "kind": "negative",
+   "pages": [
+    "/refund"
+   ],
+   "keys": [
+    "telephone line"
+   ],
+   "expect": "negative on /refund: 'telephone line'"
+  },
+  {
+   "id": "A109",
+   "kind": "not-yet",
+   "pages": [
+    "/cookies"
+   ],
+   "keys": [
+    "today",
+    "yet",
+    "temporarily unavailable"
+   ],
+   "expect": "not-yet on /cookies: 'today' / 'yet' / 'temporarily unavailable'"
+  },
+  {
+   "id": "A110",
+   "kind": "other",
+   "pages": [
+    "/cookies"
+   ],
+   "keys": [
+    "leave the same storage",
+    "same storage"
+   ],
+   "expect": "other on /cookies: 'leave the same storage' / 'same storage'"
+  },
+  {
+   "id": "A111",
+   "kind": "contradiction",
+   "pages": [
+    "/cookies",
+    "(header and footer)"
+   ],
+   "keys": [
+    "csrf",
+    "callback",
+    "CSRF"
+   ],
+   "expect": "contradiction on /cookies, (header and footer): 'csrf' / 'callback' / 'CSRF'"
+  },
+  {
+   "id": "A112",
+   "kind": "jargon",
+   "pages": [
+    "/cookies"
+   ],
+   "keys": [
+    "localStorage",
+    "sessionStorage",
+    "cross-site request forgery"
+   ],
+   "expect": "jargon on /cookies: 'localStorage' / 'sessionStorage' / 'cross-site request forgery'"
+  },
+  {
+   "id": "A113",
+   "kind": "style",
+   "pages": [
+    "/cookies"
+   ],
+   "keys": [
+    "Manage Cookies",
+    "processor’s"
+   ],
+   "expect": "style on /cookies: 'Manage Cookies' / 'processor’s'"
+  },
+  {
+   "id": "A114",
+   "kind": "negative",
+   "pages": [
+    "/cookies"
+   ],
+   "keys": [
+    "telephone line"
+   ],
+   "expect": "negative on /cookies: 'telephone line'"
+  },
+  {
+   "id": "A115",
+   "kind": "contradiction",
+   "pages": [
+    "/acceptable-use",
+    "/terms"
+   ],
+   "keys": [
+    "Reselling",
+    "sublicensing",
+    "harass"
+   ],
+   "expect": "contradiction on /acceptable-use, /terms: 'Reselling' / 'sublicensing' / 'harass'"
+  },
+  {
+   "id": "A116",
+   "kind": "contradiction",
+   "pages": [
+    "/acceptable-use",
+    "/terms"
+   ],
+   "keys": [
+    "suspend",
+    "close an account"
+   ],
+   "expect": "contradiction on /acceptable-use, /terms: 'suspend' / 'close an account'"
+  },
+  {
+   "id": "A117",
+   "kind": "jargon",
+   "pages": [
+    "/acceptable-use"
+   ],
+   "keys": [
+    "CSAM",
+    "credential-stuffing",
+    "proof-of-work"
+   ],
+   "expect": "jargon on /acceptable-use: 'CSAM' / 'credential-stuffing' / 'proof-of-work'"
+  },
+  {
+   "id": "A118",
+   "kind": "dash",
+   "pages": [
+    "/acceptable-use"
+   ],
+   "keys": [
+    "—",
+    "deceptive/fraudulent"
+   ],
+   "expect": "dash on /acceptable-use: '—' / 'deceptive/fraudulent'",
+   "rules": [
+    "CT5"
+   ]
+  },
+  {
+   "id": "A119",
+   "kind": "negative",
+   "pages": [
+    "/acceptable-use"
+   ],
+   "keys": [
+    "telephone line"
+   ],
+   "expect": "negative on /acceptable-use: 'telephone line'"
+  },
+  {
+   "id": "A120",
+   "kind": "legal",
+   "pages": [
+    "/aml-policy"
+   ],
+   "keys": [
+    "five years",
+    "3-D Secure",
+    "Russia"
+   ],
+   "expect": "legal on /aml-policy: 'five years' / '3-D Secure' / 'Russia'"
+  },
+  {
+   "id": "A121",
+   "kind": "not-yet",
+   "pages": [
+    "/aml-policy"
+   ],
+   "keys": [
+    "current status",
+    "temporarily unavailable",
+    "today"
+   ],
+   "expect": "not-yet on /aml-policy: 'current status' / 'temporarily unavailable' / 'today'"
+  },
+  {
+   "id": "A122",
+   "kind": "contradiction",
+   "pages": [
+    "/aml-policy",
+    "/privacy"
+   ],
+   "keys": [
+    "billing address",
+    "acceptance record"
+   ],
+   "expect": "contradiction on /aml-policy, /privacy: 'billing address' / 'acceptance record'"
+  },
+  {
+   "id": "A123",
+   "kind": "contradiction",
+   "pages": [
+    "/aml-policy",
+    "/privacy",
+    "/cancellation"
+   ],
+   "keys": [
+    "five years",
+    "erase"
+   ],
+   "expect": "contradiction on /aml-policy, /privacy, /cancellation: 'five years' / 'erase'"
+  },
+  {
+   "id": "A124",
+   "kind": "contradiction",
+   "pages": [
+    "/aml-policy",
+    "/payment-policy",
+    "/terms"
+   ],
+   "keys": [
+    "1 to 20,000",
+    "20,000"
+   ],
+   "expect": "contradiction on /aml-policy, /payment-policy, /terms: '1 to 20,000' / '20,000'"
+  },
+  {
+   "id": "A125",
+   "kind": "contradiction",
+   "pages": [
+    "/aml-policy",
+    "/payment-policy"
+   ],
+   "keys": [
+    "covers its quote",
+    "positive balance"
+   ],
+   "expect": "contradiction on /aml-policy, /payment-policy: 'covers its quote' / 'positive balance'"
+  },
+  {
+   "id": "A126",
+   "kind": "other",
+   "pages": [
+    "/aml-policy"
+   ],
+   "keys": [
+    "VPN",
+    "circumvent"
+   ],
+   "expect": "other on /aml-policy: 'VPN' / 'circumvent'"
+  },
+  {
+   "id": "A127",
+   "kind": "jargon",
+   "pages": [
+    "/aml-policy"
+   ],
+   "keys": [
+    "source-of-funds",
+    "settlement exposure",
+    "tip off",
+    "3-D Secure"
+   ],
+   "expect": "jargon on /aml-policy: 'source-of-funds' / 'settlement exposure' / 'tip off' / '3-D Secure'"
+  },
+  {
+   "id": "A128",
+   "kind": "dash",
+   "pages": [
+    "/aml-policy"
+   ],
+   "keys": [
+    "—"
+   ],
+   "expect": "dash on /aml-policy: '—'",
+   "rules": [
+    "CT5"
+   ]
+  },
+  {
+   "id": "A129",
+   "kind": "negative",
+   "pages": [
+    "/aml-policy"
+   ],
+   "keys": [
+    "telephone line"
+   ],
+   "expect": "negative on /aml-policy: 'telephone line'"
+  },
+  {
+   "id": "A130",
+   "kind": "contradiction",
+   "pages": [
+    "/dashboard"
+   ],
+   "keys": [
+    "Available to fine-tune",
+    "Base models"
+   ],
+   "expect": "contradiction on /dashboard: 'Available to fine-tune' / 'Base models'"
+  },
+  {
+   "id": "A131",
+   "kind": "unclear",
+   "pages": [
+    "/dashboard"
+   ],
+   "keys": [
+    "Credit +",
+    "+$3.00",
+    "Credit"
+   ],
+   "expect": "unclear on /dashboard: 'Credit +' / '+$3.00' / 'Credit'"
+  },
+  {
+   "id": "A132",
+   "kind": "contradiction",
+   "pages": [
+    "/runs/new",
+    "/security"
+   ],
+   "keys": [
+    "on our side",
+    "never uploaded"
+   ],
+   "expect": "contradiction on /runs/new, /security: 'on our side' / 'never uploaded'"
+  },
+  {
+   "id": "A133",
+   "kind": "contradiction",
+   "pages": [
+    "/runs/new",
+    "/terms",
+    "/payment-policy"
+   ],
+   "keys": [
+    "starting the GPU",
+    "fetching the dataset"
+   ],
+   "expect": "contradiction on /runs/new, /terms, /payment-policy: 'starting the GPU' / 'fetching the dataset'"
+  },
+  {
+   "id": "A134",
+   "kind": "one-page",
+   "pages": [
+    "/runs/new"
+   ],
+   "keys": [
+    "per second",
+    "one entry"
+   ],
+   "expect": "one-page on /runs/new: 'per second' / 'one entry'"
+  },
+  {
+   "id": "A135",
+   "kind": "contradiction",
+   "pages": [
+    "/runs/new",
+    "/"
+   ],
+   "keys": [
+    "JSON Lines",
+    "CSV"
+   ],
+   "expect": "contradiction on /runs/new, /: 'JSON Lines' / 'CSV'"
+  },
+  {
+   "id": "A136",
+   "kind": "contradiction",
+   "pages": [
+    "/runs/new",
+    "/acceptable-use",
+    "/terms"
+   ],
+   "keys": [
+    "won't train a model",
+    "licensed to use"
+   ],
+   "expect": "contradiction on /runs/new, /acceptable-use, /terms: \"won't train a model\" / 'licensed to use'"
+  },
+  {
+   "id": "A137",
+   "kind": "one-page",
+   "pages": [
+    "/settings"
+   ],
+   "keys": [
+    "no API keys",
+    "API keys"
+   ],
+   "expect": "one-page on /settings: 'no API keys' / 'API keys'"
+  },
+  {
+   "id": "A138",
+   "kind": "promise",
+   "pages": [
+    "/settings",
+    "/privacy",
+    "/terms"
+   ],
+   "keys": [
+    "everything",
+    "Export"
+   ],
+   "expect": "promise on /settings, /privacy, /terms: 'everything' / 'Export'"
+  },
+  {
+   "id": "A139",
+   "kind": "jargon",
+   "pages": [
+    "/settings"
+   ],
+   "keys": [
+    "auth_provider",
+    "credentials"
+   ],
+   "expect": "jargon on /settings: 'auth_provider' / 'credentials'"
+  },
+  {
+   "id": "A140",
+   "kind": "contradiction",
+   "pages": [
+    "/settings",
+    "/cancellation"
+   ],
+   "keys": [
+    "name, email address and password",
+    "avatar"
+   ],
+   "expect": "contradiction on /settings, /cancellation: 'name, email address and password' / 'avatar'"
+  },
+  {
+   "id": "A141",
+   "kind": "dash",
+   "pages": [
+    "/settings"
+   ],
+   "keys": [
+    "—"
+   ],
+   "expect": "dash on /settings: '—'",
+   "rules": [
+    "CT5"
+   ]
+  },
+  {
+   "id": "A143",
+   "kind": "different-words",
+   "pages": [
+    "/billing",
+    "/dashboard"
+   ],
+   "keys": [
+    "ADD CREDIT",
+    "Add credit"
+   ],
+   "expect": "different-words on /billing, /dashboard: 'ADD CREDIT' / 'Add credit'"
+  },
+  {
+   "id": "A144",
+   "kind": "contradiction",
+   "pages": [
+    "/billing"
+   ],
+   "keys": [
+    "$1 to $20,000"
+   ],
+   "expect": "contradiction on /billing: '$1 to $20,000'",
+   "reach": "dialog"
+  },
+  {
+   "id": "A145",
+   "kind": "other",
+   "pages": [
+    "/billing"
+   ],
+   "keys": [
+    "rate",
+    "kept in US"
+   ],
+   "expect": "other on /billing: 'rate' / 'kept in US'",
+   "reach": "dialog, EUR mode"
+  },
+  {
+   "id": "A146",
+   "kind": "promise",
+   "pages": [
+    "/billing"
+   ],
+   "keys": [
+    "Continue to payment"
+   ],
+   "expect": "promise on /billing: 'Continue to payment'",
+   "reach": "dialog"
+  },
+  {
+   "id": "A151",
+   "kind": "math",
+   "pages": [
+    "/runs/new"
+   ],
+   "keys": [
+    "€0.0179",
+    "0.0179"
+   ],
+   "expect": "math on /runs/new: '€0.0179' / '0.0179'",
+   "reach": "needs an upload"
+  },
+  {
+   "id": "A153",
+   "kind": "contradiction",
+   "pages": [
+    "/runs/[id]"
+   ],
+   "keys": [
+    "1.0012"
+   ],
+   "expect": "contradiction on /runs/[id]: '1.0012'",
+   "reach": "needs a finished job"
+  },
+  {
+   "id": "A155",
+   "kind": "unclear",
+   "pages": [
+    "/runs/[id]"
+   ],
+   "keys": [
+    "sha256"
+   ],
+   "expect": "unclear on /runs/[id]: 'sha256'",
+   "reach": "needs a finished job"
+  },
+  {
+   "id": "A156",
+   "kind": "contradiction",
+   "pages": [
+    "/runs/[id]"
+   ],
+   "keys": [
+    "1.0012"
+   ],
+   "expect": "contradiction on /runs/[id]: '1.0012'",
+   "reach": "needs a finished job"
+  },
+  {
+   "id": "A158",
+   "kind": "contradiction",
+   "pages": [
+    "/runs/[id]",
+    "/pricing"
+   ],
+   "keys": [
+    "183",
+    "182.83"
+   ],
+   "expect": "contradiction on /runs/[id], /pricing: '183' / '182.83'",
+   "reach": "needs a finished job"
+  },
+  {
+   "id": "A159",
+   "kind": "different-words",
+   "pages": [
+    "/runs/[id]",
+    "/settings",
+    "/terms"
+   ],
+   "keys": [
+    "deployment key",
+    "API key"
+   ],
+   "expect": "different-words on /runs/[id], /settings, /terms: 'deployment key' / 'API key'",
+   "reach": "needs a finished job"
+  },
+  {
+   "id": "A160",
+   "kind": "promise",
+   "pages": [
+    "/runs/[id]",
+    "/terms",
+    "/privacy"
+   ],
+   "keys": [
+    "delete control",
+    "on the run page"
+   ],
+   "expect": "promise on /runs/[id], /terms, /privacy: 'delete control' / 'on the run page'",
+   "reach": "needs a finished job"
+  },
+  {
+   "id": "A162",
+   "kind": "contradiction",
+   "pages": [
+    "/billing",
+    "/runs/[id]"
+   ],
+   "keys": [
+    "1.0012"
+   ],
+   "expect": "contradiction on /billing, /runs/[id]: '1.0012'",
+   "reach": "needs a finished job"
+  },
+  {
+   "id": "A163",
+   "kind": "dash",
+   "pages": [
+    "/billing"
+   ],
+   "keys": [
+    "—"
+   ],
+   "expect": "dash on /billing: '—'",
+   "rules": [
+    "CT5"
+   ]
+  }
+ ]
+}

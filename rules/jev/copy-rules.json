@@ -1,0 +1,153 @@
+{
+ "version": "5.7.0",
+ "about": "Claude's Babysitter copy rules asked of Jev on the rendered copy, in any language (YES means a violation). `ct` names the deterministic rule the question mirrors: a hit of that rule on the same page and line is the hard finding, Jev agreeing adds nothing; Jev alone is a finding marked Jev (≥ jev.min) or 'unsure, check by hand'.",
+ "rules": [
+  {
+   "id": "jev/not-yet",
+   "ct": "CT1",
+   "scope": "line",
+   "pageTypes": [
+    "any"
+   ],
+   "question": "Does any line in LINES say that a feature, option, model, plan, payment, email or part of the product is not available yet, temporarily unavailable, coming soon, not open yet, not switched on, not configured yet or opens later, or describe the product's current internal status ('today', 'for now', 'at the moment', 'once it opens', 'until it is live')? Copy must be written as if the product works; only the pay button or the payment dialog itself may say a payment is unavailable."
+  },
+  {
+   "id": "jev/build-note",
+   "ct": "CT1",
+   "scope": "line",
+   "pageTypes": [
+    "any"
+   ],
+   "question": "Does any line in LINES show an internal, developer, configuration or deployment detail to a customer (a feature flag or variable name, a database or library detail, 'this build', 'seed data', 'not configured', a preview host name, how the site is implemented)?"
+  },
+  {
+   "id": "jev/negative-statement",
+   "ct": "CT1",
+   "scope": "line",
+   "pageTypes": [
+    "any"
+   ],
+   "question": "Does any line in LINES tell the reader something the product does NOT have, do or offer when nobody asked (for example 'We do not operate a telephone line', 'There is no X', 'We don't do Y'), instead of saying what it does?"
+  },
+  {
+   "id": "jev/self-defence",
+   "ct": "CT1",
+   "scope": "line",
+   "pageTypes": [
+    "any"
+   ],
+   "question": "Does any line in LINES justify or defend a choice to the reader, admit a weakness of the product's own measure (for example 'it can be circumvented'), or explain at length why something is the way it is, where a plain statement would do?"
+  },
+  {
+   "id": "jev/jargon",
+   "scope": "line",
+   "pageTypes": [
+    "any"
+   ],
+   "question": "Does any line in LINES use technical jargon, an internal identifier (snake_case, camelCase, a code value, a storage key or cookie name shown as prose), or an unexplained abbreviation that a typical customer of this site would not understand?",
+   "notTypes": [
+    "blog-docs"
+   ],
+   "min": 0.85
+  },
+  {
+   "id": "jev/unexplained-value",
+   "scope": "line",
+   "pageTypes": [
+    "any"
+   ],
+   "question": "Does any line in LINES show a number, multiplier, rate, code or value (for example 'rate ×1.6', 'x2', 'tier 3') without saying what it is, what it applies to or what unit it is in?",
+   "notTypes": [
+    "blog-docs"
+   ]
+  },
+  {
+   "id": "jev/count",
+   "ct": "CT27",
+   "scope": "page",
+   "pageTypes": [
+    "any"
+   ],
+   "question": "Does any line in LINES state a number of things ('six models', 'four steps', 'three plans', 'seven documents') that differs from the number of such things listed or shown on the same page?"
+  },
+  {
+   "id": "jev/math",
+   "ct": "CT27",
+   "scope": "line",
+   "pageTypes": [
+    "any"
+   ],
+   "question": "Does any line in LINES contain a calculation, worked example, total or conversion (rate × time, a sum, a minimum against a price, an amount in two currencies) whose numbers do not add up?"
+  },
+  {
+   "id": "jev/set-style",
+   "ct": "CT28",
+   "scope": "page",
+   "pageTypes": [
+    "any"
+   ],
+   "question": "Do the items of one list, card set or table in LINES use a different form from each other (some descriptions end with a period and some do not, a colon in one and a dash in another, Title Case in one and sentence case in another, a heading written in a different case than its sibling headings)?"
+  },
+  {
+   "id": "jev/same-thing-two-names",
+   "ct": "CT19",
+   "scope": "page",
+   "pageTypes": [
+    "any"
+   ],
+   "question": "Does LINES call one thing (a fee, key, plan, button, action, role, document or concept) by two different names, or spell the same word or construction two ways ('vs.' and 'vs', 'e-mail' and 'email', 'Sign in' and 'Log in')?"
+  },
+  {
+   "id": "jev/control-says-otherwise",
+   "ct": "CT20",
+   "scope": "page",
+   "pageTypes": [
+    "any"
+   ],
+   "question": "Does LINES offer a button, link or action (for example 'Fine-tune this model', 'Continue to payment', 'Add credit') for something the same page says is not available, not open or not possible?"
+  },
+  {
+   "id": "jev/raw-path",
+   "ct": "CT12",
+   "scope": "line",
+   "pageTypes": [
+    "any"
+   ],
+   "question": "Does any line in LINES send the reader to another page by printing its raw path or URL in the sentence ('at /contact', 'see /pricing') instead of naming the page as a link?"
+  },
+  {
+   "id": "jev/heading-two-topics",
+   "scope": "line",
+   "pageTypes": [
+    "any"
+   ],
+   "question": "Is any section heading in LINES (lines marked ##) a joining of two unrelated topics, or a heading that does not describe the text under it?"
+  },
+  {
+   "id": "jev/thin-post",
+   "scope": "page",
+   "pageTypes": [
+    "blog-docs"
+   ],
+   "question": "Is this article or post so short (one or two paragraphs) that it does not cover what its title promises?"
+  },
+  {
+   "id": "jev/legal-names",
+   "ct": "CT15",
+   "scope": "site",
+   "pageTypes": [
+    "any"
+   ],
+   "question": "In LINK_NAMES, LEGAL_STRUCTURE and PAGES, does any legal document or page go by two different names (its footer label, its title and how other pages mention it)?"
+  },
+  {
+   "id": "jev/missing-page",
+   "ct": "CT22",
+   "scope": "site",
+   "pageTypes": [
+    "any"
+   ],
+   "question": "Does any name in DOCUMENT_MENTIONS refer to a page or document of this site that is not in PAGES (a policy, agreement, help centre or page the site names but does not have)?"
+  }
+ ]
+}

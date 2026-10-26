@@ -19,6 +19,10 @@
 //   prepare          → playwright/prepare.mjs (login + crawl)
 //   test-ui [...]    → playwright test with the bundled config
 //   content [repo] [--offline] → static copy lint: i18n files of every locale, JSX copy, email addresses (MX)
+//   text [--facts FILE] [--no-jev] [--from-pages FILE] [--min 0.7] [--budget USD]
+//                    → the text pass: every route read once per locale × role at desktop width; the copy rules on that
+//                      one read, plus Jev (copy rules as questions, the text rule catalog, contradictions between and
+//                      inside pages, one term per concept → .babysitter/terms.json); merged into findings.json
 //   e2e [--skip-prepare] [--quick] [--only ui|acceptance|content|product] [--last-failed] [--express [--no-cache]]
 //       [--changed | --since <ref>] [...playwright args]
 //                    → prepare (login per role + crawl + languages) + the UI checks + states / languages / scroll
@@ -90,6 +94,7 @@ switch (cmd) {
     break;
   }
   case "content": node("bin/content-lint.mjs", rest); break;
+  case "text": node("bin/text-pass.mjs", rest); break;
   case "audit": {
     // audit --diff <base>: the CI gate — only problems this branch adds since it left <base> fail the run
     const i = rest.indexOf("--diff");
