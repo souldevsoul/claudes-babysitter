@@ -148,6 +148,15 @@
     "any"
    ],
    "question": "Does any name in DOCUMENT_MENTIONS refer to a page or document of this site that is not in PAGES (a policy, agreement, help centre or page the site names but does not have)?"
+  },
+  {
+   "id": "jev/site-two-names",
+   "ct": "CT21",
+   "scope": "site",
+   "pageTypes": [
+    "any"
+   ],
+   "question": "In CONTROL_LABELS and LINK_NAMES, does the site call one action, page or thing by two different names, or write one label two ways on different pages (different words, brackets, capitals or spelling, for example 'Add credit' and '[ADD CREDIT]', 'Docs' and 'API Docs', 'vs.' and 'vs')?"
   }
  ]
 }
