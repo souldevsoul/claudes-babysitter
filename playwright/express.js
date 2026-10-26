@@ -130,6 +130,8 @@ shimTest.skip = (...args) => {
 shimTest.fixme = (...args) => (cur() || collecting ? shimTest.skip(...args) : base.fixme(...args));
 shimTest.slow = (...args) => { const c = cur(); if (c) { if (!args.length || args[0]) c.info.setTimeout(c.rec.timeout * 3); return; } return base.slow(...args); };
 shimTest.info = () => cur()?.info ?? base.info();
+// playwright/skip.js notes a decision on the running check: an express page check's own info, not its page test's
+globalThis.__bsTestInfo = () => shimTest.info();
 shimTest.setTimeout = (ms) => { const c = cur(); if (c) return c.info.setTimeout(ms); return base.setTimeout(ms); };
 shimTest.use = (o) => (collecting ? void collecting.node.uses.push(o) : base.use(o));
 shimTest.beforeEach = (fn) => (collecting ? void collecting.node.hooks.push(fn) : base.beforeEach(fn));
@@ -717,7 +719,7 @@ async function runContainer(group, fx, info) {
   const containerId = `${info.titlePath.slice(0, -1).join(" › ")} @ ${info.project.name}`;
   const base0 = { timeout: info.timeout || 0, started, request: fx.request };
   const rules = selectRules(group, info, containerId);
-  if (!rules.length) base.skip(true, "express: no check of this page matches the filter (-g / --last-failed)");
+  if (!rules.length) base.skip(true, "scope: *: express: no check of this page matches the filter (-g / --last-failed)");
   const S = new Shared(fx.browser, info, group, fx.opts);
   const shared = { containerId, entry: CACHE ? X.readEntry(STATE_DIR, containerId) : null };
   const out = [];

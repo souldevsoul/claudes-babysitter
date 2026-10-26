@@ -11,6 +11,7 @@ import { WALLET_RE } from "./checks/run.js";
 import { existsSync, readFileSync } from "node:fs";
 import { resolve } from "node:path";
 import { loadConfig, loadRoutes, ROOT, authTag, storageFor } from "./project.js";
+import { scope, decision } from "./skip.js";
 const cfg = loadConfig();
 const ROUTES = loadRoutes(cfg);
 const STRICT = process.env.STRICT !== "0";
@@ -71,7 +72,7 @@ for (const route of ROUTES) {
             hard(p.hard);
         });
         test("2.5 no word broken mid-word, no number split across lines; no orphan word in headings — phone widths (360 and 390) [text-overflow]", async ({ page }, info) => {
-            test.skip(!/mobile/.test(info.project.name), "narrow screens only");
+            test.skip(!/mobile/.test(info.project.name), scope("*", "narrow screens only"));
             await open(page, r);
             const a = await L.textBreaks(page);
             // 360 is its own project in the full run; a quick run (390 + 1440) checks it from the 390 project
@@ -116,7 +117,7 @@ for (const route of ROUTES) {
         test("3.6 the header stays on screen after scrolling 1000 px [sticky-header]", async ({ page }) => {
             await open(page, r);
             const s = await L.stickyHeader(page, Number(lay.stickyDistance ?? 1000));
-            test.skip(!s.applicable, s.minimal ? "a minimal header (the logo and Back to home): no navigation to keep in reach" : "no header bar at the top, or the page does not scroll 400 px");
+            test.skip(!s.applicable, s.minimal ? decision("3.6", "a minimal header (the logo and Back to home): no navigation to keep in reach") : decision("3.6", "no header bar at the top, or the page does not scroll 400 px"));
             const list = s.ok ? [] : [{ what: s.what, where: s.where }];
             if (lay.stickyHeader === false)
                 soft(list, "header scrolls away (layout.stickyHeader is false: reported, not failed)");
@@ -135,7 +136,7 @@ for (const route of ROUTES) {
             hard(d.hard);
         });
         test("1.6 buttons, button-links and clickable cards react to hover [hover-state]", async ({ page }, info) => {
-            test.skip(/mobile|tablet/.test(info.project.name), "pointer screens only");
+            test.skip(/mobile|tablet/.test(info.project.name), scope("*", "pointer screens only"));
             await open(page, r);
             const h = await L.hoverFeedback(page, Number(lay.maxHover ?? 40));
             notes("hover", h.notTested);
@@ -144,17 +145,17 @@ for (const route of ROUTES) {
         });
         // 5.5.0 (Kindred 1rto89): the hover that is there draws an even edge and does not move the card
         test("1.6 hover draws an even edge on every side and does not move the card [hover-state]", async ({ page }, info) => {
-            test.skip(/mobile|tablet/.test(info.project.name), "pointer screens only");
+            test.skip(/mobile|tablet/.test(info.project.name), scope("*", "pointer screens only"));
             await open(page, r);
             const h = await boxes.hoverEdge(page, { max: Number(lay.maxHoverEdge ?? 10) });
             soft(h.soft, "hover moves the card");
             hard(h.hard);
         });
         test("2.10 one menu on a phone: the burger and the avatar do not both open the navigation [mobile-menu]", async ({ page }, info) => {
-            test.skip(!/mobile/.test(info.project.name), "narrow screens only");
+            test.skip(!/mobile/.test(info.project.name), scope("*", "narrow screens only"));
             await open(page, r);
             const m = await L.oneMobileMenu(page);
-            test.skip(!m.applicable, "fewer than two menu toggles in the header");
+            test.skip(!m.applicable, decision("2.10", "fewer than two menu toggles in the header"));
             hard(m.hard);
         });
         test("money: amounts formatted the same way in every currency of the switcher [price-rounding currency-format number-format]", async ({ page }) => {
@@ -185,7 +186,7 @@ for (const route of ROUTES) {
  */
 test.describe("site-wide layout", () => {
     test("3.7 nav names match their pages; 6.5 one heading style per level; 1.2 ticks on one side; 2.7 one content top per shell; 2.22 one two-column rule", async ({ browser }, info) => {
-        test.skip(!/mobile-390|desktop-1440/.test(info.project.name), "run at one mobile and one desktop width");
+        test.skip(!/mobile-390|desktop-1440/.test(info.project.name), scope("*", "run at one mobile and one desktop width"));
         test.setTimeout(60_000 + ROUTES.length * 20_000);
         const pages = [];
         const heads = [];
@@ -245,7 +246,7 @@ test.describe("site-wide layout", () => {
     // 5.5.0 (Compass 5nel9b, 84u591, xivil1, zcg5fp): one credits count, one price per currency on every page and in the
     // top-up dialog; one unit and basis for one entity's rate
     test("B4 one conversion everywhere: the same credits cost the same in each currency on every page and in the top-up dialog; one unit per rate", async ({ browser }, info) => {
-        test.skip(!/desktop-1440/.test(info.project.name), "once per run");
+        test.skip(!/desktop-1440/.test(info.project.name), scope("*", "once per run"));
         const list = ROUTES.slice(0, Number(lay.moneyRoutes ?? 20));
         test.setTimeout(60_000 + list.length * 45_000);
         const records = [], prices = [], notTested = [], dialogFindings = [];
@@ -283,7 +284,7 @@ test.describe("site-wide layout", () => {
         hard([...M.conversionConflicts(records), ...M.entityPriceConflicts(prices), ...dialogFindings]);
     });
     test("6.11 favicon: present, served, the product's own (not a framework default, not another product's) [favicon]", async ({ browser }, info) => {
-        test.skip(!/desktop-1440/.test(info.project.name), "once per run");
+        test.skip(!/desktop-1440/.test(info.project.name), scope("*", "once per run"));
         const home = ROUTES.find((x) => !x.auth && x.path === "/") || ROUTES[0];
         const ctx = await browser.newContext({ ...info.project.use, baseURL: info.project.use.baseURL });
         const page = await ctx.newPage();
@@ -297,7 +298,7 @@ test.describe("site-wide layout", () => {
     // 5.5.0 (Kindred kytm39, bmlrc4): one brand mark — the footer logo is the header's, the tab icon is the mark, the
     // web manifest names the brand
     test("1.11 one brand mark: footer logo = header logo, favicon = the mark, manifest = the brand [logo-link favicon]", async ({ browser }, info) => {
-        test.skip(!/desktop-1440/.test(info.project.name), "once per run");
+        test.skip(!/desktop-1440/.test(info.project.name), scope("*", "once per run"));
         const home = ROUTES.find((x) => !x.auth && x.path === "/") || ROUTES[0];
         const ctx = await browser.newContext({ ...info.project.use, baseURL: info.project.use.baseURL });
         const page = await ctx.newPage();

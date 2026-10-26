@@ -17,6 +17,7 @@
 //   2.23 even rhythm in a list or a row of options (Compass xfm2up, iiy7tk)
 //   6.5  section headings of one look share one alignment on a page (Parallel k6c1vm)
 // Findings follow ../checks.js ({ what, where, selector, human }); needs checks.install(page).
+import { noteDecision } from "../skip.js";
 
 const HELPERS = () => {
   if (window.__bsR) return;
@@ -366,7 +367,7 @@ export async function shellTops(page) {
 /** 2.7 site-wide — the content of every page with the same shell starts at one height. [{ route, shell }] → findings */
 export function shellTopsAcross(list) {
   const with_ = list.filter((x) => x.shell);
-  if (with_.length < 2) return [];
+  if (with_.length < 2) { if (list.length >= 2) noteDecision("2.7", `fewer than 2 pages have a recognisable shell (${with_.length} of ${list.length}): content tops were not compared`); return []; }
   const m = new Map(); for (const x of with_) m.set(x.shell.contentTop, (m.get(x.shell.contentTop) || 0) + 1);
   const top = [...m].sort((a, b) => b[1] - a[1])[0][0];
   return with_.filter((x) => Math.abs(x.shell.contentTop - top) > 4).map((x) => ({ what: `the page content starts at ${x.shell.contentTop}px on ${x.route} and at ${top}px on the other account pages — one shell, one content top [2.7]`, where: `${x.route} ${x.shell.where}` }));

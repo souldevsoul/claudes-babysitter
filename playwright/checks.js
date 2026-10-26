@@ -1,4 +1,5 @@
 // Plain JavaScript on purpose: bin/micro-check.mjs imports it directly, and Node < 22.6 cannot load .ts.
+import { noteDecision } from "./skip.js";
 /** Short CSS-ish path for messages. */
 const describeFn = `
 window.__uiDescribe = (el) => {
@@ -2136,11 +2137,16 @@ export const offPalette = (page, extra = [], tolerance = 0.045) => page.evaluate
         if (rule.cssRules)
             visit(rule.cssRules);
     } };
+    // a cross-origin stylesheet (a CDN, a font host) cannot be read: its tokens are not in the palette — counted, so a
+    // "fewer than 4 colour tokens" decision says why (5.7.0)
+    let unread = 0;
     for (const sh of Array.from(document.styleSheets)) {
         try {
             visit(sh.cssRules);
         }
-        catch { }
+        catch {
+            unread++;
+        }
     }
     const probe = document.createElement("div");
     document.body.appendChild(probe);
@@ -2164,7 +2170,7 @@ export const offPalette = (page, extra = [], tolerance = 0.045) => page.evaluate
     for (const c of [[255, 255, 255], [0, 0, 0]])
         palette.push(oklab(c));
     if (palette.length < 6)
-        return { applicable: false, offenders: [] };
+        return { applicable: false, offenders: [], unread };
     const off = (css) => {
         const c = W.__uiRGBA(css);
         if (c[3] < 0.08)
@@ -2951,8 +2957,10 @@ export async function mobileMenu(page, allowLightWeights = false) {
  */
 export async function mobileMenuConsistency(page, sigs) {
     const m = await openMobileMenu(page);
-    if (!m)
+    if (!m) {
+        noteDecision("1.3/1.16", "no mobile menu could be opened on the home page: its buttons were not compared with the site's");
         return { applicable: false, list: [] };
+    }
     const buttons = sigs.filter((s) => s.kind === "button");
     const site = {
         heights: [...new Set(buttons.map((s) => s.height))].sort((a, b) => a - b),

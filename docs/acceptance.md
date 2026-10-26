@@ -23,6 +23,21 @@ Per-page checks run at 390 px and 1440 px. Site-wide checks run once, at 1440 px
 
 Write the check's ID into `acceptance.skip`, and the reason into `acceptance.skipReasons`. The reason is printed in the report, and a human approves it.
 
+## When Babysitter decides a check does not apply (5.7.0)
+
+Some checks judge first whether they apply: the site shows no credits (M2), does not claim 2FA, has fewer than 3 policy
+pages (P2), no sign-in page was found (A1, FM7, FM8, FM11), no header bar was found (1.20, 3.5). Each such decision is
+listed in the run summary under "Babysitter decided not to check", with the pages it applies to, and the run does not end
+"Clean." while one stands. Check it by hand; when the owner agrees, approve it:
+
+```json
+"acceptance": { "notApplicable": { "2FA": "no accounts on this site", "M2 /wallet": "the balance is shown on the page" } }
+```
+
+A key is a rule ID (every page) or `"<rule> <route>"` (one page). Approved decisions are listed under "Not applicable
+(owner-approved)". Missing setup (a login, a role's storage, the stage, prepare's files) is listed under "Setup missing —
+the run is PARTIAL"; a login or role `babysitter.config.json` declares but the run lacks makes `e2e` exit 1.
+
 ## Stage: live or test (5.2.0)
 
 The stage comes from the Nexus project status (LIVE = live, anything else = test): `babysitter prepare` asks Nexus

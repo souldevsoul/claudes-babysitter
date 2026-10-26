@@ -15,6 +15,7 @@ import * as Rh from "./checks/rhythm.js";
 import * as fit from "./checks/fit.js";
 import * as money from "./checks/money.js";
 import { loadConfig, loadRoutes, storageFor, loadLocales, applyLocale, localize, viewports } from "./project.js";
+import { scope, config, setup } from "./skip.js";
 const cfg = loadConfig();
 const ROUTES = loadRoutes(cfg);
 const LOC = loadLocales(cfg);
@@ -28,7 +29,7 @@ const OTHERS = LOC.locales.filter((l) => !l.default);
 // states and scroll: the narrowest and the widest viewport of the run (360 + 1440 by default)
 const VPS = viewports(cfg).slice().sort((x, y) => x.width - y.width);
 const EDGE = new Set([VPS[0]?.name, VPS[VPS.length - 1]?.name]);
-const atEdges = () => test.skip(![...EDGE].some((n) => test.info().project.name === n || test.info().project.name.startsWith(`${n}-`)), `runs at the narrowest and widest viewports (${[...EDGE].join(", ")})`);
+const atEdges = () => test.skip(![...EDGE].some((n) => test.info().project.name === n || test.info().project.name.startsWith(`${n}-`)), scope("*", `runs at the narrowest and widest viewports (${[...EDGE].join(", ")})`));
 const fmt = (list) => list.map((o) => `  • ${o.what} — ${o.where}`).join("\n");
 const hard = (list) => expect(list, fmt(list)).toEqual([]);
 function soft(list, label) {
@@ -102,7 +103,7 @@ for (const route of ROUTES) {
         for (const loc of [DEFAULT, ...OTHERS]) {
             test(`states${tag(loc)} 2.10/2.1/2.14/6.4/B4/N6/A1/4.4/3.8 inside dialogs, menus, after an empty submit, wizard steps, pagination [P16 P52]`, async ({ browser }) => {
                 atEdges();
-                test.skip(st.enabled === false, "babysitter.config.json → states.enabled: false");
+                test.skip(st.enabled === false, config("states", "babysitter.config.json → states.enabled: false"));
                 const pageBudget = Number(st.pageBudget ?? 240_000);
                 test.setTimeout(pageBudget + 60_000);
                 const { ctx, page, reload } = await openIn(browser, route, loc);
@@ -116,7 +117,7 @@ for (const route of ROUTES) {
         }
         /* 5.5.0: what a page's links and data promise (once, at desktop width) */
         test("4.5/J1/D4 a card's action carries its card; a CTA carries its choice to the next page; no data error on load [4.5 J1 D4]", async ({ browser }) => {
-            test.skip(!/desktop-1440/.test(test.info().project.name), "runs once, at desktop width");
+            test.skip(!/desktop-1440/.test(test.info().project.name), scope("*", "runs once, at desktop width"));
             test.setTimeout(150_000);
             const { ctx, page } = await openIn(browser, route, DEFAULT);
             const list = [...(await run.cardActions(page, route.path))];
@@ -128,9 +129,9 @@ for (const route of ROUTES) {
         });
         if (!route.auth) {
             test("J2 a guest's choice survives sign-in (\"Sign in to …\" from a page with a choice) [J2]", async ({ browser }) => {
-                test.skip(!/desktop-1440/.test(test.info().project.name), "runs once, at desktop width");
+                test.skip(!/desktop-1440/.test(test.info().project.name), scope("*", "runs once, at desktop width"));
                 const creds = a.credentials(cfg);
-                test.skip(!creds || !cfg.login?.url && !acc.auth.signIn, "needs a test account (LOGIN_EMAIL / a role's env) and login.url");
+                test.skip(!creds || !cfg.login?.url && !acc.auth.signIn, setup("J2", "needs a test account (LOGIN_EMAIL / a role's env) and login.url"));
                 test.setTimeout(120_000);
                 const { ctx, page } = await openIn(browser, route, DEFAULT);
                 const list = await run.guestChoice(page, { creds, login: cfg.login || {} });

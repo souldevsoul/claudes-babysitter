@@ -48,11 +48,27 @@ if (!failed) {
     }
   } catch {}
 }
+// 5.7.0: a "clean" last run that decided rules do not apply on the routes this work changed is not clean — the
+// decisions are shown (not blocking: a human approves them in babysitter.config.json → acceptance.notApplicable)
+let undecided = "";
+if (!failed) {
+  try {
+    const CR = await import("../lib/changed-routes.js");
+    const cfg = (() => { try { return JSON.parse(readFileSync(join(repo, "babysitter.config.json"), "utf8")); } catch { return {}; } })();
+    const ch = CR.changedRoutes(repo, CR.changedFiles(repo, CR.branchBase(repo)), cfg);
+    const j = ch.ui && existsSync(join(stateDir, "findings.json")) ? JSON.parse(readFileSync(join(stateDir, "findings.json"), "utf8")) : {};
+    const res = (ch.templates || []).map(CR.templateRe);
+    const onChanged = (i) => ch.layoutWide || !i.route || ch.routes.includes(i.route) || res.some((r) => r.test(String(i.route).split("?")[0]));
+    const list = [...(j.setupMissing || []).map((g) => ({ ...g, setup: true })), ...(j.decisions || []).filter((g) => (g.where || []).some(onChanged))];
+    if (list.length) undecided = `Claude's Babysitter: the last runtime run did not check ${list.length} rule(s) on the routes this work changed — not a clean bill of health:\n${list.slice(0, 15).map((g) => `- ${g.setup ? "setup missing" : "decided not to apply"}: ${g.rule}: ${g.reason}`).join("\n")}${list.length > 15 ? `\n… ${list.length - 15} more (babysitter fix-plan)` : ""}\nCheck them by hand or approve each in babysitter.config.json → acceptance.notApplicable; tell the user which ones remain.`;
+  } catch {}
+}
 if (!failed) {
   writeFileSync(counter, "0");
   // the checks are clean, but a human pinned notes in Babysitter Studio during this turn: they come first
   const manual = await pendingNotes(repo);
   if (manual.length) { process.stderr.write(`Before finishing, apply the notes the user pinned on the page in Babysitter Studio:\n\n${formatManual(manual)}`); process.exit(2); }
+  if (undecided) process.stdout.write(JSON.stringify({ systemMessage: undecided }));
   process.exit(0);
 }
 if (projectMode(repo) === "adoption") {
