@@ -141,7 +141,8 @@ for (const route of routes) {
 await browser.close();
 
 if (format === "json") out(JSON.stringify(problems, null, 2));
-else if (!problems.length) out(`micro-check: clean (${routes.join(", ")} at 390 and 1280)`);
+// 5.6.3: it measures layout, contrast and controls — not copy (ui-check / `babysitter content` read the copy)
+else if (!problems.length) out(`micro-check: clean (${routes.join(", ")} at 390 and 1280; rendered layout checks only — copy is checked by ui-check and \`babysitter content\`)`);
 else {
   out(`Claude's Babysitter (rendered check on ${url}): ${problems.length} problem(s) on the pages you changed. Fix them, then finish.`);
   for (const p of problems.filter((x) => x.check === "inline style [DOM]").slice(0, 15))

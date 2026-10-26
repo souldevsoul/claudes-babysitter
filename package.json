@@ -1,6 +1,6 @@
 {
   "name": "claudes-babysitter",
-  "version": "5.6.2",
+  "version": "5.6.3",
   "private": true,
   "description": "Claude's Babysitter \u2014 keeps AI code generators inside a product's UI system: AST lint rules, static WCAG contrast of theme tokens, component-reuse audit, Claude Code + git hooks and Playwright micro-checks. Enforces the UI Architecture & Consistency Guidelines (58 recurring UI bug patterns).",
   "type": "module",
@@ -47,7 +47,7 @@
     "test:team": "node test/team.test.mjs",
     "test:acceptance": "node test/acceptance.test.mjs",
     "test:run": "for f in test/run-*.test.mjs; do node \"$f\" || exit 1; done",
-    "test:content": "node test/content-lint.test.mjs && node test/content-consistency.test.mjs && node test/content-fr-561.test.mjs && node test/content-runtime.test.mjs",
+    "test:content": "node test/content-lint.test.mjs && node test/content-consistency.test.mjs && node test/content-fr-561.test.mjs && node test/content-runtime.test.mjs && node test/content-563.test.mjs",
     "test:layout": "node test/layout.test.mjs",
     "test:forms": "node test/forms.test.mjs",
     "test:misses": "node test/misses.test.mjs && node test/misses-520.test.mjs && node test/misses-521.test.mjs && node test/stage.test.mjs",

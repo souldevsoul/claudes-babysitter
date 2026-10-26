@@ -5,7 +5,7 @@
 // Finding: { what, where, selector?, human?, id }.
 import { resolve } from "node:path";
 import {
-  contentConfig, lintSegment, findDates, lastUpdatedDates, LAST_UPDATED_RE, findEmails, emailDomainProblem, untranslatedReason, untranslatedWhat,
+  contentConfig, lintSegment, readsLocale, CT1_LOCALES, findDates, lastUpdatedDates, LAST_UPDATED_RE, findEmails, emailDomainProblem, untranslatedReason, untranslatedWhat,
   looksLikeKey, isRtl, LEGAL_FAMILIES, legalFamily, normName, AUTO_VARIANTS, numericFacts, factConflicts, ruleId,
 } from "../../lib/content-rules.js";
 import { checkEmails } from "../../lib/email-dns.js";
@@ -75,7 +75,7 @@ export const collectCopy = (page) => page.evaluate(() => {
     const record = !!row || /^h[2-6]$/.test(tag) && !!el.closest("[class*=card i], [class*=profile i]");
     const rowEmail = !!row && EMAIL.test(row.innerText || "");
     const control = !!el.closest("button, a[href], [role=button], [role=tab], [role=menuitem], label, th, select, option, input");
-    segs.push({ i, text, kind, user, collapsed: !pre, footer: !!el.closest("footer, [role=contentinfo]"), table: !!el.closest("table, [role=grid], [role=table], [role=row]"), ownLang, record, rowEmail, control });
+    segs.push({ i, text, kind, user, collapsed: !pre, dialog: !!el.closest("[role=dialog], [role=alertdialog], dialog"), footer: !!el.closest("footer, [role=contentinfo]"), table: !!el.closest("table, [role=grid], [role=table], [role=row]"), ownLang, record, rowEmail, control });
   }
   // emails in text: linked by a mailto with the same address?
   const emails = [];
@@ -175,6 +175,8 @@ export async function copyFindings(page, cfg = {}, copy = null, locale = null, {
       out.push({ x, i: s.i, seg: s });
     }
   }
+  // 5.6.3: a page in a language CT1 has no lexicon for — its not-yet copy is not read; say so instead of passing quietly
+  if (pageLang && !readsLocale(pageLang) && segs.length) out.push({ x: { id: "CT1", rule: "content/unfinished", soft: true, what: `CT1 does not read ${String(pageLang).split(/[-_]/)[0]}: not-yet copy on this page is not checked (CT1 reads ${CT1_LOCALES.join(", ")})`, fix: "check the page's copy by hand, or add a lexicon for the language (lib/not-yet.js)" }, i: null });
   // one document, one date (updated vs effective compared separately)
   const lu = lastUpdatedDates(segs);
   for (const kind of ["updated", "effective"]) {

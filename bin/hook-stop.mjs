@@ -53,6 +53,9 @@ if (!failed) {
   // the checks are clean, but a human pinned notes in Babysitter Studio during this turn: they come first
   const manual = await pendingNotes(repo);
   if (manual.length) { process.stderr.write(`Before finishing, apply the notes the user pinned on the page in Babysitter Studio:\n\n${formatManual(manual)}`); process.exit(2); }
+  // 5.6.3: clean for this change, not for the site: the notice reaches the user (not blocking)
+  const notice = (r.stdout.match(/^Claude's Babysitter: clean for this change; (.*)$/m) || [])[1];
+  if (notice) process.stdout.write(JSON.stringify({ systemMessage: `Claude's Babysitter: clean for this change; ${notice}` }));
   process.exit(0);
 }
 if (projectMode(repo) === "adoption") {

@@ -2,6 +2,29 @@
 
 Earlier releases (4.11.1 and before) are described in the README under "What changed in …".
 
+## 5.6.3 — not-yet copy in any word order and language; a copy change measured against the whole site (2026-10-26)
+
+A fine-tuning product shipped "Email delivery is not enabled on <Brand> yet", "<Brand> sends no email yet", "What we
+don't do yet" and "Card top-up is temporarily unavailable" on its legal pages; CT1 knew fixed phrases only. And
+`check --changed` printed "clean" after every commit while the site had dozens of copy findings.
+
+- **CT1 product-status negation** (lib/not-yet.js): a negation or absence and a "for now" word in one clause, in any
+  word order; "temporarily unavailable" anywhere but the top-up / checkout dialog, the pay button and its error. Empty
+  states, the reader's own state, a process still running, transient errors, "yet" as "but", comments, API routes and
+  server code stay quiet. Strings in code are read too (copy constants, conditional props). Lexicons for every locale
+  the products ship: en, ru, uk, bg, kk, ky, az, fr, de, es, pt, it, sk, sl, el, ar, ja; a language without one gets a
+  soft "CT1 does not read <locale>" notice instead of a quiet pass. On the product: CT1 3 → 35 findings, no false alarm.
+- **`check --changed`**: when the change touches copy, CT1 and the site-wide rules (CT15, CT19–CT23 …) run over the whole
+  repository and over the base version; a finding the change caused on an untouched page blocks, the rest is one line —
+  "clean for this change; N copy finding(s) elsewhere on the site: run `npx --no babysitter content`". The pre-commit and
+  Stop hooks pass it on; `e2e --changed` no longer says "Clean." while findings of routes it did not open are carried;
+  micro-check says it reads layout, not copy.
+- **False alarms** on a review product (70 → 14 findings): a role with its own qualifier is another role (and
+  `content.roles`); refund wording inside a refund sentence or about a payment record; "placeholder" as the product's
+  concept; the customer's own test account; the date format read from the site's formatter; a code identifier, a scheme,
+  "marked ? are optional" and "1 needs action" in CT8; the user's own URL as a link label (CT12).
+- Tests: `test/content-563.test.mjs` (every case fails on 5.6.2).
+
 ## 5.6.2 — the browser tab in every language; French contract terms (2026-10-25)
 
 - **CT11 the browser tab.** A page's `<title>` is checked like its copy: on a French page, the tab title the same as on

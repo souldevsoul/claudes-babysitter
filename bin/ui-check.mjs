@@ -110,6 +110,7 @@ files = files.filter((f) => !ignore.some((r) => r.test(f)));
 const only = opt("file");
 if (only && only !== true) { const want = relative(repo, resolve(repo, only)); files = files.filter((f) => f === want); }
 const problems = [];
+const warnings0 = []; // collected before the theme gates (copy: languages CT1 does not read)
 // --changed: what each changed file already had at the base version, as a multiset of rule + message.
 // A finding is new only when the file has more of it than before — a codemod that rewrites one token on a
 // line does not own the debt that was already on that line.
@@ -225,8 +226,16 @@ if (!changed) {
 
 // 7. copy: i18n message files of every locale, JSX copy, email addresses (lib/content-lint.js, docs/checks-content.md).
 // Offline here (hooks run on every edit); `babysitter content` adds the MX lookups. "content": false turns it off.
+// 5.6.3: a change to copy is also measured against the whole site. The site-wide copy rules (one name / fact / label
+// across pages: CT15, CT19–CT23 …) and CT1 run over the WHOLE repository; a finding on a page this change did not touch
+// that the base version did not have is this change's (blocking); the rest is counted in one notice ("clean for this
+// change; N copy findings elsewhere on the site") — never a bare "clean" while the site has them.
+const elsewhere = { count: 0, command: null, unread: [] };
+const crossNew = [];
+const SITE_IDS = new Set(["CT1", "CT15", "CT19", "CT20", "CT21", "CT22", "CT23", "CT27", "CT31", "F5", "M3"]);
+const RUN = existsSync(join(repo, "node_modules/claudes-babysitter/bin/babysitter.mjs")) ? "npx --no babysitter" : `node ${join(here, "babysitter.mjs")}`;
 if (cfg.content !== false) {
-  const { lintContent, lintFileText } = await import("../lib/content-lint.js");
+  const { lintContent, lintFileText, isJsxFile, messageFileInfo, isCodeCopySource } = await import("../lib/content-lint.js");
   const ign = (f) => ignore.some((r) => r.test(f));
   let scope = null;
   if (only && only !== true) scope = [relative(repo, resolve(repo, only))];
@@ -234,6 +243,38 @@ if (cfg.content !== false) {
   if (!scope || scope.length) {
     const res = await lintContent(repo, { files: scope, dns: false, cfg });
     for (const p of res.problems) if (!ign(p.file)) problems.push({ file: p.file, line: p.line, rule: p.rule, message: p.message, ...(p.baseKey ? { baseKey: p.baseKey } : {}) });
+    // languages CT1 has no lexicon for: a warning, so the run never looks fully clean for them
+    for (const x of res.soft || []) if (x.unread && !elsewhere.unread.includes(x.unread)) { elsewhere.unread.push(x.unread); warnings0.push({ file: x.file, rule: "content/unfinished", message: x.message }); }
+    const copyTouched = changed && scope && !(only && only !== true) && scope.some((f) => isJsxFile(f) || messageFileInfo(f) || /\.mdx?$/.test(f) || isCodeCopySource(f));
+    if (copyTouched) {
+      const siteWide = (p) => SITE_IDS.has(p.id) || !!p.baseKey;
+      const inScope = new Set(scope);
+      const whole = await lintContent(repo, { files: null, dns: false, cfg });
+      const other = whole.problems.filter((p) => siteWide(p) && !inScope.has(p.file) && !ign(p.file));
+      // the same whole-site run on the base version, in a temp dir (the repository is not touched)
+      let baseKeys = null;
+      if (other.length && baseRef) {
+        const tmp = mkdtempSync(join(tmpdir(), "babysitter-copy-base-"));
+        try {
+          const listed = git(`ls-tree -r --name-only ${baseRef}`).split("\n").filter((f) => f && /\.(tsx|jsx|ts|js|mjs|cjs|json|ya?ml|html?|mjml|hbs|mdx?)$/.test(f) && !/(^|\/)(node_modules|\.next|dist|build|out|coverage|public)\//.test(f));
+          let ok = listed.length > 0;
+          for (let i = 0; ok && i < listed.length; i += 400) {
+            const tar = spawnSync("sh", ["-c", `git --literal-pathspecs archive ${baseRef} -- "$@" | tar -x -C "${tmp}"`, "sh", ...listed.slice(i, i + 400)], { cwd: repo, maxBuffer: 256 * 1024 * 1024 });
+            ok = tar.status === 0;
+          }
+          if (ok) {
+            const b = await lintContent(tmp, { files: null, dns: false, cfg, list: listed });
+            baseKeys = new Set(b.problems.filter(siteWide).map((p) => `${p.file}\u0001${findingKey(p)}`));
+          }
+        } catch { baseKeys = null; } finally { rmSync(tmp, { recursive: true, force: true }); }
+      }
+      for (const p of other) {
+        const q = { file: p.file, line: p.line, rule: p.rule, message: p.message, ...(p.baseKey ? { baseKey: p.baseKey } : {}) };
+        if (baseKeys && !baseKeys.has(`${p.file}\u0001${findingKey(q)}`)) crossNew.push({ ...q, message: `${q.message} (this page is unchanged: your change made it differ from the rest of the site)` });
+        else elsewhere.count++;
+      }
+      elsewhere.command = `${RUN} content`;
+    }
     const { siteMarksOfText } = await import("../lib/content-site.js");
     for (const f of lineFilter && scope ? scope : []) {
       const text = atBase(f);
@@ -280,8 +321,11 @@ if (lineFilter) {
   }
 }
 
+// site-wide copy findings this change caused on pages it did not touch (5.6.3): blocking, after the line filter
+problems.push(...crossNew);
+
 /* ───────── theme gates (run after the line filter: they are about the theme, not about lines) ───────── */
-const warnings = [];
+const warnings = [...warnings0];
 const allRepoFiles = repoFiles(repo);
 const tFiles = themeFilesOf(repo, allRepoFiles);
 const uiTouched = files.some((f) => /\.(jsx|tsx|s?css)$/.test(f)) || (opt("file") && /\.(jsx|tsx|s?css)$/.test(String(opt("file"))));
@@ -317,7 +361,9 @@ if (themeTouched && tFiles.length && cfg.registry !== false) {
   if (opt("register")) await register(name, fp, cfg.registry || DEFAULT_REGISTRY);
 }
 
-if (format === "json") console.log(JSON.stringify(changed ? { problems, info, warnings } : problems, null, 2));
+const elsewhereLine = elsewhere.count ? `${elsewhere.count} copy finding(s) elsewhere on the site: run \`${elsewhere.command}\`` : "";
+const unreadLine = elsewhere.unread.length ? `CT1 does not read ${elsewhere.unread.join(", ")}: not-yet copy in ${elsewhere.unread.length > 1 ? "those languages" : "that language"} is not checked` : "";
+if (format === "json") console.log(JSON.stringify(changed ? { problems, info, warnings, elsewhere: { count: elsewhere.count, command: elsewhere.command, unread: elsewhere.unread } } : problems, null, 2));
 else if (format === "agent") {
   const printInfo = () => {
     if (!info.length) return;
@@ -330,7 +376,11 @@ else if (format === "agent") {
     console.log(`\nWarnings (not blocking):`);
     for (const w of warnings) console.log(`  - ${w.file} ${w.rule}: ${w.message}`);
   };
-  if (!problems.length) { console.log("Claude's Babysitter: clean."); printWarnings(); printInfo(); }
+  if (!problems.length) {
+    // never a bare "clean" while the site has copy findings elsewhere or a language the copy rules do not read
+    console.log(elsewhereLine || unreadLine ? `Claude's Babysitter: clean for this change; ${[elsewhereLine, unreadLine].filter(Boolean).join("; ")}.` : "Claude's Babysitter: clean.");
+    printWarnings(); printInfo();
+  }
   else {
     console.log(`Claude's Babysitter: ${problems.length} problem(s). Fix every item, then run ui-check again until it prints "clean".
 Rules of the fix:
@@ -345,6 +395,7 @@ Rules of the fix:
       for (const p of list.sort((a, b) => a.line - b.line)) console.log(`  L${p.line} ${p.rule}: ${p.message}`);
     }
     console.log(`\nFix only what is listed above, inside the scope of your task.`);
+    if (elsewhereLine) console.log(`Not blocking: ${elsewhereLine}.`);
     printWarnings();
     printInfo();
   }
@@ -363,10 +414,10 @@ Rules of the fix:
     const tail = info.length ? `\n<sub>${info.length} older finding(s) on touched or moved lines were already in the code — not blocking.</sub>\n` : "";
     appendFileSync(summary, md + tail);
   }
-  console.log(problems.length ? `Claude's Babysitter: ${problems.length} new problem(s) — see the annotations.` : "Claude's Babysitter: no new problems.");
+  console.log(problems.length ? `Claude's Babysitter: ${problems.length} new problem(s) — see the annotations.${elsewhereLine ? ` Not blocking: ${elsewhereLine}.` : ""}` : elsewhereLine ? `Claude's Babysitter: no new problems in this change; ${elsewhereLine}.` : "Claude's Babysitter: no new problems.");
 } else {
   for (const p of problems) console.log(`${p.file}:${p.line}  ${p.rule}  ${p.message}`);
   for (const w of warnings) console.log(`${w.file}  ${w.rule} (warning)  ${w.message}`);
-  console.log(`\nui-check: ${problems.length} problem(s) in ${files.length} file(s)${changed ? " (changed only)" : ""}`);
+  console.log(`\nui-check: ${problems.length} problem(s) in ${files.length} file(s)${changed ? " (changed only)" : ""}${elsewhereLine ? `; ${elsewhereLine}` : ""}`);
 }
 process.exitCode = problems.length ? 1 : 0;

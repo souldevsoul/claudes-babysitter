@@ -39,3 +39,6 @@ if (failed) {
   process.stderr.write(`\n✋ Claude's Babysitter blocked this commit.\n\n${out}\n(Fix the items above and commit again. To bypass deliberately: git commit --no-verify)\n`);
   process.exit(1);
 }
+// 5.6.3: clean for this change, but the site has copy findings elsewhere (or a language CT1 does not read): say so
+const notice = (check.stdout.match(/^Claude's Babysitter: clean for this change; (.*)$/m) || [])[1];
+if (notice) process.stderr.write(`ℹ️  Claude's Babysitter: this commit is clean; ${notice}\n`);
