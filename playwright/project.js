@@ -99,6 +99,7 @@ export function viewports(cfg = loadConfig(), env = process.env) {
 const globMatch = (pat, name) => /[*?]/.test(pat) && new RegExp(`^${pat.replace(/[.+^${}()|[\]\\]/g, "\\$&").replace(/\*/g, ".*").replace(/\?/g, ".")}$`, "i").test(name);
 function viewportsAll(cfg, env) {
   const named = (w) => VIEWPORTS.find((v) => v.width === Number(w)) || { name: `${Number(w) < 768 ? "mobile" : Number(w) < 1024 ? "tablet" : Number(w) < 1400 ? "laptop" : "desktop"}-${w}`, width: Number(w), height: Number(w) < 768 ? 800 : 900 };
+  if (!env.VIEWPORTS && env.BABYSITTER_FAST === "1" && !(Array.isArray(cfg.viewports) && cfg.viewports.length)) return [390, 768, 1440].map(named);
   if (env.VIEWPORTS) return env.VIEWPORTS.split(",").map((s) => s.trim()).filter(Boolean).map(named);
   if ((env.BABYSITTER_PROFILE || cfg.profile) === "quick") return VIEWPORTS.filter((v) => v.width === 390 || v.width === 1440);
   if (Array.isArray(cfg.viewports) && cfg.viewports.length) return cfg.viewports.map((v) => (typeof v === "object" ? v : named(v)));

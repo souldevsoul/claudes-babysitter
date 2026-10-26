@@ -36,10 +36,11 @@
   "locales": { "list": ["en", "az"], "default": "en", "cookie": "NEXT_LOCALE", "keep": ["Acme Pro"], "untranslated": "fail" },
   "states": { "enabled": true, "maxOpeners": 15, "maxForms": 3, "maxSteps": 6, "wallet": true, "pageBudget": 240000 },
   "acceptance": { "auth": { "signIn": "/login", "signUp": "/register", "settings": "/settings" }, "skip": [], "skipReasons": {} },
-  "content": { "dateFormat": "DD.MM.YYYY", "dashes": "forbid", "brandTerms": ["Acme"], "legalIdentity": ["New Company 1", "New Address 1", "000000000"], "glossary": {}, "skip": [], "skipReasons": {} },
+  "content": { "dateFormat": "DD.MM.YYYY", "dashes": "forbid", "brandTerms": ["Acme"], "legalIdentity": ["New Company 1", "New Address 1", "000000000"], "glossary": {}, "terms": { "canonical": {}, "distinct": [] }, "skip": [], "skipReasons": {} },
   "forms": { "zeroBalanceRole": "", "protectedRoute": "/dashboard", "skip": [], "skipReasons": {} },
   "layout": { "headingVariants": 2, "stickyHeader": true, "maxListItems": 20, "registerFavicon": true, "rateDecimals": 4 },
   "domSniper": { "allowProps": [], "skip": [], "strict": false },
+  "jev": { "enabled": true, "min": 0.7, "facts": "", "context": "", "profile": "generic", "concurrency": 4, "deadline": 30, "budget": 2, "triage": true, "blocking": false, "skip": [] },
   "ignore": ["src/legacy/"],
   "audit": { "exclude": ["design-lab"] }
 }

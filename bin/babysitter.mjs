@@ -47,7 +47,7 @@
 import { spawnSync, spawn } from "node:child_process";
 import { forward } from "../lib/forward.js";
 import { dirname, join, relative } from "node:path";
-import { existsSync } from "node:fs";
+import { existsSync, statSync as statSync0 } from "node:fs";
 import { fileURLToPath } from "node:url";
 import { createRequire } from "node:module";
 
@@ -95,6 +95,8 @@ switch (cmd) {
   }
   case "content": node("bin/content-lint.mjs", rest); break;
   case "text": node("bin/text-pass.mjs", rest); break;
+  case "triage": node("bin/jev-triage.mjs", rest); break;
+  case "profile": node("bin/profile.mjs", rest); break;
   case "audit": {
     // audit --diff <base>: the CI gate — only problems this branch adds since it left <base> fail the run
     const i = rest.indexOf("--diff");
@@ -188,6 +190,11 @@ switch (cmd) {
     const changedFlag = flag("--changed");
     const since = take("--since");
     if (flag("--quick")) env.BABYSITTER_PROFILE = "quick";
+    const noJev = flag("--no-jev");
+    const noText = flag("--no-text");
+    const fast = flag("--fast");
+    if (fast) { env.BABYSITTER_FAST = "1"; if (!args.includes("--no-express")) express = true; }
+    flag("--no-express");
     const lastFailed = args.includes("--last-failed");
     const { readFileSync: rf, writeFileSync: wf, mkdirSync: md } = await import("node:fs");
     const modeFile = join(ROOT, ".babysitter/run-mode.json");
@@ -265,6 +272,40 @@ switch (cmd) {
         }
       }
     }
+    // 5.7.0: the text pass first — every route read once per locale × role; content.spec then skips what it covered.
+    // On when Jev is (a token, jev.enabled, no --no-jev) or with --fast; --no-text keeps the old content.spec run.
+    let textPass = null;
+    const textFile = join(ROOT, ".babysitter/text-pass.json");
+    if (!noText && !lastFailed && (!only || only === "content")) {
+      const { loadConfig: lc2 } = await import("../playwright/project.js");
+      process.env.BABYSITTER_ROOT = ROOT;
+      const cfgT = lc2();
+      const { jevProvider } = await import("../lib/jev/client.js");
+      const { jevConfig } = await import("../lib/jev/text-pass.js");
+      const jcT = jevConfig(cfgT);
+      const jevOn = !noJev && jcT.enabled && jevProvider({ ...env }, cfgT).ok;
+      if (jevOn || fast) {
+        const before = (() => { try { return statSync0(textFile).mtimeMs; } catch { return 0; } })();
+        console.error(`babysitter e2e: text pass — every route read once${jevOn ? ", Jev reads the copy" : " (Jev off: no token — copy checked by rules only)"}…`);
+        await forward(process.execPath, [join(root, "bin/text-pass.mjs"), "--no-merge", ...(jevOn ? [] : ["--no-jev"])], { stdio: "inherit", env });
+        const after = (() => { try { return statSync0(textFile).mtimeMs; } catch { return 0; } })();
+        if (after > before) { textPass = textFile; env.BABYSITTER_TEXT_PASS = textFile; }
+        else console.error("babysitter e2e: the text pass did not finish — content.spec runs its copy checks as before.");
+      } else console.error(noJev ? "babysitter e2e: Jev off (--no-jev) — copy checked by rules only (content.spec)." : "babysitter e2e: Jev off: no token — copy checked by rules only (content.spec). --fast reads the copy once without Jev.");
+    }
+    // --fast: the plan of the smaller matrix (after the text pass: it knows which roles see the same page)
+    if (fast) {
+      const { buildFastPlan } = await import("../lib/fast-plan.js");
+      const { loadConfig: lc3, loadRoutes: lr3 } = await import("../playwright/project.js");
+      process.env.BABYSITTER_ROOT = ROOT;
+      let tp = [];
+      try { tp = JSON.parse(rf(join(ROOT, ".babysitter/text-pages.json"), "utf8")).pages || []; } catch { }
+      const plan = buildFastPlan(lr3(lc3()), textPass ? tp : []);
+      md(join(ROOT, ".babysitter"), { recursive: true });
+      wf(join(ROOT, ".babysitter/fast-plan.json"), JSON.stringify(plan, null, 2));
+      env.BABYSITTER_FAST_PLAN = join(ROOT, ".babysitter/fast-plan.json");
+      console.error(`babysitter e2e --fast: viewports 390 + 1440, 768 on ${plan.midRoutes.length} of ${plan.of} route(s) (one per template), ${Object.keys(plan.drop).length} role duplicate(s) checked once, express on — every check not run is listed as by design scope.`);
+    }
     // a --reporter on the command line replaces the config's reporters: keep the JSON report the summary, findings.json,
     // fix-plan and the Stop hook read (a live run with --reporter=line once left nothing to summarise)
     for (let i = 0; i < args.length; i++) {
@@ -298,12 +339,16 @@ switch (cmd) {
       process.env.BABYSITTER_ROOT = ROOT;
       const cfg = loadConfig();
       const vps = viewports(cfg, env).map((v) => v.name);
-      const full = viewports(cfg, { ...env, BABYSITTER_PROFILE: "", VIEWPORTS: "" }).map((v) => v.name);
+      const full = viewports(cfg, { ...env, BABYSITTER_PROFILE: "", VIEWPORTS: "", BABYSITTER_FAST: "" }).map((v) => v.name);
+      const byDesign = fast ? full.filter((v) => !vps.includes(v)) : [];
       const RUN = existsSync(join(ROOT, "node_modules/claudes-babysitter/bin/babysitter.mjs")) ? "npx --no babysitter" : `node ${relative(ROOT, join(root, "bin/babysitter.mjs")) || join(root, "bin/babysitter.mjs")}`;
-      const sum = summarize({ root: ROOT, only, args, cfg, configured: { viewports: full }, lastFailed, selection, rerun: `${RUN} e2e --skip-prepare --last-failed${only ? ` --only ${only}` : ""}${env.BABYSITTER_PROFILE === "quick" ? " --quick" : ""}${express ? " --express" : ""}` });
+      const sum = summarize({ root: ROOT, only, args, cfg, configured: { viewports: fast ? vps : full }, byDesign: byDesign.length ? [`viewports ${byDesign.join(", ")} (--fast: 390 + 1440 for every route, 768 on a sample)`] : [], lastFailed, selection, textPass, rerun: `${RUN} e2e --skip-prepare --last-failed${only ? ` --only ${only}` : ""}${env.BABYSITTER_PROFILE === "quick" ? " --quick" : ""}${express ? " --express" : ""}` });
       console.log(`\n${sum.text}`);
+      if (sum.textBlocking && !status) status = 1;
+      // Jev triage of every finding of the run (ordering only), when Jev is on
+      if (textPass && !noJev) await forward(process.execPath, [join(root, "bin/jev-triage.mjs"), "--quiet"], { stdio: "inherit", env });
       if (!status && sum.rolesNotChecked?.length) status = 1;
-      if (vps.length < full.length) console.log(`(--quick / VIEWPORTS: ${vps.join(", ")} of ${full.join(", ")})`);
+      if (vps.length < full.length && !fast) console.log(`(--quick / VIEWPORTS: ${vps.join(", ")} of ${full.join(", ")})`);
     } catch (e) { console.error(`babysitter e2e: summary failed: ${e.message}`); }
     if (banner) console.error(banner);
     process.exit(status);

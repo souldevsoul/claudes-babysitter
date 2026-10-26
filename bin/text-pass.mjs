@@ -37,7 +37,20 @@ const contextFile = jc.context;
 const context = contextFile && existsSync(resolve(ROOT, contextFile)) ? readFileSync(resolve(ROOT, contextFile), "utf8").trim() : null;
 
 let pages, det = [], soft = [], siteDet = [], loads = 0, notReached = [], status = {};
-if (opt("from-pages")) {
+if (flag("from-source")) {
+  // no browser: the copy of the source (project map); the static copy lint is the rules half
+  const { buildProjectMap, pagesFromSource } = await import("../lib/project-map.js");
+  const { lintContent } = await import("../lib/content-lint.js");
+  const { map } = buildProjectMap(ROOT);
+  pages = pagesFromSource(map);
+  for (const p of pages) if (p.auth) p.role = "user";
+  const lint = await lintContent(ROOT, { cfg, dns: false });
+  const byFile = new Map();
+  for (const p of pages) for (const l of p.lines) if (!byFile.has(l.file)) byFile.set(l.file, p);
+  det = lint.problems.map((x) => { const p = byFile.get(x.file); return { id: x.id, route: p?.route || null, auth: !!p?.auth, role: p?.auth ? "user" : null, key: p ? `${p.auth ? "[user] " : ""}${p.route}` : "(source)", test: "babysitter content (static)", what: x.message, where: `${x.file}:${x.line}`, quote: (x.message.match(/"([^"]{3,200})"/) || [, ""])[1] }; });
+  notReached = [];
+  log(`text pass: ${pages.length} route(s) from the source (no browser), ${det.length} static copy finding(s)`);
+} else if (opt("from-pages")) {
   const saved = JSON.parse(readFileSync(resolve(opt("from-pages")), "utf8"));
   pages = saved.pages; det = saved.det || []; soft = saved.soft || []; siteDet = saved.site || []; notReached = saved.notReached || []; loads = 0;
   log(`text pass: ${pages.length} page(s) from ${opt("from-pages")} (no browser)`);
@@ -59,7 +72,7 @@ else {
     jev = await jevTextPass(J, pages, { cfg, facts, context, det: det.map((d) => ({ ...d, key: d.key })), notReached, status, log });
   } catch (e) { jevNote = `Jev stopped: ${e.message}`; log(jevNote); }
 }
-const levels = { hard: 0, jev: 0, unsure: 0, agrees: 0 };
+const levels = { hard: 0, jev: 0, disagrees: 0, unsure: 0, agrees: 0 };
 for (const f of jev?.findings || []) if (f.level in levels) levels[f.level]++;
 if (jev?.claims) writeFileSync(join(OUT, "text-claims.json"), JSON.stringify({ at: new Date().toISOString(), claims: jev.claims }, null, 1));
 if (jev?.terms) writeFileSync(join(OUT, "terms.json"), JSON.stringify({ at: new Date().toISOString(), note: "Names Jev found for one thing on this site: adopt the first term as the glossary (babysitter.config.json → content.terms.canonical), or declare different things in content.terms.distinct.", terms: jev.terms }, null, 1));
@@ -69,7 +82,7 @@ const detEntries = [...det, ...siteDet].map((d) => ({ suite: "text", route: d.ro
   items: [{ what: d.what, where: d.where }], error: d.what, ...(d.jevAgrees ? { jev: { agrees: d.jevAgrees } } : {}) }));
 // a deterministic finding Jev agrees with carries Jev's probability
 for (const f of jev?.findings || []) if (f.level === "agrees") { const d = detEntries.find((x) => x.rule === f.agreesWith && x.route === f.page?.route); if (d) d.jev = { agrees: f.p }; }
-const jevEntries = jev ? toFindings(jev.findings) : [];
+const jevEntries = jev ? toFindings(jev.findings, { blocking: jc.blocking }) : [];
 const ms = Date.now() - t0;
 const result = {
   at: new Date().toISOString(), ms, readMs: tRead, loads, pages: pages.length, notReached,
@@ -88,4 +101,4 @@ if (!flag("no-merge")) {
 }
 const { textSummary } = await import("../lib/jev/summary.js");
 console.log(textSummary(result));
-process.exit(result.findings.length ? 1 : 0);
+process.exit(result.findings.some((f) => !f.advisory) ? 1 : 0);

@@ -341,7 +341,8 @@
    "pageTypes": [
     "any"
    ],
-   "question": "Does any line in LINES contain placeholder or test content: 'Select...', a bare '...', 'Lorem ipsum', 'TODO', 'TestProject', 'asdf', 'John Doe', 'test@example.com', '[Company Name]', or an obviously fake name, ID or value?"
+   "question": "Does any line in LINES contain placeholder or test content: 'Select...', a bare '...', 'Lorem ipsum', 'TODO', 'TestProject', 'asdf', 'John Doe', 'test@example.com', '[Company Name]', or an obviously fake name, ID or value?",
+   "ct": "CT2"
   },
   {
    "id": "f/copy-build-note",
@@ -349,7 +350,8 @@
    "pageTypes": [
     "any"
    ],
-   "question": "Does any line in LINES expose an internal, developer or deployment fact to customers: 'this build', 'no mailbox is connected', 'MX record', 'a hosting provider's preview host', 'the domain is not registered', 'nothing on our side enforces one', 'seed data', 'placeholder identity', 'draft, not binding'?"
+   "question": "Does any line in LINES expose an internal, developer or deployment fact to customers: 'this build', 'no mailbox is connected', 'MX record', 'a hosting provider's preview host', 'the domain is not registered', 'nothing on our side enforces one', 'seed data', 'placeholder identity', 'draft, not binding'?",
+   "ct": "CT1"
   },
   {
    "id": "f/copy-self-defence",
@@ -382,7 +384,8 @@
    "pageTypes": [
     "any"
    ],
-   "question": "Does any line in LINES contain a spelling mistake, a doubled word, two words run together, a wrong plural ('1 credits', '1 tasks') or broken grammar?"
+   "question": "Does any line in LINES contain a spelling mistake, a doubled word, two words run together, a wrong plural ('1 credits', '1 tasks') or broken grammar?",
+   "ct": "CT8"
   },
   {
    "id": "f/copy-runtime-junk",
@@ -390,7 +393,8 @@
    "pageTypes": [
     "any"
    ],
-   "question": "Does any line in LINES show runtime junk such as NaN, undefined, null, [object Object], {{…}}, %s, or an unformatted internal key (reason_topup, MINIMAL_WEAR)?"
+   "question": "Does any line in LINES show runtime junk such as NaN, undefined, null, [object Object], {{…}}, %s, or an unformatted internal key (reason_topup, MINIMAL_WEAR)?",
+   "ct": "CT3"
   },
   {
    "id": "f/copy-emoji",
@@ -408,7 +412,8 @@
     "any"
    ],
    "question": "Does any line in LINES write a date month-first (for example 'September 21, 2026' or 09/21/2026)?",
-   "profile": "house"
+   "profile": "house",
+   "ct": "CT6"
   },
   {
    "id": "f/copy-coming-soon",
@@ -416,7 +421,8 @@
    "pageTypes": [
     "any"
    ],
-   "question": "Does any line in LINES label a feature of the product 'Coming soon', other than a disabled pay button?"
+   "question": "Does any line in LINES label a feature of the product 'Coming soon', other than a disabled pay button?",
+   "ct": "CT1"
   },
   {
    "id": "f/copy-invented-names",
@@ -454,7 +460,8 @@
     "any"
    ],
    "question": "Does any line in LINES show an email address on a domain other than the product's own domain in the FACTS, or on a test or hosting domain (.example, a hosting provider's preview domain, a free mailbox domain)?",
-   "facts": true
+   "facts": true,
+   "ct": "CT9"
   },
   {
    "id": "f/copy-fake-access",
@@ -990,7 +997,8 @@
    "pageTypes": [
     "any"
    ],
-   "question": "In LINK_NAMES, is any destination reached by links with meaningfully different names (for example 'Studio' in the header and 'Create' in the footer for the same page, or two wordings of the same call to action), ignoring harmless variants such as 'Pricing' and 'See pricing'?"
+   "question": "In LINK_NAMES, is any destination reached by links with meaningfully different names (for example 'Studio' in the header and 'Create' in the footer for the same page, or two wordings of the same call to action), ignoring harmless variants such as 'Pricing' and 'See pricing'?",
+   "ct": "CT21"
   },
   {
    "id": "f/site-label-vs-title",
@@ -998,7 +1006,8 @@
    "pageTypes": [
     "any"
    ],
-   "question": "In LINK_NAMES, does any link label name something different from the title of the page it opens?"
+   "question": "In LINK_NAMES, does any link label name something different from the title of the page it opens?",
+   "ct": "CT21"
   },
   {
    "id": "f/site-duplicate-destination",
@@ -1033,7 +1042,8 @@
    "pageTypes": [
     "any"
    ],
-   "question": "Does LEGAL_DATES show a legal page without a date, or more than one distinct 'Last updated' date across the legal pages?"
+   "question": "Does LEGAL_DATES show a legal page without a date, or more than one distinct 'Last updated' date across the legal pages?",
+   "ct": "CT7"
   },
   {
    "id": "f/site-footer-identity",
