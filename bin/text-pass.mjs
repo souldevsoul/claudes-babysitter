@@ -60,6 +60,20 @@ if (flag("from-source")) {
   writeFileSync(join(OUT, "text-pages.json"), JSON.stringify({ at: new Date().toISOString(), pages, det, soft, site: siteDet, notReached }, null, 1));
 }
 const tRead = Date.now() - t0;
+// the project map: the source's copy and UI per route, merged with what was rendered; the pages the source has and
+// the read did not reach (a promise of a control there is not judged)
+try {
+  const { buildProjectMap, mergeRendered } = await import("../lib/project-map.js");
+  const { map, stats } = buildProjectMap(ROOT, { write: false });
+  if (stats.routes) {
+    mergeRendered(map, pages);
+    const seen = new Set(pages.flatMap((p) => [p.template, p.route]).filter(Boolean));
+    const missing = Object.keys(map.routes).filter((t) => !seen.has(t) && !/^\/(api|admin)(\/|$)/.test(t));
+    notReached = [...new Set([...(notReached || []), ...missing])];
+    mkdirSync(join(ROOT, ".babysitter"), { recursive: true });
+    writeFileSync(join(ROOT, ".babysitter/project-map.json"), JSON.stringify(map));
+  }
+} catch (e) { log(`project map: ${e.message}`); }
 
 // ───────── Jev ─────────
 const prov = jevProvider(process.env, cfg);

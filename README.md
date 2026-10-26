@@ -50,7 +50,10 @@ npm run babysitter -- e2e                              # the full runtime run (e
 npm run babysitter -- e2e --quick                      # fast profile while iterating: 390 + 1440
 npm run babysitter -- e2e --express                    # one page load per route × viewport × locale × role runs every check — same findings (docs/express.md)
 npm run babysitter -- e2e --express --changed          # only the routes your change reaches through the import graph (global inputs → every route)
-npm run babysitter -- fix-plan                         # the last run's findings grouped by cause, with files to change
+npm run babysitter -- e2e --fast                       # 390 + 1440 (768 on a sample), copy read once, express; what is left out is listed (docs/jev.md)
+npm run babysitter -- text                             # the text pass: every route read once; copy rules + Jev (contradictions, one term per concept)
+npm run babysitter -- triage                           # Jev orders the last run's findings: likely real / unsure / likely noise, with the reason
+npm run babysitter -- fix-plan                         # the last run's findings grouped by cause, with files to change (--format agent: the fragments)
 npm run babysitter -- update                           # re-vendor the latest release; keeps babysitter.config.json and .babysitter/
 npm run babysitter -- version-check                    # this copy vs the latest release: minor behind warns, major behind fails
 npm run babysitter -- doctor                           # what is wired (hooks, CI, config) + the version check
