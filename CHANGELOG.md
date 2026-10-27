@@ -2,7 +2,7 @@
 
 Earlier releases (4.11.1 and before) are described in the README under "What changed in …".
 
-## 5.7.0 (draft) — every skip is reported
+## 5.7.0 — every skip reported, Jev text pass, --fast (2026-10-26)
 
 ### Skips and decisions
 
@@ -43,6 +43,61 @@ was counted and never shown, and the run still ended "Clean.".
 - Tests: `test/skip-report.test.mjs` (the summary per kind, the verdict, findings.json, fix-plan, the Stop hook, and two
   real runs: acceptance.spec P2 on a one-page site, babysitter.spec 1.20/3.5 on a page with no header in express mode).
 
+### Jev: copy read once, findings triaged
+
+- **`babysitter text`: the text pass.** Every route is loaded once per locale × role at desktop width; the copy rules
+  of content.spec (CT1–CT31, P4, 6.15) run on that one read and site-wide over its records, collapsed sections (FAQ
+  answers, `<details>`, accordion panels) and the dialogs a button opens (cookie settings, "Add credit") included.
+  `babysitter e2e` runs it first when Jev is on (a token) or with `--fast`; content.spec then skips the checks it read
+  ("read once by the text pass", listed as by design scope). `--from-source` reads the source instead of a browser.
+- **Jev reads the copy** (`lib/jev/`, docs/jev.md): the babysitter copy rules as language-independent questions, a
+  vendored text rule catalog (122 rules; house rules behind `jev.profile: "house"`, claim rules behind `jev.facts`),
+  and the **consistency engine** — claims by topic, a partner per claim, a pair verdict (conflict / differ / same /
+  unrelated): `consistency/contradiction` (hard from 0.8), `consistency/one-page`, `consistency/different-words`,
+  `consistency/promise-without-feature` (a document promises a control the signed-in pages do not have), and a term
+  map (`consistency/term`, `.babysitter/terms.json`; `content.terms.canonical` / `.distinct`). A rule's hit stays hard
+  ("Jev agrees"); a Jev-only hit ≥ `jev.min` (0.7) is marked Jev and advisory (`jev.blocking: true` to block);
+  0.5–0.7 is "unsure, check by hand".
+- **Recall net.** A copy rule that passed or is switched off where the Jev question mirroring it is ≥ 0.8 sure:
+  "Babysitter passed/skipped, Jev disagrees" (CT1 had no "not open yet", "temporarily unavailable", "sends no email
+  yet").
+- **Jev never makes a hard rule pass**: every deterministic check runs; Jev adds, labels and disagrees, never removes
+  (docs/jev.md, `test/jev.test.mjs`).
+- **`babysitter triage`**: every finding likely real / unsure / likely noise with the noise mechanism; fix-plan orders
+  by it and lists the likely noise apart ("Jev thinks this is a false alarm because …"). Nothing is dropped.
+- **fix-plan** gives repair context: the exact fragment (file, line range, lines), both sides of a consistency finding,
+  a suggested canonical wording; `--format agent` adds one JSON line per finding.
+- **`.babysitter/project-map.json`**: a static index (copy with file:line and keys, prose in data literals, UI hints,
+  files per route, file hashes; incremental), merged with the rendered text.
+- **`e2e --fast`**: 390 + 1440 for every route, 768 on one route per template, a role that sees the same page checked
+  once, copy read once, express on; everything left out is listed under "By design scope".
+- **`babysitter profile`**: where a run's time went (suite, viewport, language, role) and the time of a bigger product.
+- Config: `jev` (enabled, min, facts, context, profile, concurrency, deadline, budget USD, triage, blocking, skip).
+  Cache `.babysitter/jev-cache/`. No token: "Jev off: no token — copy checked by rules only".
+- Benchmark `test/jev-bench/`: 158 anonymised tester cards on two products. 5.6.2 rules: 15 of 140 and 0 of 18;
+  5.7.0: 80 of 140 (105 with unsure) and 5 of 18 (11 with unsure). `npm run jev:smoke -- <url>` is the live check.
+- Tests: `test/jev.test.mjs` (mocked Jev endpoint), `test/text-pass-parity.test.mjs` (every content.spec finding is a
+  text-pass finding; `e2e --fast` end to end).
+
+### Together
+
+- **By design scope is one kind.** The `--fast` skips (768 on a sample of routes, a role duplicate checked once) and the
+  content.spec checks the text pass read instead are `scope` skips: counted in "By design", never decisions, and listed by
+  what they are under "By design scope (not run, on purpose)", with the viewports `--fast` leaves out. `e2e --fast` does
+  not report its trimmed viewports as NOT RUN.
+- **The verdict** weighs everything: a blocking text-pass finding, missing setup, an undecided rule, a flake, and the
+  findings carried from routes a `--changed` run did not open ("Clean for this change; N finding(s) elsewhere on the
+  site") — "Clean." only when none of them stands. The Stop hook sends the 5.6.3 "clean for this change" notice and the
+  decisions on the changed routes in one message.
+- **The text pass runs the 5.6.3 CT1** (lib/not-yet.js, through the same copy functions content.spec calls), in
+  collapsed sections and dialogs too ("temporarily unavailable" in a dialog is the payment dialog's, as in content.spec),
+  and says "CT1 does not read <locale>" for a language without a lexicon — in `babysitter text`, in the e2e summary and
+  with `--from-source`; such a pass is not called "Clean.".
+- fix-plan `--format json` carries `decisions` and `setupMissing` next to the groups; `--format agent` prints them first,
+  then one JSON line per finding.
+- Tests: `test/skip-report.test.mjs` "together with --fast and the text pass" (by design scope, the trimmed viewports,
+  "CT1 does not read" in the text pass); `test/content-563.test.mjs` and `test/text-pass-parity.test.mjs` unchanged.
+
 ## 5.6.3 — not-yet copy in any word order and language; a copy change measured against the whole site (2026-10-26)
 
 A fine-tuning product shipped "Email delivery is not enabled on <Brand> yet", "<Brand> sends no email yet", "What we
@@ -65,7 +120,6 @@ don't do yet" and "Card top-up is temporarily unavailable" on its legal pages; C
   concept; the customer's own test account; the date format read from the site's formatter; a code identifier, a scheme,
   "marked ? are optional" and "1 needs action" in CT8; the user's own URL as a link label (CT12).
 - Tests: `test/content-563.test.mjs` (every case fails on 5.6.2).
-
 ## 5.6.2 — the browser tab in every language; French contract terms (2026-10-25)
 
 - **CT11 the browser tab.** A page's `<title>` is checked like its copy: on a French page, the tab title the same as on

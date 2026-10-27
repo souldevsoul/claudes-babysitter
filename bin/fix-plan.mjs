@@ -10,6 +10,7 @@ import { join, relative, dirname } from "node:path";
 import { execFileSync } from "node:child_process";
 import { fileURLToPath } from "node:url";
 import { templateOf } from "../lib/route-map.js";
+import { buildProjectMap, placesOf } from "../lib/project-map.js";
 
 const args = process.argv.slice(2);
 const opt = (n) => { const i = args.indexOf(`--${n}`); return i >= 0 && args[i + 1] && !args[i + 1].startsWith("--") ? args[i + 1] : null; };
@@ -70,17 +71,35 @@ function classHints(where) {
   return out;
 }
 
+/* ───────── the project map: where a finding's text lives ───────── */
+let MAP = null;
+try { MAP = buildProjectMap(repo).map; } catch { MAP = null; }
+/** A fragment to edit: file, line range and the lines themselves (a repair agent reads these, not whole files). */
+function fragment(place, around = 3) {
+  const text = read(place.file);
+  if (!text) return { ...place };
+  const lines = text.split("\n");
+  const at = place.line || (lineOf(text, place.text?.slice(0, 40) || "") || 1);
+  const from = Math.max(1, at - around), to = Math.min(lines.length, at + around);
+  return { file: place.file, from, to, at, ...(place.key ? { key: place.key } : {}), lines: lines.slice(from - 1, to).join("\n") };
+}
+const placesFor = (quote) => (MAP && quote ? placesOf(MAP, quote, { max: 6 }) : []);
+// the page a statement is most authoritative on: a policy over pricing over FAQ over the rest
+const AUTH = (route = "") => (/terms|privacy|polic|refund|cancel|cookie|aml|acceptable|legal/.test(route) ? 3 : /pricing|payment/.test(route) ? 2 : /faq|help|docs/.test(route) ? 1 : 0);
+
 /* ───────── group: one rule, many pages ───────── */
 const ruleOf = (item, test) => (item.what.match(/\[([A-Z]?\d+(?:\.\d+)?[a-z]?|[A-Z]\d|i18n)[,\]]/) || test.match(/^([A-Z]?\d+(?:\.\d+)?(?:\/[\d.]+)?|[A-Z]\d(?:[–-][A-Z]?\d)?|i18n|states)/) || [, "other"])[1];
 const groups = new Map();
 for (const f of findings) {
   const items = f.items.length ? f.items : [{ what: f.error.split("\n")[0] || f.test, where: "" }];
-  for (const it of items) {
-    const rule = ruleOf(it, f.test);
+  for (const [ii, it] of items.entries()) {
+    const rule = f.rule || ruleOf(it, f.test);
     // the same defect at several widths / languages / pages is one entry: normalise numbers and quoted text
     const sig = `${rule}|${it.what.replace(/^\[[\w-]+\]\s*/, "").replace(/\d+(\.\d+)?/g, "#").replace(/"[^"]*"/g, '""').slice(0, 160)}|${it.where.replace(/\d+/g, "#").slice(0, 120)}`;
-    if (!groups.has(sig)) groups.set(sig, { rule, what: it.what, where: it.where, pages: new Set(), projects: new Set(), locales: new Set(), roles: new Set(), test: f.test });
+    if (!groups.has(sig)) groups.set(sig, { rule, what: it.what, where: it.where, pages: new Set(), projects: new Set(), locales: new Set(), roles: new Set(), test: f.test, jev: f.jev || null, triage: null });
     const g = groups.get(sig);
+    const tr = f.triage?.[ii];
+    if (tr && (!g.triage || (tr.p ?? 0) > (g.triage.p ?? 0))) g.triage = tr;
     g.pages.add(f.route || "site-wide");
     g.projects.add(f.project);
     if (f.locale) g.locales.add(f.locale);
@@ -90,13 +109,32 @@ for (const f of findings) {
 const plan = [...groups.values()].map((g) => {
   const quoted = [...`${g.where} ${g.what}`.matchAll(/"([^"]{4,60})"/g)].map((m) => m[1]).filter((t) => !/^\d|px|\[/.test(t));
   const hints = [...new Set([...[...g.pages].map(pageFile).filter(Boolean).map((f) => `${f} (page)`), ...quoted.flatMap(textHints), ...classHints(g.where)])].slice(0, 6);
-  return { ...g, pages: [...g.pages], projects: [...g.projects], locales: [...g.locales], roles: [...g.roles], files: hints };
-}).sort((a, b) => b.pages.length - a.pages.length || a.rule.localeCompare(b.rule));
+  // the exact fragments: where the quoted text lives (project map), and for a consistency finding the other side too
+  const j = g.jev;
+  const sides = j ? [{ side: "this", route: [...g.pages][0], quote: j.quote, section: j.section }, ...(j.other ? [{ side: "other", route: j.other.route, quote: j.other.quote, section: j.other.section }] : [])] : quoted.slice(0, 2).map((q) => ({ side: "this", route: [...g.pages][0], quote: q }));
+  for (const sd of sides) sd.places = placesFor(sd.quote).map((p) => fragment(p));
+  let canonical = null;
+  if (j?.canonical) canonical = { term: j.canonical, why: "the name most of the site uses (or content.terms.canonical)" };
+  else if (j?.other && /^consistency\/(contradiction|one-page|different-words)/.test(g.rule)) {
+    const keep = AUTH(sides[1]?.route) > AUTH(sides[0]?.route) ? sides[1] : sides[0];
+    canonical = { keep: keep.quote, on: keep.route, why: "suggestion: the statement on the more authoritative page (policy > pricing > FAQ > other); decide which is true, state it once (a constants / messages module) and use it on both pages", live: MAP?.messages?.[0] || null };
+  }
+  return { ...g, pages: [...g.pages], projects: [...g.projects], locales: [...g.locales], roles: [...g.roles], files: hints, sides, canonical };
+}).sort((a, b) => tOrder(a) - tOrder(b) || (b.triage?.p ?? 0) - (a.triage?.p ?? 0) || b.pages.length - a.pages.length || a.rule.localeCompare(b.rule));
+function tOrder(g) { return { "likely real": 0, unsure: 1, "not evaluated": 1, "likely noise": 3 }[g.triage?.verdict] ?? (g.jev ? 2 : 1); }
 const byRule = new Map();
-for (const p of plan) { if (!byRule.has(p.rule)) byRule.set(p.rule, []); byRule.get(p.rule).push(p); }
+const noisy = plan.filter((p) => p.triage?.verdict === "likely noise");
+// consistency findings are grouped by what they are about (one topic, one canonical wording)
+const keyOf = (p) => (/^consistency\//.test(p.rule) ? `consistency: ${p.jev?.topic || "naming"}` : p.rule);
+for (const p of plan.filter((x) => !noisy.includes(x))) { const k = keyOf(p); if (!byRule.has(k)) byRule.set(k, []); byRule.get(k).push(p); }
 
 const rerun = `${RUN} e2e --skip-prepare --last-failed`;
 if (format === "json") { console.log(JSON.stringify({ base, rerun, groups: plan, decisions, setupMissing }, null, 2)); process.exit(plan.length ? 1 : 0); }
+// --format agent: one compact JSON object per finding (a repair agent edits only these fragments)
+const agentItem = (p, n) => ({ n, rule: p.rule, level: p.jev?.level || "hard", triage: p.triage ? { verdict: p.triage.verdict, p: p.triage.p, reason: p.triage.reason } : null, why: p.what.replace(/\s+/g, " ").slice(0, 400),
+  on: p.pages, ...(p.roles.length ? { roles: p.roles } : {}), ...(p.locales.length ? { locales: p.locales } : {}),
+  places: (p.sides || []).flatMap((sd) => sd.places.map((x) => ({ side: sd.side, route: sd.route, ...x }))), ...(p.sides?.some((sd) => !sd.places.length) ? { unplaced: p.sides.filter((sd) => !sd.places.length).map((sd) => ({ side: sd.side, route: sd.route, quote: sd.quote })) } : {}),
+  files: p.files, ...(p.canonical ? { canonical: p.canonical } : {}) });
 const L = [];
 // 5.7.0: what the last run did not check — at the top, so a "nothing to fix" is never read as "everything was checked"
 const head = [];
@@ -120,11 +158,18 @@ else {
     L.push(`## ${rule} (${list.length})`);
     for (const p of list) {
       n++;
-      L.push(`${n}. ${p.what}`);
+      L.push(`${n}. ${p.jev ? `[Jev ${p.jev.p?.toFixed?.(2) ?? ""}${p.jev.level === "disagrees" ? ", babysitter passed" : ""}] ` : ""}${p.what}${p.triage?.verdict === "unsure" ? " (Jev triage: unsure)" : ""}`);
       if (p.where) L.push(`   - element: ${p.where}`);
+      for (const sd of p.sides || []) if (sd.places.length) L.push(`   - ${sd.side === "other" ? "other side" : "text"} "${String(sd.quote).slice(0, 90)}": ${sd.places.map((x) => `${x.file}:${x.at}${x.key ? ` (key ${x.key})` : ""}`).join("; ")}`);
+      if (p.canonical) L.push(p.canonical.term ? `   - one term: "${p.canonical.term}" (${p.canonical.why})` : `   - canonical wording: "${String(p.canonical.keep).slice(0, 160)}" (${p.canonical.on}) — ${p.canonical.why}`);
       L.push(`   - on: ${p.pages.join(", ")}${p.roles.length ? ` (signed in as ${p.roles.join(", ")})` : ""} @ ${p.projects.join(", ")}${p.locales.length ? ` in ${p.locales.join(", ")}` : ""}`);
       L.push(p.files.length ? `   - look at: ${p.files.join("; ")}` : "   - look at: (no source match — search for the element's text / classes)");
     }
+    L.push("");
+  }
+  if (noisy.length) {
+    L.push(`## Jev thinks these are false alarms (${noisy.length}) — still findings: look before dismissing`);
+    for (const p of noisy) { n++; L.push(`${n}. ${p.what}`, `   - on: ${p.pages.join(", ")} @ ${p.projects.join(", ")}`, `   - Jev thinks this is a false alarm because ${p.triage.reason || "it does not look like a defect a visitor would notice"} (p(real) ${p.triage.p})`); }
     L.push("");
   }
   L.push("When every item is fixed, re-check only what failed:", `    ${rerun}`, "then run the full suite once before reporting done:", `    ${RUN} e2e`);
@@ -132,5 +177,10 @@ else {
 L.splice(plan.length ? 2 : 1, 0, ...(plan.length || !head.length ? head : ["", ...head]));
 const text = L.join("\n");
 writeFileSync(join(repo, opt("out") || ".babysitter/fix-plan.md"), text + "\n");
-console.log(format === "agent" ? text.replace(/^#+ /gm, "") : text);
+if (format === "agent") {
+  // the plan in words, then the machine-readable block: one JSON object per line
+  console.log(text.replace(/^#+ /gm, ""));
+  console.log("\n--- babysitter fix-plan items (JSON lines: edit only the listed fragments) ---");
+  [...[...byRule.values()].flat(), ...noisy].forEach((p, i) => console.log(JSON.stringify(agentItem(p, i + 1))));
+} else console.log(text);
 process.exit(plan.length ? 1 : 0);

@@ -1,0 +1,258 @@
+{
+ "about": "Site B: 18 text cards a tester filed on a second product over two days, read from the SOURCE as of each card batch (snapshot A, B): no browser, the copy of each route's files (lib/project-map.js pagesFromSource). Anonymised.",
+ "cards": [
+  {
+   "id": "B01",
+   "snapshot": "A",
+   "kind": "promise",
+   "pages": [
+    "/",
+    "/pricing",
+    "/how-it-works"
+   ],
+   "keys": [
+    "free wallet credit",
+    "$3"
+   ],
+   "expect": "promise on /, /pricing, /how-it-works: 'free wallet credit' / '$3'"
+  },
+  {
+   "id": "B03",
+   "snapshot": "A",
+   "kind": "internal",
+   "pages": [
+    "(header and footer)",
+    "/contact",
+    "/privacy",
+    "/terms",
+    "/security",
+    "/cookies"
+   ],
+   "keys": [
+    "@acmegpu.dev"
+   ],
+   "expect": "internal on (header and footer), /contact, /privacy, /terms, /security, /cookies: '@acmegpu.dev'"
+  },
+  {
+   "id": "B05",
+   "snapshot": "A",
+   "kind": "contradiction",
+   "pages": [
+    "/dashboard/billing"
+   ],
+   "keys": [
+    "KZT",
+    "AZN",
+    "TRY"
+   ],
+   "expect": "contradiction on /dashboard/billing: 'KZT' / 'AZN' / 'TRY'"
+  },
+  {
+   "id": "B09",
+   "snapshot": "A",
+   "kind": "contradiction",
+   "pages": [
+    "/cookies",
+    "(header and footer)"
+   ],
+   "keys": [
+    "optional analytics",
+    "Marketing"
+   ],
+   "expect": "contradiction on /cookies, (header and footer): 'optional analytics' / 'Marketing'"
+  },
+  {
+   "id": "B11",
+   "snapshot": "A",
+   "kind": "different-words",
+   "pages": [
+    "/dashboard",
+    "/dashboard/deploy",
+    "/dashboard/billing"
+   ],
+   "keys": [
+    "Ship a model, get an endpoint"
+   ],
+   "expect": "different-words on /dashboard, /dashboard/deploy, /dashboard/billing: 'Ship a model, get an endpoint'"
+  },
+  {
+   "id": "B12",
+   "snapshot": "A",
+   "kind": "other",
+   "pages": [
+    "/dashboard/deploy"
+   ],
+   "keys": [
+    "Not enough wallet balance"
+   ],
+   "expect": "other on /dashboard/deploy: 'Not enough wallet balance'"
+  },
+  {
+   "id": "B13",
+   "snapshot": "A",
+   "kind": "unclear",
+   "pages": [
+    "/"
+   ],
+   "keys": [
+    "THIS"
+   ],
+   "expect": "unclear on /: 'THIS'"
+  },
+  {
+   "id": "B15",
+   "snapshot": "A",
+   "kind": "other",
+   "pages": [
+    "/pricing"
+   ],
+   "keys": [
+    "Included with every endpoint",
+    "included"
+   ],
+   "expect": "other on /pricing: 'Included with every endpoint' / 'included'"
+  },
+  {
+   "id": "B17",
+   "snapshot": "A",
+   "kind": "other",
+   "pages": [
+    "/dashboard"
+   ],
+   "keys": [
+    "ENDPOINTS:",
+    "live:"
+   ],
+   "expect": "other on /dashboard: 'ENDPOINTS:' / 'live:'"
+  },
+  {
+   "id": "B18",
+   "snapshot": "A",
+   "kind": "other",
+   "pages": [
+    "/dashboard/billing"
+   ],
+   "keys": [
+    "Rows per page",
+    "ADD CREDITS"
+   ],
+   "expect": "other on /dashboard/billing: 'Rows per page' / 'ADD CREDITS'"
+  },
+  {
+   "id": "B23",
+   "snapshot": "A",
+   "kind": "promise",
+   "pages": [
+    "(header and footer)",
+    "/"
+   ],
+   "keys": [
+    "All systems operational"
+   ],
+   "expect": "promise on (header and footer), /: 'All systems operational'"
+  },
+  {
+   "id": "B24",
+   "snapshot": "A",
+   "kind": "one-page",
+   "pages": [
+    "/dashboard/endpoints/[id]"
+   ],
+   "keys": [
+    "scaled to zero",
+    "RUNNING"
+   ],
+   "expect": "one-page on /dashboard/endpoints/[id]: 'scaled to zero' / 'RUNNING'"
+  },
+  {
+   "id": "B35",
+   "snapshot": "B",
+   "kind": "style",
+   "pages": [
+    "/blog",
+    "/blog/[slug]",
+    "/dashboard/billing",
+    "/dashboard/endpoints/[id]"
+   ],
+   "keys": [
+    "August 10, 2026",
+    "toLocale"
+   ],
+   "expect": "style on /blog, /blog/[slug], /dashboard/billing, /dashboard/endpoints/[id]: 'August 10, 2026' / 'toLocale'",
+   "rules": [
+    "CT6",
+    "f/copy-date-order"
+   ]
+  },
+  {
+   "id": "B36",
+   "snapshot": "B",
+   "kind": "promise",
+   "pages": [
+    "/refund",
+    "/terms",
+    "/about"
+   ],
+   "keys": [
+    "automatic credit"
+   ],
+   "expect": "promise on /refund, /terms, /about: 'automatic credit'"
+  },
+  {
+   "id": "B37",
+   "snapshot": "B",
+   "kind": "contradiction",
+   "pages": [
+    "/pricing",
+    "/terms"
+   ],
+   "keys": [
+    "Enterprise SLA",
+    "individual developers"
+   ],
+   "expect": "contradiction on /pricing, /terms: 'Enterprise SLA' / 'individual developers'"
+  },
+  {
+   "id": "B40",
+   "snapshot": "B",
+   "kind": "different-words",
+   "pages": [
+    "(header and footer)"
+   ],
+   "keys": [
+    "API Docs",
+    "Docs"
+   ],
+   "expect": "different-words on (header and footer): 'API Docs' / 'Docs'"
+  },
+  {
+   "id": "B42",
+   "snapshot": "B",
+   "kind": "contradiction",
+   "pages": [
+    "/payment-policy",
+    "/dashboard/billing"
+   ],
+   "keys": [
+    "no minimum",
+    "10,000",
+    "0.01"
+   ],
+   "expect": "contradiction on /payment-policy, /dashboard/billing: 'no minimum' / '10,000' / '0.01'"
+  },
+  {
+   "id": "B51",
+   "snapshot": "B",
+   "kind": "promise",
+   "pages": [
+    "/terms",
+    "/faq",
+    "/security"
+   ],
+   "keys": [
+    "rate-limited"
+   ],
+   "expect": "promise on /terms, /faq, /security: 'rate-limited'"
+  }
+ ]
+}

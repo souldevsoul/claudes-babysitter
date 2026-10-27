@@ -51,6 +51,11 @@ const hard = (list) => expect(list, fmt(list)).toEqual([]);
 const note = (list, label) => { if (list.length)
     test.info().annotations.push({ type: "check by eye", description: `${label}\n${fmt(list)}` }); };
 const once = () => test.skip(!/desktop-1440/.test(test.info().project.name), scope("*", "copy is the same at every width: runs once, at desktop width"));
+// 5.7.0: `babysitter e2e` ran the text pass first — every route read once per locale × role, the same copy rules run on
+// that read (playwright/text-collect.js + text-run.js), its findings in findings.json (suite "text"). The checks below
+// are not repeated; the hreflang test (no configured languages) still runs.
+const TEXT_PASS = process.env.BABYSITTER_TEXT_PASS && existsSync(process.env.BABYSITTER_TEXT_PASS) ? process.env.BABYSITTER_TEXT_PASS : null;
+const byText = () => test.skip(!!TEXT_PASS, scope("*", "read once by the text pass (babysitter text): the same copy rules ran on one load per route × locale × role — findings in findings.json, suite text"));
 const open = opener("content", async function open(page, route, loc = null) {
     await c.install(page);
     const baseURL = test.info().project.use.baseURL;
@@ -78,7 +83,7 @@ for (const route of ROUTES) {
     describeRoute(route, `content ${authTag(route)}${route.path}`, () => {
         if (route.auth)
             test.use({ storageState: storageFor(route.role) });
-        test.beforeEach(() => once());
+        test.beforeEach(() => { once(); byText(); });
         const r = route.path;
         test("CT1–CT8 copy: nothing unfinished, no test data or raw errors, no trailing periods or em dashes, one date format, plurals agree", async ({ page }) => {
             await open(page, r);
@@ -111,7 +116,7 @@ for (const loc of LOCALES) {
         describeRoute(route, `content [${loc.code}] ${authTag(route)}${route.path}`, () => {
             if (route.auth)
                 test.use({ storageState: storageFor(route.role) });
-            test.beforeEach(() => once());
+            test.beforeEach(() => { once(); byText(); });
             test(`CT11–CT13 [${loc.code}] translated: no English left, nothing word for word the default language, no keys, lang/dir right; CT1–CT8 copy`, async ({ page, browser }) => {
                 // the same page in the default language: text left unchanged in ${loc.code} is untranslated (CT11, 2nd heuristic)
                 let defaults = null;
@@ -173,6 +178,7 @@ test.describe("content site-wide", () => {
         }
         return recs;
     }
+    test.beforeEach(({}, info) => { if (!/CT11 other languages/.test(info.title)) byText(); });
     test("CT15/CT16 one name per legal document (footer = <h1> = <title> = mentions), one © line on every page", async ({ browser }) => {
         test.skip(!on("CT15") && !on("CT16"), why("CT15"));
         test.setTimeout(120_000 + ROUTES.length * 20_000 * (1 + LOCALES.length));

@@ -30,6 +30,7 @@ import { relative, resolve } from "node:path";
 import { inspect } from "node:util";
 import { fileURLToPath } from "node:url";
 import { isSelected } from "../lib/route-selection.js";
+import { fastSkip } from "../lib/fast-plan.js";
 import * as X from "../lib/express-cache.js";
 import { STATE_DIR, ROOT } from "./project.js";
 
@@ -176,13 +177,16 @@ const withShimsAsync = async (fn) => { test = shimTest; expect = shimExpect; try
  */
 export function describeRoute(route, title, fn) {
   if (!isSelected(route)) return;
-  if (!EXPRESS) return base.describe(title, fn);
+  // --fast: a route / project the plan leaves out is skipped with its reason (listed as by design scope)
+  const trim = () => base.beforeEach(({}, info) => { const why = fastSkip(route, info.project.name); if (why) base.skip(true, why); });
+  if (!EXPRESS) return base.describe(title, () => { trim(); fn(); });
   if (collecting) throw new Error("express: describeRoute inside describeRoute");
   const group = { route, title, rules: [], node: node(null, title), file: callerFile() };
   collecting = group;
   try { withShims(fn); } finally { collecting = null; }
   if (!group.rules.length) return;
   base.describe(title, () => {
+    trim();
     const uses = Object.assign({}, ...group.node.uses);
     if (Object.keys(uses).length) base.use(uses);
     // the context options a check's own `page` would have had (config, project, file-level and describe-level use)

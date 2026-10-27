@@ -134,6 +134,25 @@ try {
     assert.match(summarize({ root: d, configured: ALL, rerun: "x" }).text, /\nClean\./);
   });
 
+  await t("together with --fast and the text pass: their skips are by design scope (counted, listed by what they are, never decisions); the trimmed viewports are listed; a CT1-unread language is said", async () => {
+    const d = tmp("fast");
+    put(d, [
+      ["babysitter.spec.js", "/", "3.3 exactly one h1", "desktop-1440", "passed"],
+      ["babysitter.spec.js", "/blog/b", "3.3 exactly one h1", "tablet-768", "skipped", skip("--fast: 768 runs on one route per page template (1 of 2) [by design scope]")],
+      ["content.spec.js", "content /", "CT1–CT8 copy", "desktop-1440", "skipped", skip(scope("*", "read once by the text pass (babysitter text): the same copy rules ran on one load per route × locale × role — findings in findings.json, suite text"))],
+    ]);
+    const s = summarize({ root: d, configured: ALL, rerun: "x", byDesign: ["viewports tablet-768 (--fast: 390 + 1440 for every route, 768 on a sample)"] });
+    assert.match(s.text, /By design: 2 test\(s\) skipped/);
+    assert.match(s.text, /By design scope \(not run, on purpose\):\n  · viewports tablet-768 \(--fast[^\n]*\n  · content\.spec copy checks \(1\): read once by the text pass instead\n  · --fast: 768 runs on one route per page template \(1 of 2\) \(1\)/);
+    assert.doesNotMatch(s.text, /Babysitter decided not to check/);
+    assert.match(s.text, /\nClean\./);
+    const { textLines, textSummary } = await import("../lib/jev/summary.js");
+    const r = { pages: 2, loads: 2, ms: 1000, findings: [], unsure: [], jev: { on: false, note: "Jev off: no token" }, soft: [{ route: "/", what: "CT1 does not read hy: not-yet copy on this page is not checked (CT1 reads en, …)" }, { route: "/a", what: "CT1 does not read hy: …" }] };
+    assert.match(textLines(r).join("\n"), /⚠ CT1 does not read hy \(2 page\(s\)\): not-yet copy in that language is not checked/);
+    assert.doesNotMatch(textSummary(r), /\nClean\./);
+    assert.match(textSummary({ ...r, soft: [] }), /\nClean\./);
+  });
+
   await t("summary: a login babysitter.config.json declares but the run lacks is required setup — listed, the run fails (e2e exits 1)", () => {
     const d = tmp("req");
     put(d, [
