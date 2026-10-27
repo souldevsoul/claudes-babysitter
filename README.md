@@ -250,7 +250,7 @@ LOGIN_PASSWORD for signed-in pages) now runs, in one pass:
 | States, languages, scroll | `run.spec.ts` | every dialog / menu / empty submit / wizard step / pagination, every language, 3.8 after navigation and `#anchors` |
 | Acceptance | `acceptance.spec.ts` | money, footer, cookies, sign-in, policies, dead links … |
 | Copy | `content.spec.ts` | CT1–CT18 in every language: unfinished copy, test data, raw errors, dates, untranslated text, emails that receive mail, legal names, numbers that agree |
-| Product | `e2e/*.spec.ts` | your own journeys |
+| Product | `e2e/*.spec.ts` (`e2eDir`) | your own journeys — only specs that import `./babysitter` (5.7.1); a product's own Playwright specs on its own `@playwright/test` are left to its runner and named in the summary |
 
 - **Viewports 360, 390, 768, 1280, 1440.** `--quick` (390 + 1440) is for iterating; config `viewports` or
   `VIEWPORTS=360,1280` pick others.

@@ -169,7 +169,13 @@ const logoScan = (scope) => {
   const out = [];
   const NOT_LOGO = /payment|visa|master ?card|paypal|stripe|apple ?pay|google ?pay|partner|client|customer|trusted|press|featured|integration|social|avatar|flag|sponsor|badge|award|logos\b|marquee/i;
   const attrs = (e) => [e.getAttribute("class"), e.id, e.getAttribute("alt"), e.getAttribute("aria-label"), e.getAttribute("title"), e.getAttribute("src"), e.getAttribute("data-testid")].filter((x) => typeof x === "string").join(" ");
-  const chrome = (e) => !!e.closest("header, [role=banner], footer, [role=contentinfo], nav, [role=navigation], [role=dialog], dialog, aside, [data-bs-menu-panel]");
+  // 5.7.1: the site chrome — the site header (L.header(): not a page's own title <header> inside main), the footer, a
+  // nav outside the content, dialogs and menu panels. A brand word inside a page heading ("BRAND · TERMS") and a
+  // breadcrumb's first step are not the logo (a live run reported both as "header logo is not a link")
+  const siteHeaders = L.header();
+  const inContent = (e) => !!e.closest("main, article, section, [role=main]");
+  const chrome = (e) => siteHeaders.some((h) => h.contains(e)) || !!e.closest("footer, [role=contentinfo], [role=dialog], dialog, [data-bs-menu-panel]") || (!!e.closest("nav, [role=navigation], aside") && !inContent(e));
+  const crumb = (e) => !!e.closest('[aria-label*=breadcrumb i], [class*=breadcrumb i], [data-breadcrumb]') || (!!e.closest("nav, [role=navigation]") && inContent(e) && !siteHeaders.some((h) => h.contains(e)));
   const hasChrome = !!document.querySelector("header, [role=banner], nav, footer");
   const brand = L.norm(L.brand());
   const cands = new Set();
@@ -178,6 +184,7 @@ const logoScan = (scope) => {
     if (NOT_LOGO.test(attrs(e)) || [...(function* () { for (let p = e.parentElement; p && p !== document.body; p = p.parentElement) yield p; })()].slice(0, 4).some((p) => NOT_LOGO.test(attrs(p)))) return;
     // in the site chrome; outside it only the mark at the top of a bare page (auth screens without a header)
     if (!scope && !chrome(e) && (hasChrome || e.getBoundingClientRect().top + scrollY > 260)) return;
+    if (!scope && (crumb(e) || (hasChrome && e.closest("h1, h2, h3, h4, h5, h6") && !siteHeaders.some((h) => h.contains(e))))) return;
     if (e.closest("button, [role=button], label, select")) return;
     // a photo is not the mark: taller than 160 px, or cropped to fill its box (proxy: a card's cover picture, 5.3.0)
     if (e.getBoundingClientRect().height > 160 || (e.tagName === "IMG" && getComputedStyle(e).objectFit === "cover")) return;
@@ -1294,8 +1301,10 @@ const moneyTokens = (src) => {
     return { raw: m[0], fontSize: parseFloat(getComputedStyle(b).fontSize), rate: /=\s*$/.test(before), unit: /^\s*(\/|per\b|за\b|each|\/\s*(hr|h|mo|month|yr|credit|token|gb|unit))/i.test(after) || /per (credit|token|unit)/i.test(txt), inHeader: siteHeader.some((h) => h.contains(b)), creditsNear: /\bcredits?\b|кредит|kredit/i.test(txt), ...L.at(b, "") };
   }
   const credits = /\bcredits?\b|кредит|kredit/i.test(document.body.innerText);
+  // an amount given in credits on this page ("6,000 credits") — lib/money-model.js CREDIT_AMOUNT_SRC, passed in
+  const creditAmounts = !!(window.__bsCreditSrc && new RegExp(window.__bsCreditSrc, "iu").test(document.body.innerText));
   const headerCredits = L.header().some((h) => /\bcredits?\b|кредит|kredit/i.test(h.innerText));
-  return { tokens: out, credits, headerCredits };
+  return { tokens: out, credits, creditAmounts, headerCredits };
 };
 /** In-page: the currency switcher (native select, or a button/combobox showing a currency) and its options. */
 const findSwitcher = (codes) => {
@@ -1320,7 +1329,8 @@ const findSwitcher = (codes) => {
 export async function moneyFormat(page, max = 8, { rateDecimals = 4, each = null, onEach = null } = {}) {
   await ensure(page);
   const hard = [], soft = [], notTested = [], tested = [], records = [];
-  const read = async () => { await ensure(page); return page.evaluate(moneyTokens, MONEY_SRC); };
+  const { CREDIT_AMOUNT_SRC } = await import("../../lib/money-model.js");
+  const read = async () => { await ensure(page); await page.evaluate((src) => { window.__bsCreditSrc = src; }, CREDIT_AMOUNT_SRC); return page.evaluate(moneyTokens, MONEY_SRC); };
   // 5.5.0: the arithmetic of what is on screen (money.js): the stated rate reproduces the prices, a bracket does not
   // repeat the amounts it explains, the calculator follows its label — in every currency
   const M = await import("./money.js");
@@ -1339,8 +1349,14 @@ export async function moneyFormat(page, max = 8, { rateDecimals = 4, each = null
   hard.push(...(await M.numberGrouping(page).catch(() => [])));
   const sw0 = onEach ? await page.evaluate(findSwitcher, CODES).catch(() => null) : null;
   await arithmetic("");
-  // an amount on the same line as credits ("10 credits = $1") is the hint next to the credits, not a money balance
-  if (base.credits && !base.headerCredits && base.tokens.some((t) => t.inHeader && !t.creditsNear)) {
+  // an amount on the same line as credits ("10 credits = $1") is the hint next to the credits, not a money balance.
+  // 5.7.1: "sells credits" is the run's money model (lib/money-model.js), the same answer M2 uses — not the word
+  // "credit" somewhere on this page ("credit card", "sign-up credit" on a product that bills in dollars)
+  const { siteMoneyModel } = await import("../../lib/money-model.js");
+  const { loadConfig } = await import("../project.js");  // eslint-disable-line
+  const mm = siteMoneyModel(loadConfig());
+  const sellsCredits = mm.model === "credits" || (mm.model === "unknown" && base.creditAmounts);
+  if (sellsCredits && !base.headerCredits && base.tokens.some((t) => t.inHeader && !t.creditsNear)) {
     const t = base.tokens.find((x) => x.inHeader && !x.creditsNear);
     soft.push({ what: `the header shows money ("${t.raw}") but the product sells credits — show the balance in credits (money only as a hint next to it) [money]`, where: t.where, selector: t.selector, human: t.human });
   }

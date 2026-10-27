@@ -12,6 +12,7 @@ import { loadConfig, loadRoutes, STORAGE, STATE_DIR, storageFor } from "./projec
 import { resolve } from "node:path";
 import { existsSync, readFileSync } from "node:fs";
 import { scope, config, setup, decision } from "./skip.js";
+import { siteMoneyModel, CREDIT_AMOUNT_SRC } from "../lib/money-model.js";
 const cfg = loadConfig();
 const acc = a.acceptanceConfig(cfg);
 const ROUTES = loadRoutes(cfg);
@@ -88,8 +89,11 @@ for (const route of ROUTES) {
             test("M2 the signed-in header shows the credit balance [owner rule]", async ({ page }) => {
                 test.skip(!on("M2") || acc.headerBalance === false, acc.headerBalance === false ? config("M2", "acceptance.headerBalance: false") : why("M2"));
                 await open(page, r);
-                const sells = acc.headerBalance === true || (await page.evaluate(() => /\bcredits?\b|кредит|kredit/i.test(document.body.innerText)));
-                test.skip(!sells, decision("M2", "the product shows no credits (acceptance.headerBalance: true to require a balance anyway)"));
+                // 5.7.1: one answer for the whole run (lib/money-model.js): an amount given in credits anywhere → every
+                // signed-in header shows the balance; amounts only in money → M2 does not apply, on every page alike
+                const mm = siteMoneyModel(cfg);
+                const sells = acc.headerBalance === true || mm.model === "credits" || (mm.model === "unknown" && (await page.evaluate((src) => new RegExp(src, "iu").test(document.body.innerText), CREDIT_AMOUNT_SRC)));
+                test.skip(!sells, decision("M2", mm.model === "money" ? `the product sells in money, not credits — ${mm.why} (acceptance.headerBalance: true to require a credit balance anyway)` : "no amount on this page is given in credits, and the run found none on any page (acceptance.headerBalance: true to require a balance anyway)"));
                 hard(await a.headerBalance(page));
             });
         test("H2 everything clickable shows the hand cursor [BQA 3]", async ({ page }) => {

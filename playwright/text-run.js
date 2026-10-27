@@ -11,6 +11,7 @@ import { resolveStage } from "../lib/stage.js";
 import { translationKeys } from "../lib/content-lint.js";
 import { loadRoutes, loadLocales, applyLocale as applyDetected, localize, storageFor, STATE_DIR, ROOT } from "./project.js";
 import { existsSync, readFileSync } from "node:fs";
+import { routeKey } from "../lib/route-selection.js";
 
 export const TEXT_VIEWPORT = { width: 1440, height: 900 };
 
@@ -69,7 +70,10 @@ export async function siteWide(byLocale, { cfg, defaultLocale, locales, base, on
 /**
  * Read every route once per locale × role. @returns {{ pages, det, soft, siteDet, loads, notReached, status, ms }}
  */
-export async function readSite({ cfg, log = () => {}, routes = loadRoutes(cfg), headless = true } = {}) {
+// 5.7.1 (--changed): `reuse` is the last run's text-pages.json and `only` the route keys the change reaches; every other
+// route × locale × role is taken from the last read (its page model, copy findings and record) instead of loaded again.
+// The site-wide rules and Jev's cross-page comparison still run over every page — fresh and reused alike.
+export async function readSite({ cfg, log = () => {}, routes = loadRoutes(cfg), headless = true, reuse = null, only = null } = {}) {
   const cc = k.contentConfig(cfg);
   const on = (id) => !(cc.skip || []).includes(id);
   const detected = (() => { try { return loadLocales(cfg); } catch { return { locales: [] }; } })();
@@ -86,7 +90,15 @@ export async function readSite({ cfg, log = () => {}, routes = loadRoutes(cfg), 
   const browser = await chromium.launch({ channel: process.env.PW_CHANNEL || "chrome", headless });
   const request = await pwRequest.newContext({ baseURL: base });
   const pages = [], det = [], soft = [], byLocale = new Map(), status = {};
-  let loads = 0;
+  let loads = 0, reused = 0;
+  const cached = (route, loc) => {
+    if (!reuse || !only || only.has(routeKey(route))) return null;
+    const lc = loc?.code || null;
+    const model = (reuse.pages || []).find((p) => p.route === route.path && !!p.auth === !!route.auth && (p.role || null) === (route.auth ? route.role || "user" : null) && (p.locale || null) === lc);
+    const code = loc?.code || defaultLocale || "default";
+    const record = (reuse.records?.[code] || []).find((r) => r.route === route.path && !!r.auth === !!route.auth && (r.role || null) === (route.auth ? route.role || "user" : null));
+    return model && record ? { model, record, key: keyOf(route, lc) } : null;
+  };
   const t0 = Date.now();
   async function open(route, loc) {
     const ctx = await browser.newContext({ viewport: TEXT_VIEWPORT, deviceScaleFactor: 1, baseURL: base, storageState: route?.auth && existsSync(storageFor(route.role)) ? storageFor(route.role) : undefined });
@@ -111,6 +123,15 @@ export async function readSite({ cfg, log = () => {}, routes = loadRoutes(cfg), 
       const recs = [];
       const dialogSeen = new Map();
       for (const route of routes) {
+        const hit = cached(route, loc);
+        if (hit) {
+          reused++;
+          recs.push(hit.record);
+          pages.push(hit.model);
+          for (const f of reuse.det || []) if (f.key === hit.key) det.push(f);
+          for (const f of reuse.soft || []) if (f.route === route.path && f.key === hit.key) soft.push(f);
+          continue;
+        }
         const o = await open(route, loc);
         if (o.error) { log(`text pass: ${route.path}${loc ? ` [${loc.code}]` : ""} could not be opened: ${String(o.error.message).split("\n")[0]}`); continue; }
         // CT11 compares a page in another language with the same page in the default language: that record is in hand
@@ -118,17 +139,20 @@ export async function readSite({ cfg, log = () => {}, routes = loadRoutes(cfg), 
         const r = await readPage(o.page, { route: route.path, cfg, locale: loc?.code || null, defaultLocale, keys, stage, own, dns, dnsCache, defaults: on("CT11") && defRec ? defRec.copy : null, auth: route.auth, role: route.role, dialogSeen: dialogSeen.get(route.role || "") || dialogSeen.set(route.role || "", new Set()).get(route.role || "") });
         await o.ctx.close();
         r.record.auth = !!route.auth;
+        r.record.role = route.auth ? route.role || "user" : null;
         r.record.copy = { segs: r.copy.segs.map((s) => ({ text: s.text })), title: r.copy.title, lang: r.copy.lang };
         recs.push(r.record);
         r.model.template = route.template || null;
         pages.push(r.model);
         for (const f of r.det.hard) det.push({ ...f, route: route.path, auth: !!route.auth, role: route.auth ? route.role || "user" : null, locale: loc?.code || null, key: keyOf(route, loc?.code), quote: quoteOf(f.what) });
-        for (const f of r.det.soft) soft.push({ ...f, route: route.path });
+        for (const f of r.det.soft) soft.push({ ...f, route: route.path, key: keyOf(route, loc?.code) });
       }
       // legal pages the footer links to but the crawl did not reach (as content.spec)
       const seen = new Set(recs.map((x) => x.route.replace(/\/$/, "") || "/"));
       const bare = (p) => (loc?.code ? p.replace(new RegExp(`^/${loc.code}(?=/|$)`, "i"), "") || "/" : p);
       for (const p of [...new Set(recs.flatMap((x) => x.legal.map((l) => bare(l.path))))].filter((p) => !seen.has(p))) {
+        const prev = only && reuse ? (reuse.records?.[code] || []).find((r) => r.route === p && !r.auth) : null;
+        if (prev && !only.has(routeKey({ path: p, auth: false }))) { recs.push(prev); reused++; continue; }
         const o = await open({ path: p, auth: false }, loc);
         if (o.error) continue;
         const r = await readPage(o.page, { route: p, cfg, locale: loc?.code || null, defaultLocale, keys, stage, own, dns, dnsCache });
@@ -140,7 +164,7 @@ export async function readSite({ cfg, log = () => {}, routes = loadRoutes(cfg), 
     const sw = await siteWide(byLocale, { cfg, defaultLocale, locales, base, on, request });
     soft.push(...sw.soft);
     const notReached = [...new Set(routes.filter((r) => r.template && /\[/.test(r.template) && !pages.some((p) => p.template === r.template)).map((r) => r.template))];
-    return { pages, det, soft, siteDet: sw.hard.map((f) => ({ ...f, quote: quoteOf(f.what), key: "(site)" })), loads, notReached, status, ms: Date.now() - t0 };
+    return { pages, det, soft, siteDet: sw.hard.map((f) => ({ ...f, quote: quoteOf(f.what), key: "(site)" })), loads, reused, notReached, status, records: Object.fromEntries(byLocale), ms: Date.now() - t0 };
   } finally {
     await request.dispose().catch(() => { });
     await browser.close().catch(() => { });

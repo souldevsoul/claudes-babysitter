@@ -119,7 +119,9 @@ export async function readPage(page, { route, cfg = {}, locale = null, defaultLo
   record.extras = extras;
   record.slugs = extras?.slugs || [];
   const st = await structure(page, copy.segs.length ? Math.max(...copy.segs.map((s) => s.i)) + 1 : 0).catch(() => []);
-  const lines = copy.segs.filter((s) => !s.user).map((s) => ({ text: s.text, kind: s.kind, region: st[s.i]?.region || (s.footer ? "footer" : "main"), section: st[s.i]?.section || "", li: !!st[s.i]?.li }));
+  // record: the line sits in a table row, a list row or a card — one item of several (5.7.1: two rows' values are not a
+  // page contradicting itself)
+  const lines = copy.segs.filter((s) => !s.user).map((s) => ({ text: s.text, kind: s.kind, region: st[s.i]?.region || (s.footer ? "footer" : "main"), section: st[s.i]?.section || "", li: !!st[s.i]?.li, ...(s.record ? { record: true } : {}) }));
   // what one click would show: collapsed answers, then dialogs (last: they act on the page)
   if (deep) {
     const have = new Set(lines.map((l) => l.text));

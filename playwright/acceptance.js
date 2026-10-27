@@ -157,7 +157,16 @@ export async function staticHover(page, max = 10) {
         if (!el)
             continue;
         await el.scrollIntoViewIfNeeded().catch(() => { });
+        // 5.7.1: a card that animates by itself (an endless glow / pulse keyframe) changes between any two readings —
+        // that is not a reaction to the pointer (a live run reported a pulsing "glow" card as hover-reactive)
+        const looping = await el.evaluate((e) => (e.getAnimations ? e.getAnimations() : []).some((an) => an.playState === "running" && an.effect?.getTiming?.().iterations === Infinity)).catch(() => false);
+        if (looping)
+            continue;
+        const idle = await snap(el).catch(() => null);
+        await page.waitForTimeout(350);
         const before = await snap(el).catch(() => null);
+        if (idle !== before)
+            continue;
         await el.hover({ timeout: 1500, force: true }).catch(() => { });
         await page.waitForTimeout(350);
         const after = await snap(el).catch(() => null);

@@ -29,7 +29,7 @@
     "node": ">=22.18"
   },
   "scripts": {
-    "test": "npm run test:eslint && npm run test:stylelint && npm run test:check && npm run test:tt && npm run test:team && npm run test:acceptance && npm run test:run && npm run test:content && npm run test:layout && npm run test:studio && npm run test:forms && npm run test:fp && npm run test:misses && npm run test:issues && npm run test:misses550 && npm run test:express && npm run test:skips && npm run test:jev && npm run test:update && npm run test:package",
+    "test": "npm run test:eslint && npm run test:stylelint && npm run test:check && npm run test:tt && npm run test:team && npm run test:acceptance && npm run test:run && npm run test:content && npm run test:layout && npm run test:studio && npm run test:forms && npm run test:fp && npm run test:misses && npm run test:issues && npm run test:misses550 && npm run test:express && npm run test:skips && npm run test:jev && npm run test:571 && npm run test:update && npm run test:package",
     "test:fp": "node test/fp-510.test.mjs && node test/fp-560.test.mjs",
     "test:update": "node test/update.test.mjs",
     "test:skips": "node test/skip-report.test.mjs",
@@ -56,6 +56,7 @@
     "test:misses550": "for f in layout-a layout-b content-a content-b money states; do node test/misses-550-$f.test.mjs || exit 1; done",
     "test:express": "node test/affected-routes.test.mjs && node test/express-cache.test.mjs && node test/express-order.test.mjs && node test/express-parity.test.mjs",
     "test:jev": "node test/jev.test.mjs && node test/text-pass-parity.test.mjs",
+    "test:571": "node test/fixes-571.test.mjs",
     "jev:smoke": "node bin/jev-smoke.mjs"
   },
   "dependencies": {

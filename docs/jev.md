@@ -117,7 +117,16 @@ skips.
 ## `--fast`: the smaller matrix
 
 - viewports 390 + 1440 for every route; 768 only on one route per page template (the home page always) — a tablet
-  layout is a breakpoint of a template, not a page of its own; 360 and 1280 are not projects of a --fast run;
+  layout is a breakpoint of a template, not a page of its own; 360 and 1280 are not projects of a --fast run.
+  5.7.1: a **page template** is read from the repo (`lib/page-templates.js`): the nearest layout above the page that
+  renders something (a layout that only returns `{children}` or sets metadata does not count; two layouts rendering the
+  same components are one shell) plus the page's **frame** — a shared page-building component it imports (a
+  `LegalDocument`, a `PageHero`, a page header, a dashboard chrome module; not a kit primitive under `components/ui/`, not
+  a helper). Pages under one non-root shell are one template (`dashboard/*`); root pages without a frame stay one each
+  (the home page, a blog post); every dynamic route of one `page.tsx` is one template; roles share a template. A real
+  app-router product of 52 routes (3 roles) went from 52 routes at 768 to 7. The run says which route stands for which
+  template ("768 on 7 of 52 route(s), one per page template …: / · /features (+7 like it) · …") and each skipped 768
+  check names the route its template is checked on. Without a repo: one per route pattern, as before;
 - a route a second role sees with the same rendered main text (a legal page signed in) is checked once;
 - copy is read once by the text pass; express mode on.
 

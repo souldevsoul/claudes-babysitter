@@ -287,7 +287,9 @@ switch (cmd) {
       if (jevOn || fast) {
         const before = (() => { try { return statSync0(textFile).mtimeMs; } catch { return 0; } })();
         console.error(`babysitter e2e: text pass — every route read once${jevOn ? ", Jev reads the copy" : " (Jev off: no token — copy checked by rules only)"}…`);
-        await forward(process.execPath, [join(root, "bin/text-pass.mjs"), "--no-merge", ...(jevOn ? [] : ["--no-jev"])], { stdio: "inherit", env });
+        // 5.7.1: --changed reads only the selected routes; the rest of the site's copy comes from the last read
+        const tenv = env.BABYSITTER_SELECTED ? { ...env, BABYSITTER_TEXT_ONLY: env.BABYSITTER_SELECTED } : env;
+        await forward(process.execPath, [join(root, "bin/text-pass.mjs"), "--no-merge", ...(jevOn ? [] : ["--no-jev"])], { stdio: "inherit", env: tenv });
         const after = (() => { try { return statSync0(textFile).mtimeMs; } catch { return 0; } })();
         if (after > before) { textPass = textFile; env.BABYSITTER_TEXT_PASS = textFile; }
         else console.error("babysitter e2e: the text pass did not finish — content.spec runs its copy checks as before.");
