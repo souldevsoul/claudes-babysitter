@@ -160,4 +160,44 @@ unclear values 0/7. Out of reach of a rendered read: 12 cards on a finished-job 
 Precision on a sample of 40 Jev findings: 22 real, 18 noise (mostly claims against a facts file older than the site).
 Cost: $0.04–0.07 per site cold (≈ 650 claims, 3 600–6 400 questions), warm re-runs a fraction of a cent.
 
-PROFILE_SECTION
+## Where the time goes (measured)
+
+`babysitter profile` on a full normal run of the express fixture product (4 public routes + a signed-in page, a second
+language, 5 viewports, 2 workers; 2 148 tests, 71 min wall):
+
+| suite | share of test time | what it is |
+|---|---|---|
+| UI checks (babysitter.spec), per page | 58 % | every check × route × viewport × role, a page load each |
+| layout, per page | 15 % | |
+| acceptance, per page | 9 % | |
+| states / languages (run.spec) | 9 % | dialogs, menus, wizards at the narrowest and widest viewport, each language |
+| content, per page + site-wide | 3 % | once at desktop — copy was never the expensive part |
+| forms, site-wide tests of every suite | 5 % | |
+
+By viewport: 360 19 %, 390 20 %, 768 14 %, 1280 15 %, 1440 31 % (desktop also runs the once-per-route tests). 39 % of
+the wall time is outside tests (worker start, browser launch, fixtures). The cost is page loads: one per check × route ×
+viewport × locale × role.
+
+Extrapolated (same per-test means, serial time / 4 workers): a 40-route product with 2 languages at the default
+5 viewports ≈ **250 min**; at 3 viewports ≈ 170 min; with 3 roles over all 40 routes (120 route × role pages) ≈
+500 min at 3 viewports, 750 at 5. That is the 2–4 hours.
+
+Measured on the same fixture, same findings:
+
+| mode | wall | distinct problems × page |
+|---|---|---|
+| `e2e` (normal, 5 viewports) | 4 266 s | 224 |
+| `e2e --express` | 1 717 s (−60 %) | 224 (identical) |
+| `e2e --fast` (express + 390/1440 + 768 sample + copy read once) | 1 177 s (−72 %) | 224 (identical; one CT22 finding is reported site-wide instead of on /) |
+
+On the fixture every problem seen at 360, 768 or 1280 is also seen at 390 or 1440, so nothing was lost; on a real
+product a defect only at 360 or 1280 would be — the summary lists those viewports as by design scope. Scaled by the
+measured ratio, a 40-route × 2-language product runs `--fast` in ≈ 70 min (5-viewport baseline) or ≈ 47 min
+(3-viewport baseline) at 4 workers; the 768 sample is one route per template, so on a product with many routes per
+template the saving is larger than on the fixture (where every route is its own template).
+
+The text pass itself: 32 pages (27 public + 5 signed in) read in 95 s with collapsed sections and dialogs (one browser,
+one load each); content.spec took 921 s for the same pages at one viewport. On the fixture: content.spec 232 s, the text pass 39 s, every content.spec finding also a text-pass finding (`test/text-pass-parity.test.mjs`). Jev on those pages: 20 s and $0.04–0.07
+cold, under a second and a fraction of a cent warm (answers cached by content). A live read-only smoke of 10 public
+pages of a fleet site: 112 s, $0.028, 26 rule findings, 59 Jev findings, 56 unsure.
+

@@ -50,8 +50,11 @@ try {
     const items = A.flatMap((f) => f.items.map((it) => ({ ...f, what: it.what })));
     assert.ok(items.length >= 5, `the fixture should break copy rules (${items.length})`);
     const have = new Set(B.findings.map((f) => norm({ ...f, what: f.items[0].what })));
-    const missing = items.filter((x) => x.route && !have.has(norm(x)));
-    const siteWide = items.filter((x) => !x.route).map((x) => String(x.what).replace(/\s+/g, " ").trim());
+    // the site-wide tests' findings ("content site-wide" describe; its titles name "Sign in / Log in", which the
+    // summary's title parser reads as route "/") are compared with the text pass's site-wide findings
+    const SITE = /^(CT15\/CT16|CT17 one term|CT24\/CT26|CT11 other languages)/;
+    const missing = items.filter((x) => x.route && !SITE.test(x.test) && !have.has(norm(x)));
+    const siteWide = items.filter((x) => !x.route || SITE.test(x.test)).map((x) => String(x.what).replace(/\s+/g, " ").trim());
     const haveSite = new Set(B.findings.filter((f) => !f.route).map((f) => String(f.items[0].what).replace(/\s+/g, " ").trim()));
     assert.deepEqual(missing.map(norm), []);
     assert.deepEqual(siteWide.filter((w) => !haveSite.has(w)), []);
