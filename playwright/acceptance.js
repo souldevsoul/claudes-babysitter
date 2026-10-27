@@ -4,6 +4,7 @@
 // Plain JavaScript on purpose (see checks.js). Page-level checks need checks.install(page) first.
 
 import { copyFindings } from "./checks/content.js";
+import { decided, noteDecision, noteNotTested } from "./skip.js";
 
 /** Defaults for babysitter.config.json → acceptance. Every one is an owner decision; override per product. */
 export const DEFAULTS = {
@@ -547,7 +548,7 @@ export async function dialogLinks(page, open) {
     const out = [];
     const home = page.url();
     const links = await (async () => {
-        if (!(await open())) return [];
+        if (!(await open())) { noteDecision("C7", "no cookie settings window could be opened (no \"Manage cookies\" control, no settings button on the banner)"); return []; }
         return page.evaluate(() => Array.from(document.querySelectorAll("[role=dialog] a[href], [role=alertdialog] a[href], dialog[open] a[href], [data-bs-cookie] a[href]")).filter((a) => window.__uiVisible(a) && a.target !== "_blank").map((a) => { try { const u = new URL(a.href); return u.origin === location.origin ? { href: u.pathname + u.search + u.hash, text: (a.textContent || "").trim().replace(/\s+/g, " ").slice(0, 40) } : null; } catch { return null; } }).filter(Boolean).slice(0, 3)).catch(() => []);
     })();
     for (const l of links) {
@@ -1009,7 +1010,7 @@ export const footerLinks = (page) => page.evaluate(() => {
 });
 /** F0 — the footer is the same signed in and signed out (Praxis xp7pmu: Contact gone from the Company column when signed in). */
 export function footerParity(anon, signed, role) {
-    if (!anon || !signed) return [];
+    if (!anon || !signed) { noteNotTested("F0", `the footer could not be read ${anon ? "signed in" : "signed out"}: signed-in and signed-out footers were not compared`); return []; }
     const k = (x) => `${x.label.toLowerCase()}|${x.path}`;
     const a = new Set(anon.map(k)), b = new Set(signed.map(k));
     const out = [];
@@ -1048,13 +1049,13 @@ export async function paymentLogoFiles(page, acc = DEFAULTS) {
 }
 
 /** M2 — the signed-in header shows the credit balance (Compass gcrh4v): a number next to credits / cr in the site header. */
-export const headerBalance = (page) => page.evaluate(() => {
+export const headerBalance = (page) => decided(page, page.evaluate(() => {
     const hs = Array.from(document.querySelectorAll("header, [role=banner]")).filter((h) => window.__uiVisible(h) && !h.closest("main article, main section") && h.getBoundingClientRect().top < 200);
-    if (!hs.length) return [];
+    if (!hs.length) { window.__bsNA = { rule: "M2", reason: "no header bar found in the top 200 px of the signed-in page: the credit balance was not looked for" }; return []; }
     const RE = /\d[\d,.\u00a0\u202f ]*\s*(credits?|cr\b|кредит\p{L}*|kredit\p{L}*)|(credits?|balance|баланс|balans)\s*:?\s*\d/iu;
     const shows = hs.some((h) => RE.test(h.innerText || "") || Array.from(h.querySelectorAll("[aria-label], [title]")).some((x) => RE.test(x.getAttribute("aria-label") || x.getAttribute("title") || "")));
     return shows ? [] : [{ id: "M2", what: "the signed-in header does not show the credit balance — show it (e.g. \"6,000 credits\") on every signed-in page [M2, owner rule]", where: window.__uiDescribe(hs[0]), selector: window.__uiSelector(hs[0]) }];
-});
+}));
 
 /**
  * A10 — a signed-in area does not render to a visitor who may not see it (Kindred gm21xv: /admin showed users,
@@ -1094,7 +1095,7 @@ export function switcherLocales(loc) {
 /** P2 parity: [{ path, h2, toc }] of every policy page → the pages with 3+ sections and no rail, when 2+ others have one. */
 export function policyRailParity(pages) {
     const withRail = pages.filter((p) => p.toc);
-    if (withRail.length < 2) return [];
+    if (withRail.length < 2) { noteDecision("P2", `fewer than 2 policy pages have an "On this page" rail (${withRail.length} of ${pages.length}): no standard to compare the others with`); return []; }
     const missing = pages.filter((p) => !p.toc && p.h2 >= 3);
     if (!missing.length) return [];
     return [{ id: "P2", what: `${missing.map((p) => `${p.path} (${p.h2} sections)`).join(", ")} ${missing.length > 1 ? "have" : "has"} no "On this page" contents, while ${withRail.length} other policies do (${withRail.slice(0, 4).map((p) => p.path).join(", ")}) — one policy layout: give every policy with sections the same contents rail [P2, BQA 8]`, where: missing[0].path }];

@@ -2,6 +2,47 @@
 
 Earlier releases (4.11.1 and before) are described in the README under "What changed in …".
 
+## 5.7.0 (draft) — every skip is reported
+
+### Skips and decisions
+
+Babysitter sometimes did not check a rule it has, and the report did not say that it had decided so itself. The summary
+counted every skipped test but printed only the ones switched off in `babysitter.config.json`; a rule skipped because no
+sign-in page was found, the site does not claim 2FA, the product shows no credits, there are fewer than 3 policy pages,
+too few UI pieces or colour tokens, no hreflang, no `.babysitter/locales.json`, no signed-in storage, the stage unknown —
+was counted and never shown, and the run still ended "Clean.".
+
+- **Every skip has a kind**, written where it is decided (`playwright/skip.js`): the annotation reads
+  `<kind>: <rule>: <reason>` — `scope` (by design: one width, once per run, pointer screens only), `config` (switched
+  off), `setup` (something the run needs is missing), `decision` (Babysitter judged the rule does not apply). All 102
+  skip sites of the specs are converted; a skip text of another shape (an older spec) is classified from its words, and
+  one that says nothing known is a decision — no skip is left out.
+- **The summary lists them.** By design: one count line. Switched off: as before. **Setup missing — the run is PARTIAL**,
+  with how to fix it; a login, role or test account `babysitter.config.json` declares but the run lacks fails the run
+  (`e2e` exits 1, like a configured role that did not sign in). **Babysitter decided not to check (N)**: every decision
+  with its rule, its reason and the pages / viewports it applies to, so a human can disagree.
+- **"Clean." only when nothing is undecided.** A run with decisions ends "No failures in what ran — N rule(s) were
+  decided not to apply (listed above); not a clean bill of health". The owner approves a decision in
+  `babysitter.config.json` → `acceptance.notApplicable: { "<rule>": "<why>" }` (or `"<rule> <route>"` for one page;
+  `forms.` / `content.` / top-level `notApplicable` work too): it is then listed under "Not applicable (owner-approved)".
+- **Silent passes are decisions too.** A check that ended as passed because a precondition was missing now says so on its
+  test (a `decision` annotation; the verdict is unchanged): 1.20 / 3.5 no header bar found, 3.5 too few hidden links to
+  call the desktop nav missing, M2 no header to look for the balance in, C7 no cookie settings window could be opened,
+  P2 fewer than 2 policies with a contents rail to compare with, 2.7 fewer than 2 pages with a recognisable shell, 1.3/1.16
+  no mobile menu could be opened; 1.18 says how many stylesheets could not be read (cross-origin). Could-not-measure cases
+  are "not tested" lines: J2 no password field after "Sign in to …", J2 the sign-in did not go through, F0 a footer that
+  could not be read.
+- **Needs a human (N)**: the "check by eye", "not checked" (forms: "verify by hand") and "could not verify" notes reach
+  the summary — before, they were in the JSON report only.
+- **Carried from the last run, routes not opened (N)**: a `--changed` run lists the findings it kept for the routes it did
+  not open (they were computed and never printed), and does not call itself clean while they stand.
+- **findings.json** has `decisions`, `approved`, `setupMissing`, `needsHuman` and `carried`. `babysitter fix-plan` prints
+  the missing setup and the decisions first — "check these by hand, or approve them in config" — also when there is
+  nothing to fix. The **Stop hook** shows the missing setup and the decisions on the routes the work changed when it lets a
+  turn end on an otherwise clean run.
+- Tests: `test/skip-report.test.mjs` (the summary per kind, the verdict, findings.json, fix-plan, the Stop hook, and two
+  real runs: acceptance.spec P2 on a one-page site, babysitter.spec 1.20/3.5 on a page with no header in express mode).
+
 ## 5.6.3 — not-yet copy in any word order and language; a copy change measured against the whole site (2026-10-26)
 
 A fine-tuning product shipped "Email delivery is not enabled on <Brand> yet", "<Brand> sends no email yet", "What we

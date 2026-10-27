@@ -16,13 +16,14 @@ import { resolveStage } from "../lib/stage.js";
 import { translationKeys } from "../lib/content-lint.js";
 import { loadConfig, loadRoutes, loadLocales, applyLocale as applyDetected, localize, STORAGE, STATE_DIR, ROOT, authTag, storageFor } from "./project.js";
 import { existsSync } from "node:fs";
+import { scope, config, decision } from "./skip.js";
 const cfg = loadConfig();
 const cc = k.contentConfig(cfg);
 const ROUTES = loadRoutes(cfg);
 const PUBLIC = ROUTES.filter((r) => !r.auth);
 const STRICT = process.env.STRICT !== "0";
 const on = (id) => !(cc.skip || []).includes(id);
-const why = (id) => `${id} switched off in babysitter.config.json → content.skip${cc.skipReasons?.[id] ? `: ${cc.skipReasons[id]}` : ""}`;
+const why = (id) => config(id, `${id} switched off in babysitter.config.json → content.skip${cc.skipReasons?.[id] ? `: ${cc.skipReasons[id]}` : ""}`);
 const DNS = process.env.BABYSITTER_DNS !== "0";
 // languages: content.locales when set, else the ones `babysitter prepare` found and verified (.babysitter/locales.json)
 const DETECTED = (() => { try {
@@ -49,7 +50,7 @@ const hard = (list) => expect(list, fmt(list)).toEqual([]);
 /** for a human to decide: listed in the report, never failing the run */
 const note = (list, label) => { if (list.length)
     test.info().annotations.push({ type: "check by eye", description: `${label}\n${fmt(list)}` }); };
-const once = () => test.skip(!/desktop-1440/.test(test.info().project.name), "copy is the same at every width: runs once, at desktop width");
+const once = () => test.skip(!/desktop-1440/.test(test.info().project.name), scope("*", "copy is the same at every width: runs once, at desktop width"));
 const open = opener("content", async function open(page, route, loc = null) {
     await c.install(page);
     const baseURL = test.info().project.use.baseURL;
@@ -252,7 +253,7 @@ test.describe("content site-wide", () => {
         hard(out);
     });
     test("CT11 other languages the site offers (hreflang) are translated", async ({ browser }) => {
-        test.skip(LOCALES.length > 0, "the languages are known (content.locales or prepare): each has its own tests");
+        test.skip(LOCALES.length > 0, scope("CT11", "the languages are known (content.locales or prepare): each has its own tests"));
         test.skip(!on("CT11"), why("CT11"));
         test.setTimeout(120_000 + PUBLIC.length * 15_000 * 4);
         const ctx = await ctxFor(browser, null);
@@ -261,7 +262,7 @@ test.describe("content site-wide", () => {
         const first = await k.collectCopy(page);
         const own = (first.lang || "").toLowerCase().split("-")[0];
         const alts = first.alternates.filter((a) => a.code && a.code !== "x-default" && a.code.toLowerCase().split("-")[0] !== own);
-        test.skip(!alts.length, "no <link rel=alternate hreflang> to other languages — list them in content.locales to check them");
+        test.skip(!alts.length, decision("CT11", "no <link rel=alternate hreflang> to other languages — list them in content.locales to check them"));
         const out = [];
         const base = new URL(page.url()).origin;
         for (const a of alts) {

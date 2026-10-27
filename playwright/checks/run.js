@@ -15,6 +15,7 @@ import * as boxes from "./boxes.js";
 import * as fm from "./forms.js";
 import * as M from "./money.js";
 import { untranslatedReason, untranslatedWhat } from "../../lib/content-rules.js";
+import { noteNotTested } from "../skip.js";
 
 /* ───────────────────────── shared ───────────────────────── */
 
@@ -1633,7 +1634,7 @@ export async function guestChoice(page, { creds, login = {} } = {}) {
     await page.waitForLoadState("load", { timeout: 15_000 }).catch(() => { });
     await page.waitForTimeout(800);
     const pw = page.locator(login.passwordSelector || "input[type=password]").first();
-    if (!(await pw.isVisible().catch(() => false))) return [];
+    if (!(await pw.isVisible().catch(() => false))) { noteNotTested("J2", `"${info.label}" did not open a page with a password field: the sign-in was not walked`); return []; }
     await page.locator(login.emailSelector || "input[type=email], input[name=email], input[name=username]").first().fill(creds.email, { timeout: 3000 }).catch(() => { });
     await pw.fill(creds.password, { timeout: 3000 }).catch(() => { });
     const atLogin = page.url();
@@ -1641,7 +1642,7 @@ export async function guestChoice(page, { creds, login = {} } = {}) {
     await page.waitForURL((u) => u.href !== atLogin, { timeout: 20_000 }).catch(() => { });
     await page.waitForLoadState("networkidle", { timeout: 8000 }).catch(() => { });
     await page.waitForTimeout(1200);
-    if (page.url() === atLogin) return [];
+    if (page.url() === atLogin) { noteNotTested("J2", `signing in with the test account did not leave ${new URL(atLogin).pathname}: what the site keeps after sign-in was not checked`); return []; }
     const kept = await page.evaluate((names) => {
         const vals = Array.from(document.querySelectorAll("input, textarea, select")).map((x) => x.value || "").join(" ");
         const t = `${document.body.innerText} ${vals} ${decodeURIComponent(location.href)}`.toLowerCase();

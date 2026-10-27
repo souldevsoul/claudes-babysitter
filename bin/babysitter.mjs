@@ -298,6 +298,8 @@ switch (cmd) {
       const sum = summarize({ root: ROOT, only, args, cfg, configured: { viewports: full }, lastFailed, selection, rerun: `${RUN} e2e --skip-prepare --last-failed${only ? ` --only ${only}` : ""}${env.BABYSITTER_PROFILE === "quick" ? " --quick" : ""}${express ? " --express" : ""}` });
       console.log(`\n${sum.text}`);
       if (!status && sum.rolesNotChecked?.length) status = 1;
+      // 5.7.0: a login / role / test account babysitter.config.json declares, missing at run time: partial, and fails
+      if (!status && sum.setupRequired?.length) status = 1;
       if (vps.length < full.length) console.log(`(--quick / VIEWPORTS: ${vps.join(", ")} of ${full.join(", ")})`);
     } catch (e) { console.error(`babysitter e2e: summary failed: ${e.message}`); }
     if (banner) console.error(banner);

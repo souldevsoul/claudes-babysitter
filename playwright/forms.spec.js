@@ -10,6 +10,7 @@ import * as c from "./checks.js";
 import * as a from "./acceptance.js";
 import * as fm from "./checks/forms.js";
 import { loadConfig, loadRoutes, STORAGE, ROOT, storageFor, authTag } from "./project.js";
+import { scope, config, setup, decision } from "./skip.js";
 const cfg = loadConfig();
 const acc = a.acceptanceConfig(cfg);
 const F = { skip: [], skipReasons: {}, zeroBalanceStorage: null, zeroBalanceRole: null, protectedRoute: null, forgot: null, ...(cfg.forms || {}) };
@@ -24,7 +25,7 @@ const SIGNED_IN = existsSync(SIGNED_STORE);
 const ZERO = F.zeroBalanceRole ? storageFor(F.zeroBalanceRole) : F.zeroBalanceStorage ? resolve(ROOT, F.zeroBalanceStorage) : null;
 const STRICT = process.env.STRICT !== "0";
 const on = (id) => !F.skip.includes(id);
-const why = (id) => `${id} switched off in babysitter.config.json → forms.skip${F.skipReasons[id] ? `: ${F.skipReasons[id]}` : ""}`;
+const why = (id) => config(id, `${id} switched off in babysitter.config.json → forms.skip${F.skipReasons[id] ? `: ${F.skipReasons[id]}` : ""}`);
 const SIGN_IN = acc.auth.signIn || PUBLIC.map((r) => r.path).find((p) => /^\/(login|log-in|signin|sign-in)(\/|$)/i.test(p)) || null;
 const SIGN_UP = acc.auth.signUp || PUBLIC.map((r) => r.path).find((p) => /^\/(register|signup|sign-up)(\/|$)/i.test(p)) || null;
 const AUTH_PAGES = [SIGN_IN, SIGN_UP, F.forgot || PUBLIC.map((r) => r.path).find((p) => /forgot|reset-password|recover/i.test(p))].filter(Boolean);
@@ -54,7 +55,7 @@ async function ctxFor(browser, storage) {
 }
 test.use({ serviceWorkers: "block" });
 // forms behave the same at every width: run once, at desktop width (the auth shell is also a layout check: two widths)
-const desktopOnce = () => test.skip(!/desktop-1440/.test(test.info().project.name), "forms: runs once, at desktop width");
+const desktopOnce = () => test.skip(!/desktop-1440/.test(test.info().project.name), scope("*", "forms: runs once, at desktop width"));
 /* ───────── every page ───────── */
 for (const route of ROUTES) {
     describeRoute(route, `forms ${authTag(route)}${route.path}`, () => {
@@ -90,7 +91,7 @@ for (const route of ROUTES) {
             // sign-in / sign-up eyes are acceptance A1; this covers settings, reset and every other page with a password
             test("FM7 every password field (settings, reset, confirm) has its own show/hide eye [pw-toggle ×24]", async ({ page }) => {
                 test.skip(!on("FM7"), why("FM7"));
-                test.skip(!!acc.auth.passwordless, "acceptance.auth.passwordless");
+                test.skip(!!acc.auth.passwordless, config("FM7", "acceptance.auth.passwordless"));
                 await open(page, r);
                 report(await fm.passwordEyes(page), "FM7");
             });
@@ -122,7 +123,8 @@ test.describe("forms site-wide", () => {
     test.beforeEach(() => desktopOnce());
     test("FM7 'Forgot password?' leads to a working reset with a neutral confirmation [forgot-pw ×29]", async ({ browser }) => {
         test.skip(!on("FM7"), why("FM7"));
-        test.skip(!SIGN_IN || !!acc.auth.passwordless, SIGN_IN ? "acceptance.auth.passwordless" : "no sign-in page (acceptance.auth.signIn / config.login.url)");
+        test.skip(!!acc.auth.passwordless, config("FM7", "acceptance.auth.passwordless"));
+        test.skip(!SIGN_IN, decision("FM7", "no sign-in page found (acceptance.auth.signIn / config.login.url sets it)"));
         const ctx = await ctxFor(browser);
         const page = await ctx.newPage();
         await c.install(page);
@@ -131,7 +133,7 @@ test.describe("forms site-wide", () => {
     });
     test("FM8 sign-in / sign-up / reset: logo links home, 'Back to home', no full nav or footer [auth-minimal-layout ×31]", async ({ browser }) => {
         test.skip(!on("FM8"), why("FM8"));
-        test.skip(!AUTH_PAGES.length, "no sign-in / sign-up page found");
+        test.skip(!AUTH_PAGES.length, decision("FM8", "no sign-in / sign-up page found (acceptance.auth.signIn / signUp sets them)"));
         const out = [];
         for (const p of AUTH_PAGES) {
             const ctx = await ctxFor(browser);
@@ -144,7 +146,7 @@ test.describe("forms site-wide", () => {
     });
     test("FM11 the browser saves the e-mail as the login: autocomplete username / email / new- and current-password on sign-in and sign-up [autofill]", async ({ browser }) => {
         test.skip(!on("FM11"), why("FM11"));
-        test.skip(!AUTH_PAGES.length, "no sign-in / sign-up page found");
+        test.skip(!AUTH_PAGES.length, decision("FM11", "no sign-in / sign-up page found (acceptance.auth.signIn / signUp sets them)"));
         const out = [];
         for (const p of AUTH_PAGES) {
             const ctx = await ctxFor(browser);
@@ -181,7 +183,7 @@ test.describe("forms site-wide", () => {
         report(out, "FM9");
     });
     test.describe("signed in", () => {
-        test.skip(!SIGNED_IN, "no signed-in storage — run `babysitter prepare` with LOGIN_EMAIL / LOGIN_PASSWORD");
+        test.skip(!SIGNED_IN, setup("FM7/FM10", "no signed-in storage — run `babysitter prepare` with LOGIN_EMAIL / LOGIN_PASSWORD"));
         test.use({ storageState: SIGNED_STORE });
         const settings = () => [...new Set([acc.auth.settings, ...AUTH.map((r) => r.path).filter((p) => /setting|security|account|profile|password/i.test(p))].filter(Boolean))];
         test("FM7 change password rejects the current password as the new one, and asks twice [pw-change ×29]", async ({ page }) => {

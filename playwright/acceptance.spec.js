@@ -11,6 +11,7 @@ import { resolveStage } from "../lib/stage.js";
 import { loadConfig, loadRoutes, STORAGE, STATE_DIR, storageFor } from "./project.js";
 import { resolve } from "node:path";
 import { existsSync, readFileSync } from "node:fs";
+import { scope, config, setup, decision } from "./skip.js";
 const cfg = loadConfig();
 const acc = a.acceptanceConfig(cfg);
 const ROUTES = loadRoutes(cfg);
@@ -25,7 +26,7 @@ const STAGE = resolveStage(cfg, resolve(STATE_DIR, "stage.json"));
 const CATALOG = (cfg.catalog || PUBLIC.map((r) => r.path).filter((p) => /^\/(specialists|experts|catalog|marketplace|freelancers|talent)$/.test(p)));
 const STRICT = process.env.STRICT !== "0";
 const on = (id) => !(acc.skip || []).includes(id);
-const why = (id) => `${id} switched off in babysitter.config.json → acceptance.skip${acc.skipReasons?.[id] ? `: ${acc.skipReasons[id]}` : ""}`;
+const why = (id) => config(id, `${id} switched off in babysitter.config.json → acceptance.skip${acc.skipReasons?.[id] ? `: ${acc.skipReasons[id]}` : ""}`);
 const fmt = (list) => list.map((o) => `  • ${o.what} — ${o.where}`).join("\n");
 const hard = (list) => expect(list, fmt(list)).toEqual([]);
 function soft(list, label) {
@@ -52,8 +53,8 @@ async function ctxFor(browser, auth, role) {
     const info = test.info();
     return browser.newContext({ ...info.project.use, storageState: auth ? storageFor(role) : undefined, baseURL: info.project.use.baseURL });
 }
-const twoWidths = () => test.skip(!/mobile-390|desktop-1440/.test(test.info().project.name), "runs at one mobile and one desktop width");
-const desktopOnce = () => test.skip(!/desktop-1440/.test(test.info().project.name), "site-wide: runs once, at desktop width");
+const twoWidths = () => test.skip(!/mobile-390|desktop-1440/.test(test.info().project.name), scope("*", "runs at one mobile and one desktop width"));
+const desktopOnce = () => test.skip(!/desktop-1440/.test(test.info().project.name), scope("*", "site-wide: runs once, at desktop width"));
 /* ───────── every page ───────── */
 for (const route of ROUTES) {
     describeRoute(route, `acceptance ${route.auth ? `[signed-in${route.role ? `: ${route.role}` : ""}] ` : ""}${route.path}`, () => {
@@ -64,8 +65,8 @@ for (const route of ROUTES) {
         test.beforeEach(({}, info) => { if (!/^N6 /.test(info.title))
             twoWidths(); });
         test("ST1/ST2 stage: no test entity on a live site; in testing every test entity is marked as one [stage]", async ({ page }) => {
-            test.skip(!STAGE, "stage unknown: set babysitter.config.json → stage (live | test), or run prepare with NEXUS_URL / NEXUS_API_KEY");
-            test.skip(route.auth, "what the public sees: a signed-in page shows the user's own (test) account to itself");
+            test.skip(!STAGE, setup("ST1/ST2", "stage unknown: set babysitter.config.json → stage (live | test), or run prepare with NEXUS_URL / NEXUS_API_KEY"));
+            test.skip(route.auth, scope("ST1/ST2", "what the public sees: a signed-in page shows the user's own (test) account to itself"));
             await open(page, r);
             const marker = cfg.stageGates?.testMarker || null;
             hard(STAGE.stage === "live" ? await stg.liveTestEntities(page, { marker }) : await stg.unmarkedTestEntities(page, { marker }));
@@ -73,7 +74,7 @@ for (const route of ROUTES) {
         test("B1 no build notes or self-justifying copy [BQA 5]", async ({ page }) => {
             test.skip(!on("B1"), why("B1"));
             // B1 = CT1: content.spec reports these phrases (every page, every language) — B1 runs only when it is not in the run
-            test.skip(process.env.BABYSITTER_ONLY !== "acceptance", "B1 is reported by CT1 (content.spec) — once per phrase");
+            test.skip(process.env.BABYSITTER_ONLY !== "acceptance", scope("B1", "B1 is reported by CT1 (content.spec) — once per phrase"));
             await open(page, r);
             hard(await a.copyLeaks(page, cfg));
         });
@@ -85,19 +86,19 @@ for (const route of ROUTES) {
         // 5.5.0 (Compass gcrh4v): a product that sells credits shows the balance in the signed-in header
         if (route.auth)
             test("M2 the signed-in header shows the credit balance [owner rule]", async ({ page }) => {
-                test.skip(!on("M2") || acc.headerBalance === false, acc.headerBalance === false ? "acceptance.headerBalance: false" : why("M2"));
+                test.skip(!on("M2") || acc.headerBalance === false, acc.headerBalance === false ? config("M2", "acceptance.headerBalance: false") : why("M2"));
                 await open(page, r);
                 const sells = acc.headerBalance === true || (await page.evaluate(() => /\bcredits?\b|кредит|kredit/i.test(document.body.innerText)));
-                test.skip(!sells, "the product shows no credits (acceptance.headerBalance: true to require a balance anyway)");
+                test.skip(!sells, decision("M2", "the product shows no credits (acceptance.headerBalance: true to require a balance anyway)"));
                 hard(await a.headerBalance(page));
             });
         test("H2 everything clickable shows the hand cursor [BQA 3]", async ({ page }) => {
-            test.skip(!on("H2") || /mobile/.test(test.info().project.name), on("H2") ? "no cursor on touch" : why("H2"));
+            test.skip(!on("H2") || /mobile/.test(test.info().project.name), on("H2") ? scope("H2", "no cursor on touch") : why("H2"));
             await open(page, r);
             hard(await a.pointerCursor(page));
         });
         test("H1 static cards do not react to hover [BQA 3]", async ({ page }) => {
-            test.skip(!on("H1") || /mobile/.test(test.info().project.name), on("H1") ? "no hover on touch" : why("H1"));
+            test.skip(!on("H1") || /mobile/.test(test.info().project.name), on("H1") ? scope("H1", "no hover on touch") : why("H1"));
             await open(page, r);
             soft(await a.staticHover(page), "hover effect on a card that is not clickable");
         });
@@ -132,10 +133,10 @@ for (const route of ROUTES) {
             soft(await a.ragGrids(page), "last grid row is not full");
         });
         test("1.18 colours come from the theme palette", async ({ page }) => {
-            test.skip(!on("S2") || !!cfg.allow?.palette, cfg.allow?.palette ? "allow.palette" : why("S2"));
+            test.skip(!on("S2") || !!cfg.allow?.palette, cfg.allow?.palette ? config("1.18", "allow.palette") : why("S2"));
             await open(page, r);
             const res = await c.offPalette(page);
-            test.skip(!res.applicable, "the theme declares fewer than 4 colour tokens");
+            test.skip(!res.applicable, decision("1.18", `the theme declares fewer than 4 colour tokens${res.unread ? ` (${res.unread} stylesheet(s) could not be read — cross-origin)` : ""}`));
             hard(res.offenders);
         });
         test("1.19 native parts follow the theme (color-scheme, number spinners) [BQA 9]", async ({ page }) => {
@@ -172,7 +173,7 @@ test.describe("acceptance site-wide", () => {
             await ctx.close();
         }
         const shape = c.siteShape(shapes, cfg.design?.shape);
-        test.skip(!shape, "too few UI pieces to tell the site's shape");
+        test.skip(!shape, decision("1.17", "too few UI pieces to tell the site's shape (design.shape: rounded | sharp sets it)"));
         hard(c.shapeOutliers(shapes, shape));
     });
     test("F1–F5 footer: legal order, © line, company line, support email, payment logos [BQA 6]", async ({ page }) => {
@@ -186,7 +187,7 @@ test.describe("acceptance site-wide", () => {
     // 5.5.0 (Praxis xp7pmu): one footer signed in and signed out
     test("F0 the footer has the same links signed in as signed out (each role) [BQA 6]", async ({ browser }) => {
         test.skip(!on("F0"), why("F0"));
-        test.skip(!SIGNED_IN, "no signed-in storage");
+        test.skip(!SIGNED_IN, setup("F0", "no signed-in storage — run `babysitter prepare` with LOGIN_EMAIL / LOGIN_PASSWORD"));
         const path = PUBLIC.find((r) => a.isPolicyPath(r.path, acc))?.path || PUBLIC[0]?.path || "/";
         const read = async (auth, role) => { const ctx = await ctxFor(browser, auth, role); const page = await ctx.newPage(); await open(page, path); const l = await a.footerLinks(page); await ctx.close(); return l; };
         const anon = await read(false);
@@ -203,7 +204,7 @@ test.describe("acceptance site-wide", () => {
     test("P2 every policy with sections has the contents rail the other policies have [BQA 8]", async ({ browser }) => {
         test.skip(!on("P1"), why("P1"));
         const pols = PUBLIC.filter((r) => a.isPolicyPath(r.path, acc));
-        test.skip(pols.length < 3, "fewer than 3 policy pages");
+        test.skip(pols.length < 3, decision("P2", `fewer than 3 policy pages (${pols.length} found; acceptance.policyPaths lists more)`));
         test.setTimeout(60_000 + pols.length * 20_000);
         const seen = [];
         for (const r of pols) {
@@ -221,7 +222,7 @@ test.describe("acceptance site-wide", () => {
         test.skip(!on("A10"), why("A10"));
         const AREA = /^\/(admin|dashboard|settings|account|wallet|billing|orders|onboarding)(\/|$)/;
         const cands = [...new Map([...AUTH, ...PUBLIC.filter((r) => AREA.test(r.path)), ...(cfg.roles || []).flatMap((x) => (x.authRoutes || []).map((path) => ({ path, auth: true, role: x.name })))].map((r) => [r.path, r])).values()].filter((r) => !/\[/.test(r.path)).slice(0, 25);
-        test.skip(!cands.length, "no signed-in or account routes found");
+        test.skip(!cands.length, decision("A10", "no signed-in or account routes found"));
         test.setTimeout(60_000 + cands.length * 15_000);
         const out = [];
         const signIn = acc.auth.signIn;
@@ -247,7 +248,7 @@ test.describe("acceptance site-wide", () => {
     test("LS1 the language switcher switches: every language it offers turns the page into that language [BQA 9]", async () => {
         test.skip(!on("LS1"), why("LS1"));
         const f = resolve(STATE_DIR, "locales.json");
-        test.skip(!existsSync(f), "no .babysitter/locales.json (run prepare)");
+        test.skip(!existsSync(f), setup("LS1", "no .babysitter/locales.json — run `babysitter prepare`"));
         const loc = JSON.parse(readFileSync(f, "utf8"));
         hard(a.switcherLocales(loc));
     });
@@ -260,7 +261,8 @@ test.describe("acceptance site-wide", () => {
         await ctx.close();
     });
     test("ST3 stage test: the main flows can be walked — the catalog lists entities, one can be hired, every role has a test account [stage]", async ({ browser }) => {
-        test.skip(!STAGE || STAGE.stage !== "test", STAGE ? "stage is live: ST1 applies instead" : "stage unknown");
+        test.skip(!STAGE, setup("ST3", "stage unknown: set babysitter.config.json → stage (live | test), or run prepare with NEXUS_URL / NEXUS_API_KEY"));
+        test.skip(STAGE?.stage !== "test", scope("ST3", "stage is live: ST1 applies instead"));
         const out = [];
         if (STAGE.testCredentials === false)
             out.push({ what: "the Nexus project has no test credentials — put a test account per role in its testCredentials [ST3, stage test]", where: "Nexus project" });
@@ -376,7 +378,7 @@ test.describe("acceptance site-wide", () => {
         hard(out);
     });
     test("M1 the chosen currency applies on every page [BQA 9, BQA]", async ({ browser }) => {
-        test.skip(!on("M1") || acc.currencies.length < 2, acc.currencies.length < 2 ? "acceptance.currencies lists fewer than 2 currencies" : why("M1"));
+        test.skip(!on("M1") || acc.currencies.length < 2, acc.currencies.length < 2 ? config("M1", "acceptance.currencies lists fewer than 2 currencies") : why("M1"));
         test.setTimeout(300_000);
         const out = [];
         for (const code of acc.currencies.slice(0, 2)) {
@@ -436,11 +438,11 @@ test.describe("acceptance site-wide", () => {
                 out.push(...(await a.footer(page, acc)).filter((o) => o.id === "F0").map((o) => ({ ...o, what: `${path}: ${o.what} — a minimal one (legal links, ©, support email) is enough on auth pages [A6, FM8]` })));
             await ctx.close();
         }
-        test.skip(!pages.length, "acceptance.auth.signIn / signUp not set and no password pages crawled");
+        test.skip(!pages.length, decision("A1", "no sign-in / sign-up page found: acceptance.auth.signIn / signUp not set and no password pages crawled"));
         hard(out);
     });
     test.describe("signed in", () => {
-        test.skip(!SIGNED_IN, "no signed-in storage — run `babysitter prepare` with LOGIN_EMAIL / LOGIN_PASSWORD");
+        test.skip(!SIGNED_IN, setup("A5/A7/2FA/A9", "no signed-in storage — run `babysitter prepare` with LOGIN_EMAIL / LOGIN_PASSWORD"));
         test.use({ storageState: SIGNED_STORE });
         test("A5 sign-in / sign-up are not offered to a signed-in user [BQA 6/10, BQA]", async ({ page }) => {
             test.skip(!on("A5"), why("A5"));
@@ -484,7 +486,7 @@ test.describe("acceptance site-wide", () => {
             hard(out);
         });
         test("2FA two-factor sign-in is offered in the account settings [owner rule]", async ({ page }) => {
-            test.skip(!on("2FA") || acc.twoFactor === "off", acc.twoFactor === "off" ? "acceptance.twoFactor: off" : why("2FA"));
+            test.skip(!on("2FA") || acc.twoFactor === "off", acc.twoFactor === "off" ? config("2FA", "acceptance.twoFactor: off") : why("2FA"));
             let claimed = false;
             if (acc.twoFactor === "if-claimed") {
                 for (const r of PUBLIC.slice(0, 15)) {
@@ -494,7 +496,7 @@ test.describe("acceptance site-wide", () => {
                         break;
                     }
                 }
-                test.skip(!claimed, "the site does not claim 2FA (acceptance.twoFactor: if-claimed)");
+                test.skip(!claimed, decision("2FA", "the site does not claim 2FA (acceptance.twoFactor: if-claimed; set it to required to check anyway)"));
             }
             const settings = [acc.auth.settings, ...AUTH.map((r) => r.path).filter((p) => /setting|security|account|profile/i.test(p))].filter(Boolean);
             let found = false;
@@ -510,7 +512,7 @@ test.describe("acceptance site-wide", () => {
                 : `no settings page offers two-factor sign-in (looked at ${settings.join(", ") || "no settings routes — set acceptance.auth.settings"}) [2FA]`).toBe(true);
         });
         test("A9 a signed-in user can delete their account [BQA 10, GDPR]", async ({ page }) => {
-            test.skip(!on("A9") || !acc.accountDeletion, acc.accountDeletion ? why("A9") : "acceptance.accountDeletion: false");
+            test.skip(!on("A9") || !acc.accountDeletion, acc.accountDeletion ? why("A9") : config("A9", "acceptance.accountDeletion: false"));
             const settings = [acc.auth.settings, ...AUTH.map((r) => r.path).filter((p) => /setting|account|profile|privacy/i.test(p))].filter(Boolean);
             let found = false;
             for (const p of [...new Set(settings)]) {
@@ -528,7 +530,7 @@ test.describe("acceptance site-wide", () => {
         test.skip(!on("A4"), why("A4"));
         // 5.2.0: role credentials count (roles[].env), not LOGIN_EMAIL only — A4 never ran on role-based projects
         const creds = a.credentials(cfg);
-        test.skip(!creds || !cfg.login, "needs LOGIN_EMAIL / LOGIN_PASSWORD (or a role in babysitter.config.json → roles with its env set) and config.login");
+        test.skip(!creds || !cfg.login, setup("A4", "needs LOGIN_EMAIL / LOGIN_PASSWORD (or a role in babysitter.config.json → roles with its env set) and config.login"));
         const ctx = await ctxFor(browser, false);
         const page = await ctx.newPage();
         await c.install(page);

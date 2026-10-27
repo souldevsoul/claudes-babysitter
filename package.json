@@ -29,9 +29,10 @@
     "node": ">=22.18"
   },
   "scripts": {
-    "test": "npm run test:eslint && npm run test:stylelint && npm run test:check && npm run test:tt && npm run test:team && npm run test:acceptance && npm run test:run && npm run test:content && npm run test:layout && npm run test:studio && npm run test:forms && npm run test:fp && npm run test:misses && npm run test:issues && npm run test:misses550 && npm run test:express && npm run test:update && npm run test:package",
+    "test": "npm run test:eslint && npm run test:stylelint && npm run test:check && npm run test:tt && npm run test:team && npm run test:acceptance && npm run test:run && npm run test:content && npm run test:layout && npm run test:studio && npm run test:forms && npm run test:fp && npm run test:misses && npm run test:issues && npm run test:misses550 && npm run test:express && npm run test:skips && npm run test:update && npm run test:package",
     "test:fp": "node test/fp-510.test.mjs && node test/fp-560.test.mjs",
     "test:update": "node test/update.test.mjs",
+    "test:skips": "node test/skip-report.test.mjs",
     "test:package": "node test/package-mode.test.mjs && node test/husky.test.mjs",
     "test:eslint": "node rules/eslint/test.mjs && node rules/eslint/test-forms.mjs",
     "test:stylelint": "node rules/stylelint/test.mjs",

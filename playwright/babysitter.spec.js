@@ -10,6 +10,7 @@ import * as details from "./checks/details.js";
 import * as boxes from "./checks/boxes.js";
 import * as money from "./checks/money.js";
 import { loadConfig, loadRoutes, storageFor } from "./project.js";
+import { scope, config, decision } from "./skip.js";
 const cfg = loadConfig();
 const ROUTES = loadRoutes(cfg);
 const STRICT = process.env.STRICT !== "0";
@@ -71,7 +72,7 @@ for (const route of ROUTES) {
         test("2.18 a rounded box does not scroll itself · 2.19 an empty box does not scroll · 2.20 a panel does not scroll sideways over nothing [P21 P16]", async ({ page }) => { await open(page, r); hard([...(await boxes.roundedScroller(page)), ...(await boxes.emptyScroller(page)), ...(await boxes.sidewaysScroll(page))]); });
         test("2.24 an icon and its label have a gap [P16]", async ({ page }) => { await open(page, r); const g = await boxes.iconGap(page); soft(g.soft, "icon close to its label"); hard(g.hard); });
         test("1.20 the header's word controls share one typeface · 3.5 a desktop header shows its navigation · 3.10 a burger beside the nav adds something [P04 P10]", async ({ page }, info) => {
-            test.skip((info.project.use.viewport?.width ?? 1440) < 1024, "desktop widths (the header's full row)");
+            test.skip((info.project.use.viewport?.width ?? 1440) < 1024, scope("1.20/3.5/3.10", "desktop widths (the header's full row)"));
             await open(page, r);
             const out = [...(await boxes.headerFaces(page))];
             if ((cfg.layout || {}).desktopNav !== "menu")
@@ -90,7 +91,7 @@ for (const route of ROUTES) {
             hard(list);
         });
         test("1.12 no emoji used as icons [P40]", async ({ page }) => {
-            test.skip(!!allow.emoji, "emoji allowed by babysitter.config.json");
+            test.skip(!!allow.emoji, config("1.12", "emoji allowed by babysitter.config.json"));
             await open(page, r);
             hard(await c.emoji(page));
         });
@@ -108,7 +109,7 @@ for (const route of ROUTES) {
         test("3.5 active nav item has aria-current=page [P10]", async ({ page }) => {
             await open(page, r);
             const a = await c.activeNav(page);
-            test.skip(!a.applicable, "no nav link points to this route");
+            test.skip(!a.applicable, decision("3.5", "no nav link points to this route"));
             expect(a.ok, `nav link(s) for ${r} lack aria-current="page": ${a.where}`).toBe(true);
         });
         test("3.5 every width has navigation: hidden nav links come with a menu button [P10]", async ({ page }) => { await open(page, r); hard(await c.navReachable(page)); });
@@ -145,10 +146,10 @@ for (const route of ROUTES) {
             hard(await c.selfAppearingMotion(page, r));
         });
         test("6.12 animate-in / animate-out classes produce an animation [P59]", async ({ page }) => { await open(page, r); hard(await c.deadAnimationClasses(page)); });
-        test("3.5 the open mobile menu: legible, tappable, uncovered, covers the page, matches the theme [P10]", async ({ page }) => {
+        test("3.5 the open mobile menu: legible, tappable, uncovered, covers the page, matches the theme [P10]", async ({ page }, info) => {
             await open(page, r);
             const m = await c.mobileMenu(page, !!allow.lightWeights);
-            test.skip(!m.applicable, "no menu toggle at this width (3.5 nav reachability covers that)");
+            test.skip(!m.applicable, (info.project.use.viewport?.width ?? 1440) >= 1024 ? scope("3.5", "the menu is a narrow-screen part") : decision("3.5", "no menu toggle at this width (3.5 nav reachability covers that)"));
             if (m.eye.length)
                 test.info().annotations.push({ type: "check by eye", description: fmt(m.eye) });
             if (m.soft.length) {
@@ -173,7 +174,7 @@ for (const route of ROUTES) {
  */
 test.describe("site-wide interactions", () => {
     test("6.12 every interactive element animates what it shows, hides or changes [P59]", async ({ browser }, info) => {
-        test.skip(!/mobile-390|desktop-1440/.test(info.project.name), "run at one mobile and one desktop width");
+        test.skip(!/mobile-390|desktop-1440/.test(info.project.name), scope("*", "run at one mobile and one desktop width"));
         const mo = cfg.motion || {};
         const max = Number(mo.maxClicks ?? 30);
         const clickBudget = Number(mo.clickBudget ?? 20_000); // one click, judged and toggled back
@@ -271,7 +272,7 @@ test.describe("site-wide interactions", () => {
  */
 test.describe("site-wide consistency", () => {
     test("1.3/1.16 buttons, inputs and cards share one look across pages [P04 P46 P47]", async ({ browser }, info) => {
-        test.skip(!/mobile-390|desktop-1440/.test(info.project.name), "run at one mobile and one desktop width");
+        test.skip(!/mobile-390|desktop-1440/.test(info.project.name), scope("*", "run at one mobile and one desktop width"));
         test.setTimeout(60_000 + ROUTES.length * 15_000);
         const sigs = [];
         for (const route of ROUTES) {
@@ -314,7 +315,7 @@ test.describe("site-wide consistency", () => {
         expect(problems, problems.join("\n\n")).toEqual([]);
     });
     test("1.20 one look per role across pages: buttons (filled / outlined), tags, cards and inputs share their corners and case [P04 P46 P47]", async ({ browser }, info) => {
-        test.skip(!/mobile-390|desktop-1440/.test(info.project.name), "run at one mobile and one desktop width");
+        test.skip(!/mobile-390|desktop-1440/.test(info.project.name), scope("*", "run at one mobile and one desktop width"));
         test.setTimeout(60_000 + ROUTES.length * 15_000);
         const items = [];
         const notTested = [];
@@ -339,7 +340,7 @@ test.describe("site-wide consistency", () => {
     // 5.5.0: one placement of the "Most popular" badge (Kindred fqsn52), one accent hue (Compass u5brwv / 9ln1xx), page
     // titles in one case (Kindred 9ha0j4), one accent style in headings (Compass 5dudz9, soft)
     test("1.20 one placement of the popular badge · 1.21 one accent per site · 6.5 page titles in one case, one accent style in headings [P04 P46]", async ({ browser }, info) => {
-        test.skip(!/mobile-390|desktop-1440/.test(info.project.name), "run at one mobile and one desktop width");
+        test.skip(!/mobile-390|desktop-1440/.test(info.project.name), scope("*", "run at one mobile and one desktop width"));
         test.setTimeout(60_000 + ROUTES.length * 15_000);
         const list = [];
         const notTested = [];

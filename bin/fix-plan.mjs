@@ -17,7 +17,7 @@ const repo = opt("repo") || process.env.BABYSITTER_ROOT || process.cwd();
 const format = opt("format") || "md";
 const src = join(repo, ".babysitter/findings.json");
 if (!existsSync(src)) { console.error("babysitter fix-plan: no .babysitter/findings.json — run `babysitter e2e` first"); process.exit(2); }
-const { findings = [], base } = JSON.parse(readFileSync(src, "utf8"));
+const { findings = [], base, decisions = [], setupMissing = [] } = JSON.parse(readFileSync(src, "utf8"));
 const TOOL = join(dirname(fileURLToPath(import.meta.url)), "..");
 const RUN = existsSync(join(repo, "node_modules/claudes-babysitter/bin/babysitter.mjs")) ? "npx --no babysitter" : `node ${relative(repo, join(TOOL, "bin/babysitter.mjs"))}`;
 
@@ -96,9 +96,22 @@ const byRule = new Map();
 for (const p of plan) { if (!byRule.has(p.rule)) byRule.set(p.rule, []); byRule.get(p.rule).push(p); }
 
 const rerun = `${RUN} e2e --skip-prepare --last-failed`;
-if (format === "json") { console.log(JSON.stringify({ base, rerun, groups: plan }, null, 2)); process.exit(plan.length ? 1 : 0); }
+if (format === "json") { console.log(JSON.stringify({ base, rerun, groups: plan, decisions, setupMissing }, null, 2)); process.exit(plan.length ? 1 : 0); }
 const L = [];
-if (!plan.length) L.push("Claude's Babysitter fix plan: nothing to fix in the last run.");
+// 5.7.0: what the last run did not check — at the top, so a "nothing to fix" is never read as "everything was checked"
+const head = [];
+const pagesOf = (g) => [...new Set((g.where || []).map((i) => `${i.route || "site-wide"}${i.auth ? ` [${i.role || "user"}]` : ""}`))];
+if (setupMissing.length) {
+  head.push(`## Not run — setup missing (${setupMissing.length}): fix the setup, then run \`${RUN} e2e\` again`, "");
+  for (const g of setupMissing) head.push(`- ${g.rule}: ${g.reason}`);
+  head.push("");
+}
+if (decisions.length) {
+  head.push(`## Babysitter decided not to check (${decisions.length}) — check these by hand, or approve them in babysitter.config.json → acceptance.notApplicable { "<rule>": "<why>" }`, "");
+  for (const g of decisions) { const p = pagesOf(g); head.push(`- ${g.rule}: ${g.reason} — ${p.slice(0, 8).join(", ")}${p.length > 8 ? `, … ${p.length - 8} more` : ""}`); }
+  head.push("");
+}
+if (!plan.length) L.push(`Claude's Babysitter fix plan: nothing to fix in the last run${head.length ? " — but it did not check everything (below)" : ""}.`);
 else {
   L.push(`# Babysitter fix plan — ${plan.length} problem(s) from ${findings.length} failed test(s)${base ? ` on ${base}` : ""}`, "");
   L.push("These are blocking. Fix the cause in the source (the kit component / the theme token / the translation), not per page; one fix usually clears every page listed.", "");
@@ -116,6 +129,7 @@ else {
   }
   L.push("When every item is fixed, re-check only what failed:", `    ${rerun}`, "then run the full suite once before reporting done:", `    ${RUN} e2e`);
 }
+L.splice(plan.length ? 2 : 1, 0, ...(plan.length || !head.length ? head : ["", ...head]));
 const text = L.join("\n");
 writeFileSync(join(repo, opt("out") || ".babysitter/fix-plan.md"), text + "\n");
 console.log(format === "agent" ? text.replace(/^#+ /gm, "") : text);
