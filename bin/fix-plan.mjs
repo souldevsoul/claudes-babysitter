@@ -12,6 +12,7 @@ import { fileURLToPath } from "node:url";
 import { templateOf } from "../lib/route-map.js";
 import { buildProjectMap, placesOf } from "../lib/project-map.js";
 import { countsLine, groupProblems } from "../lib/problems.js";
+import { quotedCopy } from "../lib/quoted-copy.js";
 
 const args = process.argv.slice(2);
 const opt = (n) => { const i = args.indexOf(`--${n}`); return i >= 0 && args[i + 1] && !args[i + 1].startsWith("--") ? args[i + 1] : null; };
@@ -111,7 +112,9 @@ for (const g of groups.values()) {
   }
 }
 const plan = [...groups.values()].map((g) => {
-  const quoted = [...`${g.where} ${g.what}`.matchAll(/"([^"]{4,60})"/g)].map((m) => m[1]).filter((t) => !/^\d|px|\[/.test(t));
+  // page copy only: a CSS value the check printed ("color-scheme is \"normal\"", "cursor \"default\"")
+  // is not on the page, and searching the repo for it lands on an unrelated file (lib/quoted-copy.js)
+  const quoted = quotedCopy(`${g.where} ${g.what}`);
   const hints = [...new Set([...[...g.pages].map(pageFile).filter(Boolean).map((f) => `${f} (page)`), ...quoted.flatMap(textHints), ...classHints(g.where)])].slice(0, 6);
   // the exact fragments: where the quoted text lives (project map), and for a consistency finding the other side too
   const j = g.jev;
