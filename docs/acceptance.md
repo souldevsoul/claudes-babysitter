@@ -25,7 +25,7 @@ Write the check's ID into `acceptance.skip`, and the reason into `acceptance.ski
 
 ## When Babysitter decides a check does not apply (5.7.0)
 
-Some checks judge first whether they apply: the site shows no credits (M2), does not claim 2FA, has fewer than 3 policy
+Some checks judge first whether they apply: the site sells in money, not credits (M2), does not claim 2FA, has fewer than 3 policy
 pages (P2), no sign-in page was found (A1, FM7, FM8, FM11), no header bar was found (1.20, 3.5). Each such decision is
 listed in the run summary under "Babysitter decided not to check", with the pages it applies to, and the run does not end
 "Clean." while one stands. Check it by hand; when the owner agrees, approve it:
@@ -33,6 +33,14 @@ listed in the run summary under "Babysitter decided not to check", with the page
 ```json
 "acceptance": { "notApplicable": { "2FA": "no accounts on this site", "M2 /wallet": "the balance is shown on the page" } }
 ```
+
+**Credits or money (5.7.1).** M2 and the money check's "header shows money but the product sells credits" read one
+answer for the whole run (`lib/money-model.js`): the product sells **credits** when any page gives an amount in credits
+("6,000 credits", "120 cr", "Credits: 500"); it sells **money** when amounts carry a currency and none is given in
+credits. The word alone ("credit card", "sign-up credit", "Adjust credits") decides nothing — before, M2 judged "no
+credits" on one signed-in page and failed "the header must show the credit balance" on the next. The amounts come from
+the text pass, else from prepare's crawl (`crawl.json → money`); `babysitter.config.json → moneyModel: "credits" |
+"money"` settles it, `acceptance.headerBalance: true` still requires the balance.
 
 A key is a rule ID (every page) or `"<rule> <route>"` (one page). Approved decisions are listed under "Not applicable
 (owner-approved)". Missing setup (a login, a role's storage, the stage, prepare's files) is listed under "Setup missing —
@@ -157,7 +165,7 @@ with `"stage": "live" | "test"` in `babysitter.config.json`. With no stage known
 | F5 | "We accept" on the logos' line, before Visa; the marks are the studio's files (`acceptance.paymentLogoSet`, sha256) | Compass r98e7t cnfovs |
 | A4 | sign out lands on `acceptance.afterSignOut` (default `/`) or a locale root; account menus (account / user / profile / avatar triggers in header, nav or sidebar) are opened first, up to 8 | Compass 3v77n0; issue #5 |
 | A10 | signed-in and admin areas are not rendered to signed-out visitors or to another role | Kindred gm21xv |
-| M2 | the signed-in header shows the credit balance (`acceptance.headerBalance`) | Compass gcrh4v |
+| M2 | the signed-in header shows the credit balance, on a product that sells credits (one money model per run, 5.7.1; `acceptance.headerBalance`, `moneyModel`) | Compass gcrh4v |
 | LS1 | a language offered in the switcher switches the page | Compass htmhfi |
 | C1 | "OK" / "Got it" count as accept; an essential-only "OK" notice is compliant when nothing beyond the strictly necessary is stored (measured), and still needs "Manage" when the footer opens a settings window | issues #4 #5; Compass y28qwn |
 | C2 | "Allow all" must allow something | Compass faefuc |

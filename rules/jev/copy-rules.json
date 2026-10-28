@@ -27,7 +27,17 @@
    "pageTypes": [
     "any"
    ],
-   "question": "Does any line in LINES tell the reader something the product does NOT have, do or offer when nobody asked (for example 'We do not operate a telephone line', 'There is no X', 'We don't do Y'), instead of saying what it does?"
+   "question": "Does any line in LINES tell the reader something the product does NOT have, do or offer when nobody asked (for example 'We do not operate a telephone line', 'There is no X', 'We don't do Y'), instead of saying what it does?",
+   "notTypes": [
+    "legal-terms",
+    "legal-privacy",
+    "legal-cookies",
+    "legal-refund",
+    "legal-payment",
+    "legal-aml",
+    "legal-other"
+   ],
+   "why_notTypes": "5.7.1: a policy states what is not done on purpose ('we do not sell your data', 'no method of transmission is completely secure'): a legal disclosure, not copy that hides what the product does"
   },
   {
    "id": "jev/self-defence",
@@ -36,7 +46,17 @@
    "pageTypes": [
     "any"
    ],
-   "question": "Does any line in LINES justify or defend a choice to the reader, admit a weakness of the product's own measure (for example 'it can be circumvented'), or explain at length why something is the way it is, where a plain statement would do?"
+   "question": "Does any line in LINES justify or defend a choice to the reader, admit a weakness of the product's own measure (for example 'it can be circumvented'), or explain at length why something is the way it is, where a plain statement would do?",
+   "notTypes": [
+    "legal-terms",
+    "legal-privacy",
+    "legal-cookies",
+    "legal-refund",
+    "legal-payment",
+    "legal-aml",
+    "legal-other"
+   ],
+   "why_notTypes": "5.7.1: a policy states what is not done on purpose ('we do not sell your data', 'no method of transmission is completely secure'): a legal disclosure, not copy that hides what the product does"
   },
   {
    "id": "jev/jargon",
@@ -46,9 +66,11 @@
    ],
    "question": "Does any line in LINES use technical jargon, an internal identifier (snake_case, camelCase, a code value, a storage key or cookie name shown as prose), or an unexplained abbreviation that a typical customer of this site would not understand?",
    "notTypes": [
-    "blog-docs"
+    "blog-docs",
+    "legal-cookies"
    ],
-   "min": 0.85
+   "min": 0.85,
+   "why_notTypes": "5.7.1: a cookie policy must name each cookie and storage key; blog-docs: documentation explains its terms"
   },
   {
    "id": "jev/unexplained-value",

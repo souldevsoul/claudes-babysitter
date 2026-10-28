@@ -57,9 +57,19 @@ if (flag("from-source")) {
   pages = saved.pages; det = saved.det || []; soft = saved.soft || []; siteDet = saved.site || []; notReached = saved.notReached || []; loads = 0;
   log(`text pass: ${pages.length} page(s) from ${opt("from-pages")} (no browser)`);
 } else {
-  const r = await (await import("../playwright/text-run.js")).readSite({ cfg, log });
+  // 5.7.1: `e2e --changed` reads only the routes the change reaches; the others come from the last read (unchanged)
+  let reuse = null, only = null;
+  const sel = process.env.BABYSITTER_TEXT_ONLY;
+  if (sel && existsSync(sel) && existsSync(join(OUT, "text-pages.json"))) {
+    try {
+      const prev = JSON.parse(readFileSync(join(OUT, "text-pages.json"), "utf8"));
+      if (prev.records) { reuse = prev; only = new Set(JSON.parse(readFileSync(sel, "utf8")).routes || []); }
+    } catch { reuse = null; only = null; }
+  }
+  const r = await (await import("../playwright/text-run.js")).readSite({ cfg, log, reuse, only });
   ({ pages, det, soft, siteDet, loads, notReached, status } = r);
-  writeFileSync(join(OUT, "text-pages.json"), JSON.stringify({ at: new Date().toISOString(), pages, det, soft, site: siteDet, notReached }, null, 1));
+  if (r.reused) log(`text pass: ${r.reused} page read(s) reused from the last run (routes the change does not reach), ${loads} loaded — every page is still compared with every other`);
+  writeFileSync(join(OUT, "text-pages.json"), JSON.stringify({ at: new Date().toISOString(), pages, det, soft, site: siteDet, notReached, records: r.records, reused: r.reused || 0 }, null, 1));
 }
 const tRead = Date.now() - t0;
 // the project map: the source's copy and UI per route, merged with what was rendered; the pages the source has and

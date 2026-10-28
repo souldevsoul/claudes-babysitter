@@ -33,6 +33,7 @@ import { join, relative, resolve, dirname, basename } from "node:path";
 import { fileURLToPath } from "node:url";
 import { spawnSync, execSync } from "node:child_process";
 import * as clack from "@clack/prompts";
+import { hasOwnPlaywright } from "../lib/product-specs.js";
 
 const TOOL = resolve(dirname(fileURLToPath(import.meta.url)), "..");
 const args = process.argv.slice(2);
@@ -150,13 +151,22 @@ if (mode === "package") {
 /* ───────── 3. project config (merged) ───────── */
 const cfgPath = join(repo, "babysitter.config.json");
 const prev = readJson(cfgPath, null);
+// A REPO THAT RUNS PLAYWRIGHT ITSELF KEEPS ITS e2e/ TO ITSELF.
+// Dropping our babysitter.ts and journeys.spec.ts into a directory the product already fills
+// with its own specs puts two copies of @playwright/test in one run; Playwright stops with
+// "Requiring @playwright/test second time" and nothing runs, theirs or ours. When the repo has
+// its own playwright.config, or e2e/ already holds specs that are not ours, our journeys go to
+// e2e-babysitter/ and their directory is left alone.
+const ownPw = !prev?.e2eDir && hasOwnPlaywright(repo);
 const cfg = {
   $comment: "claudes-babysitter project settings. Every allowance is a design decision: write the reason in allowReasons.",
+  ...(ownPw ? { e2eDir: "e2e-babysitter" } : {}),
   // the product's stable name: the cross-product favicon registry (layout) and reports key on it
   name: prev?.name || String(pkg?.name || "").replace(/^@[^/]+\//, "") || basename(repo),
   baseURL: opt("url") || prev?.baseURL || "",
   routes: prev?.routes || ["/"],
   ...(prev || {}),
+  ...(ownPw ? { e2eDir: prev?.e2eDir || "e2e-babysitter" } : {}),
   cssLayers: prev?.cssLayers ?? layered,
   kit: [...new Set([...(prev?.kit || []), ...exported])],
   themePaths: prev?.themePaths || [kitDir ? `**/${kitDir.replace(/^src\//, "")}/**` : "**/components/ui/**", "**/theme/**"],
@@ -290,7 +300,7 @@ const runCmd = mode === "package" ? "babysitter" : mode === "vendor" ? `node ${t
 // product's own file — created once, never overwritten. `npm run test:e2e` runs prepare + UI checks + business
 // acceptance + e2e/*.spec.ts.
 {
-  const e2eDir = join(repo, prevCfg?.e2eDir || "e2e");
+  const e2eDir = join(repo, cfg?.e2eDir || prevCfg?.e2eDir || "e2e");
   const fixtures = mode === "package" ? `${PKG}/playwright/fixtures.js` : mode === "vendor" ? `../${toolRel}/playwright/fixtures.js` : join(TOOL, "playwright/fixtures.js");
   const shim = `// Managed by \`babysitter init\`: the test helpers of Claude's Babysitter for this project's own e2e specs.\n// import { test, expect, open, acc, routes, checks, acceptance } from "./babysitter";\nexport * from "${fixtures}";\n`;
   const shimPath = join(e2eDir, "babysitter.ts");

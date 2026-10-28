@@ -398,12 +398,19 @@ export const illegibleText = (page, allowLightWeights = false, root = null) => p
             const pc = getComputedStyle(p);
             clipText = pc.backgroundClip === "text" || pc.webkitBackgroundClip === "text";
         }
+        // 5.7.1: AN ITEM THAT SAYS ONLY "11px" NAMES NOTHING.
+        // The fix-plan line read "11px" and a selector, so a reader had to open the page to
+        // learn what was wrong with it and which words were affected — and four such items
+        // off one table looked like four problems. Each item now says the rule it broke, the
+        // threshold it broke it against, and the text it is about.
+        const words = (el.innerText || el.textContent || "").trim().replace(/\s+/g, " ").slice(0, 40);
+        const quoted = words ? `: "${words}"` : "";
         const bad = [];
         if (size < 12)
-            bad.push(`${size}px`);
+            bad.push(`text ${size}px, under the 12px minimum${quoted}`);
         // 6.4: body/nav text — weight ≥400 below 16px, ≥300 from 16px; display type ≥24px free. Projects may opt out (allow.lightWeights).
         if (!allowLightWeights && size < 24 && (weight < 300 || (weight < 400 && size < 16)))
-            bad.push(`weight ${weight} at ${size}px`);
+            bad.push(`weight ${weight} at ${size}px, under 400${quoted}`);
         // fully transparent through an ancestor (a reveal-on-scroll block not yet revealed, a closed tooltip):
         // nobody can read it, so there is no contrast to judge — visibility is not this check's question
         if (opacity < 0.01)
@@ -428,7 +435,7 @@ export const illegibleText = (page, allowLightWeights = false, root = null) => p
                 bad.push(`contrast ${ratio.toFixed(2)}:1${opacity < 0.95 ? ` (opacity ${opacity.toFixed(2)} included)` : ""}`);
         }
         if (bad.length)
-            out.push({ what: bad.join(", "), where: window.__uiDescribe(el), selector: window.__uiSelector(el), human: window.__uiHuman(el) });
+            out.push({ what: `${bad.join(", ")} [6.4]`, where: window.__uiDescribe(el), selector: window.__uiSelector(el), human: window.__uiHuman(el) });
     }
     // every finding is reported: a dense page with 60 faint captions has 60 findings, not the first 40
     return { hard: out, eye };
@@ -1025,7 +1032,12 @@ export const inputVisibility = (page) => page.evaluate(() => {
         let lo = 0, hi = 1;
         for (let k = 0; k < 24; k++) { const t = (lo + hi) / 2; const c = start.map((v, i) => v + (target[i] - v) * t); if (ratio(c, bg) >= 3.05) hi = t; else lo = t; }
         const hex = "#" + start.map((v, i) => Math.round(v + (target[i] - v) * hi).toString(16).padStart(2, "0")).join("");
-        return { what: `input barely visible at rest (border ${bw ? ratio(border, bg).toFixed(2) + ":1" : "none"}, fill ${ratio(fill, bg).toFixed(2)}:1; lightest passing edge ${hex}) [1.9, P09]`, where: W.__uiDescribe(el), selector: W.__uiSelector(el), human: W.__uiHuman(el) };
+        // 5.7.1: a field marked invalid (after an empty submit) wears its error edge — not the field at rest (that one is
+        // measured before any interaction); its edge must still read (Parallel zu9088), and the message says which state
+        let invalid = el.matches('[aria-invalid="true"]');
+        try { invalid = invalid || el.matches(":user-invalid"); } catch { }
+        const state = invalid ? "input edge barely visible in its error state" : "input barely visible at rest";
+        return { what: `${state} (border ${bw ? ratio(border, bg).toFixed(2) + ":1" : "none"}, fill ${ratio(fill, bg).toFixed(2)}:1; lightest passing edge ${hex}) [1.9, P09]`, where: W.__uiDescribe(el), selector: W.__uiSelector(el), human: W.__uiHuman(el) };
     })
         .filter(Boolean);
 });
@@ -1601,6 +1613,14 @@ export async function checkedState(page) {
             if (radio && checked)
                 return null; // a checked radio cannot be unchecked; its unchecked siblings are toggled instead
             const label = el.closest("label") || (el.id && document.querySelector(`label[for="${CSS.escape(el.id)}"]`));
+            // 5.7.1: a hidden native input next to a visible role=checkbox / switch / radio (Base UI, Radix: the input
+            // carries the form value, the button draws the tick) is that control's — judged on the button; its label
+            // alone never shows the tick ("checking it changes nothing visible" on a box that does show one)
+            if (native && !W.__uiVisible(el)) {
+                const box = Array.from((el.parentElement || document).querySelectorAll("[role=checkbox], [role=switch], [role=radio]")).find((b) => b !== el && W.__uiVisible(b));
+                if (box)
+                    return null;
+            }
             const visual = W.__uiVisible(el) ? el : label && W.__uiVisible(label) ? label : null;
             if (!visual)
                 return null;
@@ -1987,10 +2007,20 @@ export function arrivalModalFindings(arrival) {
     return arrival.closed ? { hard: [], soft: [f] } : { hard: [f], soft: [] };
 }
 /**
+ * 5.7.1: wait until the page shows its content, not its loading state — no visible skeleton, no aria-busy region
+ * (a route's loading.tsx paints skeletons first; a page read then has no <h1> yet, and the nav / heading checks
+ * compared names against it). At most `timeout` ms: a skeleton that never goes away is the page's own business.
+ */
+export const contentReady = (page, timeout = 4000) => page.waitForFunction(() => {
+    const vis = (e) => (window.__uiVisible ? window.__uiVisible(e) : !!e.getClientRects().length);
+    return !Array.from(document.querySelectorAll('[aria-busy="true"], [data-slot="skeleton"], [class*="skeleton" i], [data-skeleton], [data-loading="true"]')).some(vis);
+}, null, { timeout, polling: 150 }).then(() => true).catch(() => false);
+/**
  * Scroll the whole page once, so reveal-on-scroll content (framer-motion whileInView, IntersectionObserver,
  * lazy sections) renders the way a reader sees it — measured before, it is opacity 0 and reads as 1:1.
  */
 export const revealLazy = async (page) => {
+    await contentReady(page);
     await page.evaluate(async () => {
         const step = Math.max(200, Math.floor(window.innerHeight * 0.8));
         // instant: with `scroll-behavior: smooth` a plain scrollTo animates, and the page was then measured a few
@@ -2184,6 +2214,10 @@ export const offPalette = (page, extra = [], tolerance = 0.045) => page.evaluate
     const els = Array.from(document.querySelectorAll('button, [role=button], a, input:not([type=hidden]), textarea, select, [role=combobox], [role=tab], h1, h2, h3, h4, label, p, li, span, td, th'));
     for (const el of els) {
         if (!W.__uiVisible(el) || el.closest("svg, picture, video, canvas, [data-babysitter-ignore], iframe"))
+            continue;
+        // 5.7.1: decoration a screen reader is told to skip, with no text of its own (a window's three "traffic light"
+        // dots, a status pip) is illustration, not a UI colour the theme must name
+        if (el.closest('[aria-hidden="true"], [role=presentation], [role=none]') && !(el.textContent || "").trim())
             continue;
         const cs = getComputedStyle(el);
         const checks = [];
