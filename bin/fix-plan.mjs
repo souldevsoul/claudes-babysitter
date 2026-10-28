@@ -11,6 +11,7 @@ import { execFileSync } from "node:child_process";
 import { fileURLToPath } from "node:url";
 import { templateOf } from "../lib/route-map.js";
 import { buildProjectMap, placesOf } from "../lib/project-map.js";
+import { countsLine, groupProblems } from "../lib/problems.js";
 
 const args = process.argv.slice(2);
 const opt = (n) => { const i = args.indexOf(`--${n}`); return i >= 0 && args[i + 1] && !args[i + 1].startsWith("--") ? args[i + 1] : null; };
@@ -18,7 +19,7 @@ const repo = opt("repo") || process.env.BABYSITTER_ROOT || process.cwd();
 const format = opt("format") || "md";
 const src = join(repo, ".babysitter/findings.json");
 if (!existsSync(src)) { console.error("babysitter fix-plan: no .babysitter/findings.json — run `babysitter e2e` first"); process.exit(2); }
-const { findings = [], base, decisions = [], setupMissing = [] } = JSON.parse(readFileSync(src, "utf8"));
+const { findings = [], base, decisions = [], setupMissing = [], counts = null } = JSON.parse(readFileSync(src, "utf8"));
 const TOOL = join(dirname(fileURLToPath(import.meta.url)), "..");
 const RUN = existsSync(join(repo, "node_modules/claudes-babysitter/bin/babysitter.mjs")) ? "npx --no babysitter" : `node ${relative(repo, join(TOOL, "bin/babysitter.mjs"))}`;
 
@@ -151,7 +152,12 @@ if (decisions.length) {
 }
 if (!plan.length) L.push(`Claude's Babysitter fix plan: nothing to fix in the last run${head.length ? " — but it did not check everything (below)" : ""}.`);
 else {
-  L.push(`# Babysitter fix plan — ${plan.length} problem(s) from ${findings.length} failed test(s)${base ? ` on ${base}` : ""}`, "");
+  // ONE HEADER, ONE UNIT. "N problem(s) from M failed test(s)" put two different units on one
+  // line and called them both tests: M was checks (an express page test holds many), and the
+  // text pass's findings were in neither. The count of problems stands alone; what they were
+  // grouped from is said underneath, in the units findings.json records.
+  L.push(`# Babysitter fix plan — ${plan.length} problem(s)${base ? ` on ${base}` : ""}`, "");
+  L.push(`from ${countsLine(findings, counts)} of the last run`, "");
   L.push("These are blocking. Fix the cause in the source (the kit component / the theme token / the translation), not per page; one fix usually clears every page listed.", "");
   let n = 0;
   for (const [rule, list] of byRule) {
