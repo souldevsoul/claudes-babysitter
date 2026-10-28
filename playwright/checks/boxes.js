@@ -182,6 +182,23 @@ export const sidewaysScroll = (page) => page.evaluate(() => {
       for (let p = d.parentElement; p && p !== el; p = p.parentElement) if (/absolute|fixed/.test(getComputedStyle(p).position)) { inAbs = true; break; }
       if (!inAbs) inflow = Math.max(inflow, right);
     }
+    /** Text with no element around it is content too. A <pre> holding one long command, a code
+     *  block or a cell of unwrapped words has no element children at all, so the walk above
+     *  finds nothing and a scroller with an honest reason reads as an empty one (relaygpu,
+     *  2026-10: the endpoint page's curl line, 139px of text in a bare <pre>). Measuring text
+     *  rects is the expensive half, so it runs only when the element walk found nothing wider. */
+    if (inflow <= limit) {
+      const range = document.createRange();
+      const walker = document.createTreeWalker(el, NodeFilter.SHOW_TEXT);
+      for (let n = walker.nextNode(); n; n = walker.nextNode()) {
+        if (!(n.textContent || "").trim()) continue;
+        let nested = false;
+        for (let p = n.parentElement; p && p !== el; p = p.parentElement) { if (getComputedStyle(p).overflowX !== "visible") { nested = true; break; } }
+        if (nested) continue;
+        range.selectNodeContents(n);
+        for (const b of range.getClientRects()) if (b.width > 0 && b.height > 0) inflow = Math.max(inflow, b.right + shift);
+      }
+    }
     if (inflow > limit) continue; // real content is wider: a scroller with a reason (a table, chips, a carousel)
     const pseudo = ["::before", "::after"].find((p) => { const ps = getComputedStyle(el, p); return ps.content !== "none" && /absolute|fixed/.test(ps.position); });
     const who = culprit && culpritRight > limit ? `an absolute ${W.__uiDescribe(culprit).slice(0, 50)}` : pseudo ? `its ${pseudo} (position: absolute)` : "a pseudo-element or an absolute filler";

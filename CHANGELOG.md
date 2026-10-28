@@ -2,6 +2,16 @@
 
 Earlier releases (4.11.1 and before) are described in the README under "What changed in …".
 
+## 5.7.5 — text with no element around it is content (2026-10-28)
+
+**2.20 again, the other half.** The scan for "is anything in here actually wider?" walks the panel's element
+descendants. A `<pre>` holding one long command has none: the overflow is a bare text node, so the walk found
+nothing and an honest scroller was reported as an empty one. Measured on relaygpu's endpoint page, whose curl
+line runs 139px past a 357px box: reported before, quiet after, with the drawer and chip-rail cases unchanged.
+
+The text pass runs only when the element walk found nothing wider, so the expensive half is skipped on every
+panel that already has an answer.
+
 ## 5.7.4 — a scrolled rail is not an empty one (2026-10-28)
 
 **2.20 called a working chip rail "a panel that scrolls over nothing".** The check compares each child's screen

@@ -220,6 +220,10 @@ try {
     await load(page, doc(`<div id="rail" style="display:flex;gap:8px;overflow-x:auto;width:300px">${Array.from({ length: 12 }, (_, i) => `<span style="flex:0 0 80px;border:1px solid">Chip ${i}</span>`).join("")}</div>`));
     await page.evaluate(() => { document.getElementById("rail").scrollLeft = 9999; });
     assert.deepEqual(await check(page), [], "real chips, scrolled to the end");
+    // relaygpu: a <pre> with one long command has no element children at all, so the walk over
+    // descendants finds nothing and the honest scroller read as an empty one (5.7.5).
+    await load(page, doc(`<div style="width:300px"><pre style="overflow-x:auto;margin:0">curl http://localhost:3177/api/infer/bs-transcribe-calls -H "Authorization: Bearer rgpu_live_x"</pre></div>`));
+    assert.deepEqual(await check(page), [], "a bare text node is content");
   }, { width: 1440, height: 900 });
 
   /* ═════ 6.5 all-caps h1 outlier — Kindred 9ha0j4 ═════ */
