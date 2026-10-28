@@ -25,7 +25,15 @@ const RUN = existsSync(join(repo, "node_modules/claudes-babysitter/bin/babysitte
 
 /* ───────── the repo's files ───────── */
 const files = (() => { try { return execFileSync("git", ["ls-files", "--cached", "--others", "--exclude-standard"], { cwd: repo, encoding: "utf8", stdio: ["ignore", "pipe", "ignore"], maxBuffer: 64 * 1024 * 1024 }).split("\n").filter(Boolean); } catch { return []; } })()
-  .filter((f) => /\.(tsx|jsx|ts|js|mjs|vue|svelte|astro|html|mdx?|json|css|scss)$/.test(f) && !/(^|\/)(node_modules|\.next|dist|build|tools\/claudes-babysitter|\.babysitter)\//.test(f) && !/package(-lock)?\.json$|tsconfig/.test(f));
+  // "look at" has to point where the FIX goes. A note to an agent, a test and an editor setting
+  // all contain the same words as the page, so they matched the search and pushed the component
+  // that actually renders the text off a six-item list — a reader was sent to CLAUDE.md to fix a
+  // 10px table header. Notes, tests, agent settings and docs are not where the fix goes.
+  .filter((f) => /\.(tsx|jsx|ts|js|mjs|vue|svelte|astro|html|mdx?|json|css|scss)$/.test(f)
+    && !/(^|\/)(node_modules|\.next|dist|build|tools\/claudes-babysitter|\.babysitter|\.claude|\.github|\.vscode|coverage|e2e|tests?|__tests__|cypress|playwright|docs|stories)\//.test(f)
+    && !/(^|\/)(CLAUDE|AGENTS|README|CHANGELOG|CONTRIBUTING)\.mdx?$/i.test(f)
+    && !/\.(test|spec|stories)\.[cm]?[jt]sx?$/.test(f)
+    && !/package(-lock)?\.json$|tsconfig/.test(f));
 const cache = new Map();
 const read = (f) => { if (!cache.has(f)) { try { cache.set(f, readFileSync(join(repo, f), "utf8")); } catch { cache.set(f, ""); } } return cache.get(f); };
 const pages = files.map((f) => ({ f, t: templateOf(f) })).filter((x) => x.t !== null);
@@ -89,22 +97,17 @@ const placesFor = (quote) => (MAP && quote ? placesOf(MAP, quote, { max: 6 }) : 
 const AUTH = (route = "") => (/terms|privacy|polic|refund|cancel|cookie|aml|acceptable|legal/.test(route) ? 3 : /pricing|payment/.test(route) ? 2 : /faq|help|docs/.test(route) ? 1 : 0);
 
 /* ───────── group: one rule, many pages ───────── */
-const ruleOf = (item, test) => (item.what.match(/\[([A-Z]?\d+(?:\.\d+)?[a-z]?|[A-Z]\d|i18n)[,\]]/) || test.match(/^([A-Z]?\d+(?:\.\d+)?(?:\/[\d.]+)?|[A-Z]\d(?:[–-][A-Z]?\d)?|i18n|states)/) || [, "other"])[1];
-const groups = new Map();
-for (const f of findings) {
-  const items = f.items.length ? f.items : [{ what: f.error.split("\n")[0] || f.test, where: "" }];
-  for (const [ii, it] of items.entries()) {
-    const rule = f.rule || ruleOf(it, f.test);
-    // the same defect at several widths / languages / pages is one entry: normalise numbers and quoted text
-    const sig = `${rule}|${it.what.replace(/^\[[\w-]+\]\s*/, "").replace(/\d+(\.\d+)?/g, "#").replace(/"[^"]*"/g, '""').slice(0, 160)}|${it.where.replace(/\d+/g, "#").slice(0, 120)}`;
-    if (!groups.has(sig)) groups.set(sig, { rule, what: it.what, where: it.where, pages: new Set(), projects: new Set(), locales: new Set(), roles: new Set(), test: f.test, jev: f.jev || null, triage: null });
-    const g = groups.get(sig);
-    const tr = f.triage?.[ii];
+// ONE DEFINITION OF "A PROBLEM", SHARED WITH THE SUMMARY AND TRIAGE.
+// fix-plan used to group findings itself, by the message and the full selector, so four column
+// headers of one table component came out as four problems that all read "10px" — and the
+// summary, which groups by component for 6.4, disagreed with it on the same run. The grouping
+// lives in lib/problems.js now and everything reads it from there.
+const groups = groupProblems(findings);
+for (const g of groups.values()) {
+  g.triage = null;
+  for (const [fi, ii] of g.refs) {
+    const tr = findings[fi]?.triage?.[ii];
     if (tr && (!g.triage || (tr.p ?? 0) > (g.triage.p ?? 0))) g.triage = tr;
-    g.pages.add(f.route || "site-wide");
-    g.projects.add(f.project);
-    if (f.locale) g.locales.add(f.locale);
-    if (f.auth) g.roles.add(f.role);
   }
 }
 const plan = [...groups.values()].map((g) => {
@@ -120,7 +123,10 @@ const plan = [...groups.values()].map((g) => {
     const keep = AUTH(sides[1]?.route) > AUTH(sides[0]?.route) ? sides[1] : sides[0];
     canonical = { keep: keep.quote, on: keep.route, why: "suggestion: the statement on the more authoritative page (policy > pricing > FAQ > other); decide which is true, state it once (a constants / messages module) and use it on both pages", live: MAP?.messages?.[0] || null };
   }
-  return { ...g, pages: [...g.pages], projects: [...g.projects], locales: [...g.locales], roles: [...g.roles], files: hints, sides, canonical };
+  // a component grouped from several elements says which ones, so the item is still specific
+  const texts = [...(g.texts || [])];
+  const elements = texts.length > 1 ? `${texts.length} elements of this component: ${texts.map((t) => `"${t}"`).join(", ")}` : null;
+  return { ...g, pages: [...g.pages], projects: [...g.projects], locales: [...g.locales], roles: [...g.roles], files: hints, sides, canonical, elements };
 }).sort((a, b) => tOrder(a) - tOrder(b) || (b.triage?.p ?? 0) - (a.triage?.p ?? 0) || b.pages.length - a.pages.length || a.rule.localeCompare(b.rule));
 function tOrder(g) { return { "likely real": 0, unsure: 1, "not evaluated": 1, "likely noise": 3 }[g.triage?.verdict] ?? (g.jev ? 2 : 1); }
 const byRule = new Map();
@@ -166,6 +172,7 @@ else {
       n++;
       L.push(`${n}. ${p.jev ? `[Jev ${p.jev.p?.toFixed?.(2) ?? ""}${p.jev.level === "disagrees" ? ", babysitter passed" : ""}] ` : ""}${p.what}${p.triage?.verdict === "unsure" ? " (Jev triage: unsure)" : ""}`);
       if (p.where) L.push(`   - element: ${p.where}`);
+      if (p.elements) L.push(`   - ${p.elements}`);
       for (const sd of p.sides || []) if (sd.places.length) L.push(`   - ${sd.side === "other" ? "other side" : "text"} "${String(sd.quote).slice(0, 90)}": ${sd.places.map((x) => `${x.file}:${x.at}${x.key ? ` (key ${x.key})` : ""}`).join("; ")}`);
       if (p.canonical) L.push(p.canonical.term ? `   - one term: "${p.canonical.term}" (${p.canonical.why})` : `   - canonical wording: "${String(p.canonical.keep).slice(0, 160)}" (${p.canonical.on}) — ${p.canonical.why}`);
       L.push(`   - on: ${p.pages.join(", ")}${p.roles.length ? ` (signed in as ${p.roles.join(", ")})` : ""} @ ${p.projects.join(", ")}${p.locales.length ? ` in ${p.locales.join(", ")}` : ""}`);

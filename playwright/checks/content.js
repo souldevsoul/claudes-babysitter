@@ -61,12 +61,29 @@ export const collectCopy = (page) => page.evaluate(() => {
     r.lastBox = box;
     r.parts.push(n.nodeValue);
   }
+  // 5.7.1: CODE IS NOT COPY.
+  // An error code in a monospace cell, a curl line in a monospace block, the contents of
+  // <pre>/<code>/<kbd> — the copy rules read them as sentences and Jev asked questions of
+  // them. What makes them code is the FONT, not the letters: "PAYMENT_FAILED" set in the body
+  // face is a raw key on the page and a defect the copy rules should report, while the same
+  // word in monospace is a value the product is showing on purpose. Prose that merely mentions
+  // code ("Press {x} to copy.", "curl is a command-line tool.") stays copy, because it is
+  // prose: only a segment that is entirely monospace, or is nothing but a code placeholder,
+  // is left out.
+  const MONO = /\bmono|courier|consolas|menlo|monaco|"sf mono"|ui-monospace/i;
+  const isCode = (el, text) => {
+    if (text === "{x}") return true;
+    const ff = getComputedStyle(el).fontFamily || "";
+    if (!MONO.test(ff)) return false;
+    return true;
+  };
   const segs = [];
   for (const r of recs.values()) {
     const pre = /pre/.test(getComputedStyle(r.el).whiteSpace);
     const raw = r.parts.join("");
     const text = pre ? raw.trim() : raw.replace(/\s+/g, " ").trim();
     if (!text) continue;
+    if (isCode(r.el, text)) continue;
     const el = r.el, tag = el.tagName.toLowerCase();
     const btn = el.closest("button, [role=button], [role=tab], [role=menuitem], [role=option]");
     const link = el.closest("a[href]") || (tag !== "a" && el.querySelector(":scope > a[href]"));
