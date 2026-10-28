@@ -13,6 +13,20 @@ const structure = (page, n) => page.evaluate((count) => {
   const heads = Array.from(document.querySelectorAll("h1, h2, h3, h4, [role=heading]")).filter((h) => window.__uiVisible(h));
   const before = (a, b) => !!(a.compareDocumentPosition(b) & Node.DOCUMENT_POSITION_FOLLOWING);
   const clean = (t) => String(t || "").replace(/\s+/g, " ").trim().slice(0, 120);
+  // the nearest ancestor that carries a name of its own: aria-labelledby (an accordion panel → its
+  // question, a tabpanel → its tab), aria-label on a region, or <details> → its <summary>. The
+  // trailing glyph of the trigger ("…machine?+", "…more ›") is the icon, not part of the name.
+  const noGlyph = (t) => clean(t).replace(/[\s+\-–—›»▸▾▼↓×]+$/u, "").trim();
+  const labelOfRegion = (el) => {
+    for (let n = el; n && n !== document.body; n = n.parentElement) {
+      if (n.tagName === "DETAILS") { const s = n.querySelector("summary"); if (s && !s.contains(el)) return noGlyph(s.innerText || s.textContent); }
+      const by = n.getAttribute && n.getAttribute("aria-labelledby");
+      if (by) { const t = document.getElementById(by); if (t && !t.contains(el)) return noGlyph(t.innerText || t.textContent); }
+      const lb = n.getAttribute && n.getAttribute("aria-label");
+      if (lb && /^(region|tabpanel|group|dialog|alertdialog)$/i.test(n.getAttribute("role") || "")) return noGlyph(lb);
+    }
+    return "";
+  };
   const out = [];
   for (let i = 0; i < count; i++) {
     const el = els[i];
@@ -21,7 +35,12 @@ const structure = (page, n) => page.evaluate((count) => {
     for (const x of heads) { if (x === el || x.contains(el)) { h = x; break; } if (before(x, el)) h = x; else break; }
     const dialog = el.closest("[role=dialog], dialog, [role=alertdialog]");
     const region = el.closest("footer, [role=contentinfo]") ? "footer" : el.closest("header, nav, [role=navigation]") ? "nav" : dialog ? "dialog" : "main";
-    out.push({ section: h && h !== el ? clean(h.innerText) : "", region, li: !!el.closest("li") });
+    // 5.7.2: a LABELLED region names its contents better than the heading above it. An accordion panel
+    // is role=region + aria-labelledby → its trigger, and for an FAQ that trigger is the question. Without
+    // it the answer's sentences arrive with nothing to say what they are about: relaygpu's "A rented
+    // machine is billed whether or not you send it traffic" — the answer to "How is this different from
+    // renting a GPU machine?" — was read as a claim about relaygpu and reported as contradicting /terms.
+    out.push({ section: labelOfRegion(el) || (h && h !== el ? clean(h.innerText) : ""), region, li: !!el.closest("li") });
   }
   return out;
 }, n);
@@ -46,8 +65,10 @@ export const collapsedText = (page) => page.evaluate(() => {
     if (panel && !panel.closest("header, nav")) blocks(panel, clean(t.textContent));
   }
   for (const h of Array.from(document.querySelectorAll('[hidden="until-found"]'))) {
-    const trigger = h.id && document.querySelector(`[aria-controls="${h.id}"]`);
-    blocks(h, clean(trigger?.textContent || ""));
+    // 5.7.2: Base UI wires the panel to its trigger with aria-labelledby, not aria-controls
+    const by = h.getAttribute("aria-labelledby");
+    const trigger = (h.id && document.querySelector(`[aria-controls="${h.id}"]`)) || (by && document.getElementById(by));
+    blocks(h, clean(trigger?.textContent || "").replace(/[\s+\-–—›»▸▾▼↓×]+$/u, "").trim());
   }
   return out;
 }).catch(() => []);

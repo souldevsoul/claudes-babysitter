@@ -169,3 +169,59 @@ test("M1: picks a currency from a segmented switcher, and still from a dropdown"
     }
   } finally { await browser.close(); }
 });
+
+/* ───────── 4. consistency: a sentence needs what it is about ───────── */
+
+test("claimsOf: a sentence cut from a paragraph carries the paragraph", async () => {
+  const { claimsOf } = await import("../lib/jev/consistency.js");
+  const answer = "A rented machine is billed whether or not you send it traffic. Relaygpu charges per request: the GPU-seconds spent on it plus a routing fee. There is no server to manage or keep warm.";
+  const pages = [{ route: "/faq", body: [{ text: answer, kind: "body", section: "How is this different from renting a GPU machine?" }] }];
+  const claims = claimsOf(pages);
+  const first = claims.find((c) => /^A rented machine/.test(c.text));
+  assert.ok(first, "the sentence is a claim");
+  assert.equal(first.around, answer, "its paragraph travels with it");
+  assert.equal(first.section, "How is this different from renting a GPU machine?", "so does the question");
+  // a line that is one sentence needs no paragraph of its own
+  const single = claimsOf([{ route: "/x", body: [{ text: "An endpoint with no requests is not charged.", kind: "body" }] }])[0];
+  assert.equal(single.around, undefined);
+});
+
+test("termCandidates: a name the site does not say is not a name", async () => {
+  const { termCandidates } = await import("../lib/jev/consistency.js");
+  // relaygpu /faq: "the meter and the ledger are real" — stop words dropped, words joined,
+  // and the engine told a reader the site "mostly says meter ledger". It never says it.
+  const pages = [{ route: "/faq", body: [
+    { text: "Accounts, endpoints, API keys, the meter and the ledger are real.", kind: "body" },
+    { text: "Past requests stay in your billing ledger.", kind: "body" },
+  ] }];
+  const byHead = termCandidates(pages);
+  const terms = [...byHead.values()].flat().map((e) => e.term.toLowerCase());
+  assert.ok(!terms.includes("meter ledger"), `invented phrase must not be a term: ${terms.join(", ")}`);
+  assert.ok(terms.includes("billing ledger"), "a phrase the page really holds is a term");
+});
+
+test("the section of an accordion panel is its question", async () => {
+  const { chromium } = await import("@playwright/test");
+  // Base UI's shape: role=region + aria-labelledby → the trigger; the "+" is the icon
+  const html = `<body><main><h2>Billing</h2>
+    <h3 id="q1">How is this different from renting a GPU machine?+</h3>
+    <div role="region" aria-labelledby="q1" id="p1">
+      <p id="a">A rented machine is billed whether or not you send it traffic.</p>
+    </div></main></body>`;
+  const browser = await chromium.launch({ channel: "chrome" });
+  try {
+    const page = await browser.newPage();
+    await page.goto("data:text/html;charset=utf-8," + encodeURIComponent(html));
+    const section = await page.evaluate(() => {
+      const clean = (t) => String(t || "").replace(/\s+/g, " ").trim().slice(0, 120);
+      const noGlyph = (t) => clean(t).replace(/[\s+\-–—›»▸▾▼↓×]+$/u, "").trim();
+      const el = document.getElementById("a");
+      for (let n = el; n && n !== document.body; n = n.parentElement) {
+        const by = n.getAttribute && n.getAttribute("aria-labelledby");
+        if (by) { const t = document.getElementById(by); if (t && !t.contains(el)) return noGlyph(t.innerText || t.textContent); }
+      }
+      return "";
+    });
+    assert.equal(section, "How is this different from renting a GPU machine?", "the question, without its + icon");
+  } finally { await browser.close(); }
+});
