@@ -760,7 +760,12 @@ export const hasControl = (page, source) => page.evaluate((source) => {
 }, source);
 export const TWO_FA_RE = /two[- ]factor|2fa|two[- ]step|authenticator app|multi[- ]factor|\bmfa\b|двухфактор/i;
 export const DELETE_ACCOUNT_RE = /delete (my |your )?account|close (my |your )?account|delete profile|удалить (аккаунт|профиль)/i;
-export const SIGN_OUT_RE = /^(sign ?out|log ?out|выйти|выход)$/i;
+// 5.7.2 (relaygpu): the account menu's item is `<span>x</span> sign out` — a decorative glyph inside
+// the control. Anchored at both ends, this matched "sign out" and not "x sign out", and A4 reported
+// "no visible Sign out / Log out control" on a product whose sign-out works in two clicks. A glyph
+// (and a single stray letter used as one: x, ×, ⏻, →, ›) before or after the label is allowed; a
+// label with words of its own around it ("sign out of every device") is still not the control.
+export const SIGN_OUT_RE = /^(?:[\s\p{P}\p{S}]*(?:\p{L}\s+)?)?(sign ?out|log ?out|выйти|выход)[\s\p{P}\p{S}]*$/iu;
 export const SIGN_IN_CTA_RE = /^(sign ?in|log ?in|create (an )?account|sign ?up|get started free|войти|регистрац)/i;
 
 /** Text the whole page says (for "the site claims X" checks). */
@@ -796,10 +801,52 @@ export async function login(page, cfg, base, creds = credentials(cfg)) {
 }
 
 /** Click the first visible control matching re; opens a user/account menu first when needed. */
+/**
+ * The label a READER sees on a control, with its icons left out: a child element holding a single
+ * character (`<span>x</span>`, `<span>&gt;</span>`, an arrow) or marked aria-hidden is an icon, not a
+ * word. 5.7.2 (relaygpu): the account menu renders `<span>x</span>sign out` and JSX drops the newline
+ * between them, so textContent is "xsign out" — no regex for the label matched, and A4 reported "no
+ * visible Sign out / Log out control" on a product whose sign-out is two clicks away.
+ * Marks every match with data-bs-ctl so Playwright can locate and click it.
+ */
+async function markByReadLabel(page, re) {
+    return page.evaluate(({ source, flags }) => {
+        const rx = new RegExp(source, flags);
+        const label = (el) => {
+            let s = "";
+            for (const n of el.childNodes) {
+                if (n.nodeType === 3) { s += n.nodeValue; continue; }
+                if (n.nodeType !== 1) continue;
+                if (n.getAttribute("aria-hidden") === "true") continue;
+                const t = (n.textContent || "").trim();
+                if ([...t].length <= 1) continue; // an icon: "x", ">", "→", "•"
+                s += ` ${n.textContent} `;
+            }
+            return s.replace(/\s+/g, " ").trim();
+        };
+        let n = 0;
+        for (const el of document.querySelectorAll("button, a, [role=menuitem], [role=button]")) {
+            el.removeAttribute("data-bs-ctl");
+            if (!el.getClientRects().length) continue;
+            if (rx.test(label(el))) { el.setAttribute("data-bs-ctl", "1"); n++; }
+        }
+        return n;
+    }, { source: re.source, flags: re.flags.replace(/[gy]/g, "") });
+}
+
 export async function clickControl(page, re) {
-    const find = () => page.locator("button, a, [role=menuitem], [role=button]").filter({ hasText: re }).filter({ visible: true }).first();
-    if (await find().isVisible().catch(() => false)) {
-        await find().click();
+    const byText = () => page.locator("button, a, [role=menuitem], [role=button]").filter({ hasText: re }).filter({ visible: true }).first();
+    const find = async () => {
+        if (await byText().isVisible().catch(() => false)) return byText();
+        if (await markByReadLabel(page, re).catch(() => 0)) {
+            const l = page.locator("[data-bs-ctl]").filter({ visible: true }).first();
+            if (await l.isVisible().catch(() => false)) return l;
+        }
+        return null;
+    };
+    let hit = await find();
+    if (hit) {
+        await hit.click();
         return true;
     }
     // 5.5.0 (Compass, issue #5): the avatar menu (Radix DropdownMenu, aria-label="Account menu") came after the language
@@ -818,8 +865,9 @@ export async function clickControl(page, re) {
         tried.add(key);
         await t.click({ timeout: 2000 }).catch(() => { });
         await page.waitForTimeout(400);
-        if (await find().isVisible().catch(() => false)) {
-            await find().click();
+        hit = await find();
+        if (hit) {
+            await hit.click();
             return true;
         }
         await page.keyboard.press("Escape");
@@ -935,6 +983,26 @@ export const currencyMentions = (page) => page.evaluate(() => {
 export async function chooseCurrency(page, code) {
     // a first-visit cookie banner can sit over the switcher's list
     await page.locator("button").filter({ hasText: /^\s*(accept( all)?|allow all|agree)\s*$/i }).filter({ visible: true }).first().click({ timeout: 3000 }).catch(() => { });
+    // 5.7.2 (relaygpu): a SEGMENTED switcher — every currency is its own always-visible control
+    // ("$ USD" / "€ EUR" in a role=group, aria-pressed on the chosen one). There is nothing to open,
+    // so every "open the list, then pick" selector below missed it and M1 said "could not pick EUR"
+    // about a switcher that works. Two or more currency-only controls is what makes it a switcher.
+    const onlyCode = (c) => new RegExp(`^[\\s$€£₸₼¥₽₴₺]*${c}[\\s$€£₸₼¥₽₴₺]*$`, "i");
+    const segment = page.locator([
+        "[role=group] button", "[role=group] [role=button]",
+        "[role=radiogroup] [role=radio]", "[role=tablist] [role=tab]",
+        "header button[aria-pressed]", "header [role=button][aria-pressed]",
+        "[class*=currency i] button", "[aria-label*=currency i] button",
+    ].join(", ")).filter({ visible: true });
+    const segCount = await segment.filter({ hasText: /\b(USD|EUR|GBP|KZT|AZN|PLN|UAH|TRY|JPY|RUB)\b/ }).count().catch(() => 0);
+    if (segCount >= 2) {
+        const pick = segment.filter({ hasText: onlyCode(code) }).first();
+        if (await pick.isVisible().catch(() => false)) {
+            await pick.click({ timeout: 5000 }).catch(() => pick.click({ force: true, timeout: 5000 })).catch(() => { });
+            await page.waitForTimeout(800);
+            return true;
+        }
+    }
     const trig = page.locator('header select, header [role=combobox], header button[aria-haspopup], header button[data-testid*=currency i], select[name*=currency i], [data-testid*=currency i]').filter({ hasText: /USD|EUR|GBP|KZT|AZN|PLN|[$€£₸₼]/ }).filter({ visible: true }).first();
     if (!(await trig.isVisible().catch(() => false)))
         return false;
