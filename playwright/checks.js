@@ -2387,7 +2387,25 @@ const selfProbe = (windowMs) => {
         return r.width * r.height >= 1500 && r.bottom > 0 && r.top < innerHeight && r.right > 0 && r.left < innerWidth && opac(el) > 0.05 && meaningful(el);
     };
     const look = (el) => { const r = el.getBoundingClientRect(); const cs = getComputedStyle(el); return [cs.opacity, cs.transform, cs.translate, cs.scale, cs.clipPath, Math.round(r.top), Math.round(r.left), Math.round(r.height), Math.round(r.width), ...chain(el).map((n) => { const c = getComputedStyle(n); return c.opacity + c.transform + c.translate + c.clipPath; })].join("|"); };
-    const bigKids = (el) => { const r = el.getBoundingClientRect(); const a = r.width * r.height; const o = []; for (const k of el.querySelectorAll("*")) { if (o.length >= 12) break; const b = k.getBoundingClientRect(); if (b.width * b.height >= a * 0.5) o.push(k); } return o; };
+    /** The descendants whose motion counts as the layer's own: any that covers half of it, and the
+     *  largest one whatever its size. Without that last part a full-width fixed wrapper around a
+     *  centred card hid the card's fade and slide — at 1440 the card is about a third of the
+     *  wrapper's area, so nothing qualified and a working animation read as "one frame"
+     *  (relaygpu, 2026-10; the same banner passed at 390, where the card fills 80% of it). */
+    const bigKids = (el) => {
+        const r = el.getBoundingClientRect();
+        const a = r.width * r.height;
+        const o = [];
+        let best = null, bestArea = 0;
+        for (const k of el.querySelectorAll("*")) {
+            const b = k.getBoundingClientRect();
+            const ka = b.width * b.height;
+            if (ka > bestArea) { bestArea = ka; best = k; }
+            if (o.length < 12 && ka >= a * 0.5) o.push(k);
+        }
+        if (best && bestArea > 0 && !o.includes(best)) o.push(best);
+        return o;
+    };
     const finite = (a) => { try { return Number.isFinite(a.effect.getComputedTiming().endTime); } catch { return true; } };
     const animated = (l, kids) => { try { return [l, ...kids, ...chain(l)].some((n) => n.getAnimations().some((a) => (a.playState === "running" || a.playState === "pending") && finite(a))); } catch { return false; } };
     const related = (l, kids, x) => x === l || kids.includes(x) || chain(l).includes(x);

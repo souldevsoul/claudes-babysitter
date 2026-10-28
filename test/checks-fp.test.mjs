@@ -238,7 +238,16 @@ try {
     const out = await self(page, "?ssr");
     assert.ok(!out.some((f) => /appears by itself/.test(f.what)), JSON.stringify(out));
   });
+  await test("6.12 self-appearing: the motion may live on a centred card inside a full-width wrapper", async (page) => {
+    // relaygpu, 2026-10: the notice is a full-width fixed wrapper around a max-w card. The card fades and
+    // slides, the wrapper never moves, and on a wide screen the card is ~a third of the wrapper's area —
+    // under the "half of it" bar the kid scan used, so the check called a working animation "one frame".
+    await page.setViewportSize({ width: 1280, height: 900 });
+    const out = await self(page, "?inner");
+    assert.deepEqual(out, [], JSON.stringify(out));
+  });
   await test("6.12 self-appearing: an endless spinner is not an entrance; a fade-out close is an exit", async (page) => {
+    await page.setViewportSize({ width: 390, height: 844 });   // its own width, not the one the test before left
     const out = await self(page, "?spinner");
     assert.ok(out.some((f) => /appears by itself/.test(f.what) && f.selector === "#toast"), `the toast pops in: ${JSON.stringify(out)}`);
     assert.ok(!out.some((f) => /removes it/.test(f.what)), `its close fades: ${JSON.stringify(out)}`);

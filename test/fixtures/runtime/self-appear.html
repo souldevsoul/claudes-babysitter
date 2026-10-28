@@ -4,7 +4,10 @@
      1 s with tailwindcss-animate classes and no plugin (no CSS behind them) and removed at once on Accept/Reject.
      ?good: real enter keyframes + an exit transition. ?enteronly: enters with motion, removed at once.
      ?ssr: the banner is in the HTML from the first frame (part of the page load). ?spinner: a toast whose only motion
-     is an endless spinner (not an entrance), closed with a fade. -->
+     is an endless spinner (not an entrance), closed with a fade.
+     ?inner: relaygpu's shape (2026-10) — a full-width fixed wrapper holding a centred card, where the card carries the
+     motion and the wrapper never moves. On a wide screen the card is about a third of the wrapper's area, so a
+     "big kids" rule that only looks at children covering half of it saw no motion at all. -->
 <style>
   body { margin: 0; font: 16px/1.5 system-ui, sans-serif; background: #0a0f1c; color: #e5e7eb; }
   main { padding: 80px 16px; min-height: 1400px; }
@@ -19,6 +22,8 @@
   .spin { display: inline-block; width: 16px; height: 16px; border: 2px solid #fff; border-top-color: transparent; border-radius: 50%; animation: spin 1s linear infinite; }
   @keyframes spin { to { transform: rotate(360deg); } }
   .fade-out { transition: opacity 200ms; opacity: 0; }
+  .inner-card { max-width: 460px; margin: 0 auto; transition: opacity 200ms ease-out, translate 200ms ease-out; }
+  .inner-card.off { opacity: 0; translate: 0 12px; }
 </style></head>
 <body>
 <main><h1>Fixture page</h1><p>Some content under the banner.</p></main>
@@ -37,6 +42,17 @@
   if (/ssr/.test(q)) make("");
   if (/bad/.test(q)) setTimeout(() => make("animate-in fade-in slide-in-from-bottom-4 duration-500"), 1000);
   if (/good|enteronly/.test(q)) setTimeout(() => make("enter"), 1000);
+  if (/inner/.test(q)) setTimeout(() => {
+    const b = document.createElement("div");
+    b.id = "banner"; b.className = "banner";
+    b.innerHTML = '<div class="card inner-card off" id="innercard"><h2>We use cookies</h2><p>Necessary cookies run the site.</p><button id="accept">Accept all</button><button id="reject">Reject all</button></div>';
+    document.body.appendChild(b);
+    const card = b.querySelector("#innercard");
+    requestAnimationFrame(() => card.classList.remove("off"));
+    for (const id of ["accept", "reject"]) b.querySelector("#" + id).addEventListener("click", () => {
+      card.classList.add("off"); setTimeout(() => b.remove(), 210);
+    });
+  }, 1000);
   if (/spinner/.test(q)) setTimeout(() => {
     const t = document.createElement("div");
     t.id = "toast"; t.className = "toast"; t.setAttribute("role", "status");

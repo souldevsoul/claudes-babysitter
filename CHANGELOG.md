@@ -2,6 +2,18 @@
 
 Earlier releases (4.11.1 and before) are described in the README under "What changed in …".
 
+## 5.7.3 — a layer's motion may live on its card, not on its wrapper (2026-10-28)
+
+**6.12 called a working animation "one frame".** An overlay built as a full-width fixed wrapper around a centred card —
+the shape most cookie notices use — carries its fade and slide on the card. The kid scan behind `selfAppearingMotion`
+only looked at descendants covering half of the layer, and at 1440 such a card is about a third of its wrapper's area:
+nothing qualified, so the check saw no opacity or transform change and reported both the entrance and the exit. The same
+notice passed at 390, where the card fills 80% of the wrapper — which is why every finding of this kind in a run was at
+the desktop width.
+
+The scan now also takes the largest descendant whatever its size. Measured on relaygpu, whose notice animates opacity
+0 → 1 and translate 12px → 0 over 200ms and mirrors it on dismiss: 47 findings before, none after, at both widths.
+
 ## 5.7.0 — every skip reported, Jev text pass, --fast (2026-10-26)
 
 ### Skips and decisions
