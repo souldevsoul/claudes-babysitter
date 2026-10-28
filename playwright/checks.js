@@ -398,12 +398,19 @@ export const illegibleText = (page, allowLightWeights = false, root = null) => p
             const pc = getComputedStyle(p);
             clipText = pc.backgroundClip === "text" || pc.webkitBackgroundClip === "text";
         }
+        // 5.7.1: AN ITEM THAT SAYS ONLY "11px" NAMES NOTHING.
+        // The fix-plan line read "11px" and a selector, so a reader had to open the page to
+        // learn what was wrong with it and which words were affected — and four such items
+        // off one table looked like four problems. Each item now says the rule it broke, the
+        // threshold it broke it against, and the text it is about.
+        const words = (el.innerText || el.textContent || "").trim().replace(/\s+/g, " ").slice(0, 40);
+        const quoted = words ? `: "${words}"` : "";
         const bad = [];
         if (size < 12)
-            bad.push(`${size}px`);
+            bad.push(`text ${size}px, under the 12px minimum${quoted}`);
         // 6.4: body/nav text — weight ≥400 below 16px, ≥300 from 16px; display type ≥24px free. Projects may opt out (allow.lightWeights).
         if (!allowLightWeights && size < 24 && (weight < 300 || (weight < 400 && size < 16)))
-            bad.push(`weight ${weight} at ${size}px`);
+            bad.push(`weight ${weight} at ${size}px, under 400${quoted}`);
         // fully transparent through an ancestor (a reveal-on-scroll block not yet revealed, a closed tooltip):
         // nobody can read it, so there is no contrast to judge — visibility is not this check's question
         if (opacity < 0.01)
@@ -428,7 +435,7 @@ export const illegibleText = (page, allowLightWeights = false, root = null) => p
                 bad.push(`contrast ${ratio.toFixed(2)}:1${opacity < 0.95 ? ` (opacity ${opacity.toFixed(2)} included)` : ""}`);
         }
         if (bad.length)
-            out.push({ what: bad.join(", "), where: window.__uiDescribe(el), selector: window.__uiSelector(el), human: window.__uiHuman(el) });
+            out.push({ what: `${bad.join(", ")} [6.4]`, where: window.__uiDescribe(el), selector: window.__uiSelector(el), human: window.__uiHuman(el) });
     }
     // every finding is reported: a dense page with 60 faint captions has 60 findings, not the first 40
     return { hard: out, eye };

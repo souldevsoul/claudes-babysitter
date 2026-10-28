@@ -41,6 +41,24 @@ export const collectCopy = (page) => page.evaluate(() => {
     if (code) continue;
     let r = recs.get(b);
     if (!r) { r = { el: b, parts: [] }; recs.set(b, r); }
+    // 5.7.1: A GAP A READER SEES IS A SPACE.
+    // Two inline elements side by side with no whitespace between them in the markup
+    // (<span>ACME</span><span style="margin-left:8px">TERMS</span>) have no text node between
+    // them either, so the parts joined to "ACMETERMS" — and every copy rule and every Jev line
+    // then read one invented word. The glyph boxes are measured instead of the markup: a gap on
+    // the same line of a fifth of the font size or more is the space it looks like. Markup with
+    // no gap (Hello <b>world</b>s, letter-spacing) still joins, because nothing separates it.
+    const rng = document.createRange();
+    rng.selectNodeContents(n);
+    const box = rng.getBoundingClientRect();
+    const prev = r.lastBox;
+    if (prev && box.width && prev.width) {
+      const sameLine = Math.abs(box.top - prev.top) <= Math.max(2, box.height * 0.3);
+      const gap = box.left - prev.right;
+      const fs = parseFloat(getComputedStyle(p).fontSize) || 16;
+      if (sameLine && gap >= fs * 0.2) r.parts.push(" ");
+    }
+    r.lastBox = box;
     r.parts.push(n.nodeValue);
   }
   const segs = [];
@@ -115,7 +133,25 @@ export const collectCopy = (page) => page.evaluate(() => {
     const c = Array.from(f.querySelectorAll("*")).filter((e) => e.children.length < 6 && /©|\(c\)\s*\d{4}|copyright/i.test(e.textContent || "") && visible(e)).sort((a, b) => a.textContent.length - b.textContent.length)[0];
     if (c) copyright = { i: els.push(c) - 1, text: (c.innerText || c.textContent || "").replace(/\s+/g, " ").trim() };
   }
-  const h1 = Array.from(document.querySelectorAll("h1")).filter((x) => visible(x)).map((x) => (x.innerText || "").replace(/\s+/g, " ").trim());
+  // innerText glues two inline spans with a visible gap between them ("ACMETERMS OF SERVICE"):
+  // the heading is read the same way the copy is, so one invented word cannot reach a rule
+  // through one path after being fixed on the other.
+  const gapped = (el) => {
+    let out = "", last = null;
+    const w = document.createTreeWalker(el, NodeFilter.SHOW_TEXT);
+    for (let n = w.nextNode(); n; n = w.nextNode()) {
+      if (!n.nodeValue.trim()) { out += " "; last = null; continue; }
+      const rng = document.createRange(); rng.selectNodeContents(n);
+      const box = rng.getBoundingClientRect();
+      if (last && box.width && last.width && Math.abs(box.top - last.top) <= Math.max(2, box.height * 0.3)) {
+        const fs = parseFloat(getComputedStyle(n.parentElement).fontSize) || 16;
+        if (box.left - last.right >= fs * 0.2) out += " ";
+      }
+      out += n.nodeValue; last = box;
+    }
+    return out.replace(/\s+/g, " ").trim();
+  };
+  const h1 = Array.from(document.querySelectorAll("h1")).filter((x) => visible(x)).map(gapped);
   const brand = [document.querySelector('meta[property="og:site_name"]')?.getAttribute("content"), ...Array.from(document.querySelectorAll('header a[href="/"] img[alt], header [aria-label*=home i], header a[href="/"]')).map((x) => x.getAttribute("alt") || x.getAttribute("aria-label") || (x.innerText || "").trim())].filter(Boolean);
   const alternates = Array.from(document.querySelectorAll('link[rel="alternate"][hreflang]')).map((l) => ({ code: l.getAttribute("hreflang"), href: l.href }));
   // every internal link with the name a reader sees (CT21 / CT22): a card link is named by its heading, a link inside a
