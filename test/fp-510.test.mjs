@@ -102,9 +102,15 @@ try {
     await load(page, doc(`<header style="height:60px"><a href="/">Praxis</a> <span>Account</span></header><div class="shell"><section><header class="mb-6"><h1>Wallet</h1><p>Your balance in money: $240.00</p></header><p>Buy credits for tasks.</p></section></div>`));
     m = await L.moneyFormat(page);
     assert.ok(!m.soft.some((f) => /header shows money/.test(f.what)), `a page header in a section outside main is not the site header either: ${show(m.soft)}`);
-    await load(page, doc(`<header style="height:60px"><a href="/">Praxis</a> <span>Balance: $240.00</span></header><main><h1>Dashboard</h1><p>Buy credits for tasks.</p></main>`));
+    // 5.7.1 asks for a credits amount ("500 credits"), not the word "credits" in a sentence: on a product
+    // that bills in dollars, "sign-up credit" or "credit card" used to be enough to call it a credits product.
+    await load(page, doc(`<header style="height:60px"><a href="/">Praxis</a> <span>Balance: $240.00</span></header><main><h1>Dashboard</h1><p>Buy credits for tasks. 500 credits left this month.</p></main>`));
     m = await L.moneyFormat(page);
     assert.ok(m.soft.some((f) => /header shows money \("\$240\.00"\)/.test(f.what)), show(m.soft));
+    // and the word alone is not: the same header on a page that only mentions credits stays quiet
+    await load(page, doc(`<header style="height:60px"><a href="/">Praxis</a> <span>Balance: $240.00</span></header><main><h1>Dashboard</h1><p>Buy credits for tasks.</p></main>`));
+    m = await L.moneyFormat(page);
+    assert.ok(!m.soft.some((f) => /header shows money/.test(f.what)), `the word "credits" alone is not a credits product: ${show(m.soft)}`);
   });
 
   /* ───────── P2 / P3: collapsed contents bar, data categories ───────── */

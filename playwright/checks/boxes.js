@@ -158,6 +158,14 @@ export const sidewaysScroll = (page) => page.evaluate(() => {
     if (el.scrollWidth <= el.clientWidth + 1 || !W.__uiVisible(el)) continue;
     const box = el.getBoundingClientRect();
     const limit = box.left + parseFloat(cs.borderLeftWidth) + el.clientWidth + 1;
+    /** A rect is where the thing is on screen now, so a scroller that has already been scrolled
+     *  reports its content pulled left: at the end of the track every child sits inside the box
+     *  and the honest "something is wider" test turns into "nothing is wider". Measure in the
+     *  content's own coordinates by undoing the scroll. (relaygpu, 2026-10: the policy pages' chip
+     *  rail, 923px of chips in 358px, read as an empty 565px scroller once a click had scrolled it
+     *  to the end — the same rail passed on first load.) A fixed child does not travel with the
+     *  content, so it keeps its screen position. */
+    const shift = el.scrollLeft;
     let inflow = -Infinity, culprit = null, culpritRight = -Infinity;
     for (const d of Array.from(el.querySelectorAll("*")).slice(0, 1500)) {
       // inside a nested box that clips or scrolls: that box handles it
@@ -168,10 +176,11 @@ export const sidewaysScroll = (page) => page.evaluate(() => {
       const r = d.getBoundingClientRect();
       if (r.width < 1 || r.height < 1) continue;
       const abs = /absolute|fixed/.test(ds.position);
-      if (abs) { if (r.right > culpritRight) { culpritRight = r.right; culprit = d; } continue; }
+      const right = r.right + (ds.position === "fixed" ? 0 : shift);
+      if (abs) { if (right > culpritRight) { culpritRight = right; culprit = d; } continue; }
       let inAbs = false;
       for (let p = d.parentElement; p && p !== el; p = p.parentElement) if (/absolute|fixed/.test(getComputedStyle(p).position)) { inAbs = true; break; }
-      if (!inAbs) inflow = Math.max(inflow, r.right);
+      if (!inAbs) inflow = Math.max(inflow, right);
     }
     if (inflow > limit) continue; // real content is wider: a scroller with a reason (a table, chips, a carousel)
     const pseudo = ["::before", "::after"].find((p) => { const ps = getComputedStyle(el, p); return ps.content !== "none" && /absolute|fixed/.test(ps.position); });

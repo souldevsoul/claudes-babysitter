@@ -2,6 +2,24 @@
 
 Earlier releases (4.11.1 and before) are described in the README under "What changed in …".
 
+## 5.7.4 — a scrolled rail is not an empty one (2026-10-28)
+
+**2.20 called a working chip rail "a panel that scrolls over nothing".** The check compares each child's screen
+position with the panel's right edge, and a rect says where a thing is *now*: once something has scrolled the rail to
+the end of its track, every chip sits inside the box and the honest "something in here is wider" test inverts. Measured
+on relaygpu's policy pages, whose mobile "On this page" rail holds 923px of chips in 358px: scrolled to the end,
+`inflow` came out 374 against a limit of 375 — one pixel — and the rail was reported as an empty 565px scroller. It
+passed on first load, which is why the finding only appeared after a click.
+
+The scan now measures in the content's own coordinates, undoing `scrollLeft`; a `fixed` child keeps its screen position,
+because it does not travel with the content.
+
+**A red test from 5.7.1 (money: the site header shows money).** The money model stopped treating the word "credits" in a
+sentence as evidence that the product sells credits — correctly: "credit card" and "sign-up credit" appear on products
+that bill in dollars. The fixture for "a money balance in the site header still fires" carried only the word, so the
+case stopped firing and the suite had been red since. The fixture now states a credits amount, and a second case holds
+the new line: the word alone stays quiet.
+
 ## 5.7.3 — a layer's motion may live on its card, not on its wrapper (2026-10-28)
 
 **6.12 called a working animation "one frame".** An overlay built as a full-width fixed wrapper around a centred card —

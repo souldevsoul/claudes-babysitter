@@ -203,7 +203,7 @@ try {
 
   /* ═════ 2.20 sideways scroll over nothing — Kindred 1zetde (vaul drawer, fix f273c0c) ═════ */
   const drawer = (x) => `<style>.p::after{content:"";position:absolute;left:100%;top:0;width:200%;height:100%}</style><div role="dialog" class="p" style="position:fixed;right:0;top:0;width:599px;height:100vh;overflow-y:auto;${x}"><p>Order #123 · Completed</p></div>`;
-  await test("1zetde Kindred order drawer: scrolls sideways to 1797px over a pseudo-element filler; overflow-x:hidden passes; a chip scroller with real chips stays quiet", async (page) => {
+  await test("1zetde Kindred order drawer: scrolls sideways to 1797px over a pseudo-element filler; overflow-x:hidden passes; a chip scroller with real chips stays quiet, scrolled to the end too", async (page) => {
     const check = need(B.sidewaysScroll);
     await load(page, doc(drawer("")));
     const bad = await check(page);
@@ -215,6 +215,11 @@ try {
     assert.deepEqual(await check(page), [], "real chips");
     await load(page, doc(`<div style="overflow-x:auto;width:300px"><table style="width:800px"><tr><td>a</td></tr></table></div>`));
     assert.deepEqual(await check(page), [], "a wide table");
+    // relaygpu: the same chips, already scrolled to the end of the track. Every chip is then inside
+    // the box on screen, and before 5.7.4 that read as an empty scroller.
+    await load(page, doc(`<div id="rail" style="display:flex;gap:8px;overflow-x:auto;width:300px">${Array.from({ length: 12 }, (_, i) => `<span style="flex:0 0 80px;border:1px solid">Chip ${i}</span>`).join("")}</div>`));
+    await page.evaluate(() => { document.getElementById("rail").scrollLeft = 9999; });
+    assert.deepEqual(await check(page), [], "real chips, scrolled to the end");
   }, { width: 1440, height: 900 });
 
   /* ═════ 6.5 all-caps h1 outlier — Kindred 9ha0j4 ═════ */
