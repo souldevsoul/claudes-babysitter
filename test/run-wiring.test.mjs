@@ -40,6 +40,30 @@ try {
     assert.match(r.stderr + r.stdout, /NOT WIRED into this repo \(after init\)[\s\S]*CI gate on pull requests[\s\S]*CI full run after deploy/);
     assert.ok(!/post-merge re-check/.test(r.stderr), "hooks are wired: not listed as missing");
   });
+  await t("init keeps its e2e helpers out of the project's own type-check (the shim's import is absolute, the build machine has no such path)", async () => {
+    /* The shim re-exports the tool's fixtures by absolute path in link mode — the tool lives
+       outside the repo on purpose. A Next project's tsconfig includes every .ts in the tree, so
+       `next build` type-checked the shim: green on the machine that has the tool, "Cannot find
+       module '/Users/.../playwright/fixtures.js'" on the deploy runner. Playwright transpiles the
+       specs itself and never reads this include. (relaygpu, 2026-10.) */
+    const d = project();
+    writeFileSync(join(d, "tsconfig.json"), JSON.stringify({ compilerOptions: { strict: true }, include: ["**/*.ts", "**/*.tsx"], exclude: ["node_modules"] }, null, 2) + "\n");
+    git(d, "add", "-A"); commit(d, "tsconfig");
+    const r = spawnSync(process.execPath, [BIN, "init", ".", "--yes", "--new", "--link"], { cwd: d, encoding: "utf8", env });
+    assert.equal(r.status, 0, r.stdout + r.stderr);
+    const shim = join(d, "e2e/babysitter.ts");
+    assert.ok(existsSync(shim), "the shim is written");
+    assert.match(readFileSync(shim, "utf8"), /^export \* from "\//m, "link mode writes an absolute import");
+    const ts = JSON.parse(readFileSync(join(d, "tsconfig.json"), "utf8"));
+    assert.ok(ts.exclude.includes("e2e"), `the e2e folder is excluded from the project's type-check, got ${JSON.stringify(ts.exclude)}`);
+    assert.ok(ts.exclude.includes("node_modules"), "the project's own exclusions are kept");
+    assert.deepEqual(ts.include, ["**/*.ts", "**/*.tsx"], "include is left alone");
+    // running init twice does not add the folder twice
+    spawnSync(process.execPath, [BIN, "init", ".", "--yes", "--existing", "--link"], { cwd: d, encoding: "utf8", env });
+    const ts2 = JSON.parse(readFileSync(join(d, "tsconfig.json"), "utf8"));
+    assert.equal(ts2.exclude.filter((x) => x === "e2e").length, 1, "idempotent");
+  });
+
   await t("init --ci (package mode): the after-deploy workflow (deployment_status → the full suite + fix plan); install-hooks adds post-merge / post-rewrite; nothing left unwired", async () => {
     const d = project();
     const pj = JSON.parse(readFileSync(join(d, "package.json"), "utf8"));

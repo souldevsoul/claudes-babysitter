@@ -76,6 +76,14 @@ try {
     const good = real_(await forms.gibberish(page));
     assert.deepEqual(good, [], show(good));
   });
+  await test("FM2 a model prompt box is not a contact form: \"asdf\" is a prompt somebody meant to send", async (page) => {
+    /* A playground's one field is a textarea, so it was read as the message of a contact form
+       and the endpoint page was told to reject gibberish — a check that would have stopped a
+       reader trying the model out. (relaygpu /dashboard/endpoints/<id>, 2026-10.) */
+    await go(page, "playground-prompt.html");
+    const out = real_(await forms.gibberish(page));
+    assert.deepEqual(out, [], show(out));
+  });
   await test("FM3/FM4 a form that empties itself and says 'sent' on a 500 is reported; a silent one too", async (page) => {
     await go(page, "submit-bad.html");
     const out = real_(await forms.submitOutcomes(page));

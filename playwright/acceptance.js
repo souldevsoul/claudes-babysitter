@@ -44,7 +44,13 @@ export function acceptanceConfig(cfg = {}) {
 // 5.5.0 (Parallel gjfjnc): /delivery-policy, /shipping-policy, /returns-policy, /specialist-agreement never got P1–P3
 const POLICY_RE = /\/(terms|privacy|cookie|cookies|refund|refunds|aml|kyc|legal|policy|policies|gdpr|disclaimer|payments?-policy|cancellation|acceptable-use|[a-z]+(-[a-z]+)*-(policy|terms|agreement|notice))(\/|-|$)/i;
 export const isPolicyPath = (path, acc = DEFAULTS) => (acc.policyPaths || []).includes(path) || POLICY_RE.test(path);
-export const isAuthPath = (path, acc = DEFAULTS) => [acc.auth.signIn, acc.auth.signUp].filter(Boolean).includes(path) || /^\/(login|log-in|signin|sign-in|register|signup|sign-up|auth)(\/|$)/i.test(path);
+/* Every step of signing in or up. These are the pages that carry a minimal header — the wordmark
+   and a way back — instead of the site's navigation, so rules about the header exempt them.
+   Two lists used to say this, one here and one inside rule 3.5, and neither knew about the step
+   between signing up and signing in: a product that verifies the address got "the header shows no
+   navigation" on /verify-email while its four sibling pages went free. (relaygpu, 2026-10.) */
+export const AUTH_FLOW_RE = /(?:^|\/)(log-?in|log-?out|sign-?in|sign-?out|sign-?up|register|registration|join|create-account|auth|oauth|forgot(-password)?|reset(-password)?|new-password|verify(-email)?|email-verification|confirm-email|activate|activation|otp|one-time-(code|password)|magic-link|passwordless|2fa|two-factor|mfa)(?:\/|$)/i;
+export const isAuthPath = (path, acc = DEFAULTS) => [acc.auth.signIn, acc.auth.signUp].filter(Boolean).includes(path) || AUTH_FLOW_RE.test(path);
 
 /* ─────────────── page text ─────────────── */
 

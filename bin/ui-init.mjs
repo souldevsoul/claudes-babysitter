@@ -311,6 +311,31 @@ const runCmd = mode === "package" ? "babysitter" : mode === "vendor" ? `node ${t
   if (!existsSync(esm)) { write(esm, '{ "type": "module" }\n'); say("e2e/ is an ES module folder (the specs import the tool's ESM helpers)", esm); }
   const journeys = join(e2eDir, "journeys.spec.ts");
   if (!existsSync(journeys)) { write(journeys, readFileSync(join(TOOL, "templates/e2e/journeys.spec.ts"), "utf8")); say("product journeys spec (yours to grow: one test per user-facing feature)", journeys); }
+  /* Keep these helpers out of the product's own type-check. The shim re-exports the tool's
+     fixtures by absolute path in link mode (the tool lives outside the repo on purpose), and a
+     Next project's tsconfig takes every .ts in the tree — so `next build` type-checked the shim
+     and stopped at "Cannot find module '/Users/.../playwright/fixtures.js'" on a build machine
+     that has no such path, while the same build was green on the machine that wrote it. That is
+     the worst shape a failure can take: it passes exactly where it is checked. Playwright
+     transpiles the specs itself and never reads this include, so excluding the folder costs
+     nothing. A tsconfig we cannot parse (comments, JSON5) is reported, not rewritten.
+     (relaygpu, 2026-10.) */
+  const tsPath = join(repo, "tsconfig.json");
+  if (existsSync(tsPath)) {
+    const raw = readFileSync(tsPath, "utf8");
+    let ts = null;
+    try { ts = JSON.parse(raw); } catch { ts = null; }
+    const dirRel = relative(repo, e2eDir) || ".";
+    if (!ts) say(`! ${dirRel} must be added to "exclude" in tsconfig.json by hand — it could not be read as JSON (comments?), and the build type-checks it otherwise`);
+    else {
+      const ex = Array.isArray(ts.exclude) ? ts.exclude : ts.exclude ? [ts.exclude] : [];
+      if (!ex.some((x) => x === dirRel || x === `${dirRel}/**` || x === `./${dirRel}`)) {
+        ts.exclude = [...ex, dirRel];
+        write(tsPath, JSON.stringify(ts, null, 2) + "\n");
+        say(`${dirRel}/ excluded from tsconfig (its helpers import the tool by path; the app's build must not type-check them)`, tsPath);
+      }
+    }
+  }
   const pj = readJson(join(repo, "package.json"));
   pj.scripts ||= {};
   const e2eCmd = mode === "package" ? "babysitter e2e" : `${runCmd} e2e`;

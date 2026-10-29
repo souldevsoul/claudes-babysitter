@@ -20,6 +20,7 @@
 //   1.11 brandMark            footer logo = header logo, favicon = the mark, manifest = the brand (Kindred kytm39, bmlrc4)
 //   B5   customAmountTile     the top-up dialog's custom amount is a tile like the packages (Kindred c25ux3)
 import { decided } from "../skip.js";
+import { AUTH_FLOW_RE } from "../acceptance.js";
 
 /* ───────── 2.14 a table cell's text runs into the next cell (Praxis izrv19) ───────── */
 export const cellSpill = (page) => page.evaluate(() => {
@@ -271,10 +272,12 @@ export const headerFaces = (page) => decided(page, page.evaluate(() => {
 }));
 
 /* ───────── 3.5 a desktop header shows its navigation (Kindred sxnm89, 62i3ff) ───────── */
-export const desktopHeaderNav = (page) => decided(page, page.evaluate(() => {
+export const desktopHeaderNav = (page) => decided(page, page.evaluate((authFlow) => {
   const W = window;
   if (innerWidth < 1024) return [];
-  if (/\/(log-?in|sign-?in|sign-?up|register|join|forgot|reset)/i.test(location.pathname)) return [];
+  // The whole sign-in flow, from one list (acceptance.js AUTH_FLOW_RE), so no step of it is
+  // exempt here while its neighbours are not.
+  if (new RegExp(authFlow, "i").test(location.pathname)) return [];
   const header = Array.from(document.querySelectorAll("header, [role=banner]")).find((h) => W.__uiVisible(h) && h.getBoundingClientRect().top < 120);
   if (!header) { window.__bsNA = { rule: "3.5", reason: "no header bar found in the top 120 px: the desktop navigation was not looked for" }; return []; }
   const AUTH = /log-?in|sign-?(in|up)|register|join|logout|account|profile|cart|checkout/i;
@@ -290,7 +293,7 @@ export const desktopHeaderNav = (page) => decided(page, page.evaluate(() => {
   if (all.size < 3) { window.__bsNA = { rule: "3.5", reason: `the header shows no navigation, but fewer than 3 hidden or footer links (${all.size}) to call it missing` }; return []; }
   const names = [...(hidden.size ? hidden : inFooter)].slice(0, 5).join(", ");
   return [{ what: `at ${innerWidth}px the header shows no navigation — only the logo${toggle ? " and a menu button" : ""}; ${names} are hidden${toggle ? " behind the toggle" : ""}. Show the main links in the desktop header (or layout.desktopNav: "menu" with the reason in allowReasons) [3.5]`, where: W.__uiDescribe(header), selector: W.__uiSelector(header), human: W.__uiHuman(header) }];
-}));
+}, AUTH_FLOW_RE.source));
 
 /* ───────── 3.10 a burger beside the visible nav adds something (Compass 6d0aki) ───────── */
 export async function burgerRepeatsNav(page) {

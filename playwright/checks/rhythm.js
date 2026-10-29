@@ -204,6 +204,34 @@ export async function slotWraps(page) {
           const wrapped = present.filter((e, i) => n[i] >= 2);
           if (wrapped.length && ones >= 2 && ones > present.length / 2) {
             const e = wrapped[0];
+            /* In a stacked list the fix offered is a wider column, so there has to be one: a
+               slot that already spans its whole item has no room to be given, and on a phone
+               the only cures left are a smaller face or a shorter heading. A document's
+               longest section heading took two lines at 390px and was reported on three
+               pages at once. (relaygpu /docs, /security, /cookies, 2026-10.) */
+            if (stacked) {
+              const item = items.find((it) => it.contains(e));
+              const iw = item && item.getBoundingClientRect().width;
+              if (iw && e.getBoundingClientRect().width >= 0.9 * iw) continue;
+              /* The slot may be one cell of a row rather than the item itself — a clause
+                 heading beside its numeral. What is left to give it is the row's free space,
+                 not the item's width: with the numeral and the gap taken out there is none,
+                 and the rule only moved from page to page as the heading size changed (at
+                 24px it named /security and /cookies, at 20px /terms and /privacy — the same
+                 markup throughout). (relaygpu legal documents, 2026-10.) */
+              const host = e.parentElement;
+              if (host) {
+                const hs = R.cs(host), hr = host.getBoundingClientRect();
+                /* every cell that takes width, decoration included: the numeral beside a
+                   clause heading is aria-hidden, and leaving it out of the sum invented 34px
+                   of room that is not there */
+                const kids = Array.from(host.children).filter((k) => k.getBoundingClientRect().width > 0);
+                const inner = hr.width - (parseFloat(hs.paddingLeft) || 0) - (parseFloat(hs.paddingRight) || 0);
+                const gap = parseFloat(hs.columnGap) || 0;
+                const used = kids.reduce((a, k) => a + k.getBoundingClientRect().width, 0) + gap * Math.max(0, kids.length - 1);
+                if (kids.includes(e) && inner - used <= 2) continue;
+              }
+            }
             const key = `w|${R.sig(e)}|${k}`;
             if (done.has(key)) continue;
             done.add(key);
@@ -297,7 +325,14 @@ export async function markerBadgeLevel(page) {
         for (const it of items) {
           const mk = Array.from(it.querySelectorAll("*")).find((e) => { const b = e.getBoundingClientRect(); const s = R.cs(e); return b.width >= 4 && b.width <= 24 && Math.abs(b.width - b.height) <= 2 && !(e.innerText || "").trim() && e.children.length === 0 && (parseFloat(s.borderTopLeftRadius) >= b.width / 2 - 1 || /50%/.test(s.borderTopLeftRadius)) && R.painted(e) && R.cs(e).display !== "none"; });
           if (!mk) { offs.push(null); continue; }
-          const lab = R.textNodes(it).find((n) => !mk.contains(n));
+          /* The text the marker marks is the text that follows it, not the item's first words:
+             a card that opens with an eyebrow and a heading and carries a status dot further
+             down had that dot measured against the eyebrow, and a dot sitting exactly on its
+             own caption was reported as 218px out of line. A marker that trails its text (a
+             status dot at the end of a row) still reads backwards. (relaygpu /, 2026-10.) */
+          const rest = R.textNodes(it).filter((n) => !mk.contains(n));
+          const after = rest.find((n) => mk.compareDocumentPosition(n) & Node.DOCUMENT_POSITION_FOLLOWING);
+          const lab = after || rest[0];
           const r = lab && R.rectsOf(lab)[0];
           if (!r) { offs.push(null); continue; }
           const m = mk.getBoundingClientRect();
@@ -431,7 +466,11 @@ export async function textOverlap(page) {
     const R = window.__bsR, out = [];
     const runs = [];
     const alpha = (el) => { let o = 1; for (let e = el; e && e.nodeType === 1; e = e.parentElement) o *= Number(R.cs(e).opacity); return o * window.__uiRGBA(R.cs(el).color)[3]; };
-    const clipBox = (el) => { let box = { left: -1e9, top: -1e9, right: 1e9, bottom: 1e9 }; for (let e = el.parentElement; e && e !== document.body; e = e.parentElement) { const s = R.cs(e); if (s.overflowX !== "visible" || s.overflowY !== "visible") { const r = e.getBoundingClientRect(); box = { left: Math.max(box.left, r.left), top: Math.max(box.top, r.top), right: Math.min(box.right, r.right), bottom: Math.min(box.bottom, r.bottom) }; } } return box; };
+    /* From the element itself, not its parent: a row that ends in an ellipsis clips on the
+       span the text is in, and starting a step up meant that clip was never counted — the
+       text node's range runs the full untruncated width, so the ellipsised URL "overlapped"
+       the COPY key beside it, which nobody can see. (relaygpu, 2026-10.) */
+    const clipBox = (el) => { let box = { left: -1e9, top: -1e9, right: 1e9, bottom: 1e9 }; for (let e = el; e && e !== document.body; e = e.parentElement) { const s = R.cs(e); if (s.overflowX !== "visible" || s.overflowY !== "visible") { const r = e.getBoundingClientRect(); box = { left: Math.max(box.left, r.left), top: Math.max(box.top, r.top), right: Math.min(box.right, r.right), bottom: Math.min(box.bottom, r.bottom) }; } } return box; };
     for (const n of R.textNodes(document.body)) {
       const el = n.parentElement;
       if (el.closest("[role=dialog], dialog, [role=tooltip], [role=listbox], [role=menu]") || R.fixedLayer(el) || alpha(el) <= 0.25 || /transparent/.test(R.cs(el).webkitTextFillColor || "")) continue;

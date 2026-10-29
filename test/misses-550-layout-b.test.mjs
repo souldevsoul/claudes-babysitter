@@ -93,6 +93,22 @@ try {
     await load(page, doc(kHeader("")));
     assert.deepEqual(await check(page), [], "phone width");
   }, { width: 390, height: 800 });
+  await test("3.5 every step of the sign-in flow is exempt, the verify-email step among them", async (page) => {
+    const check = need(B.desktopHeaderNav);
+    // The same minimal header each of these pages carries: the wordmark and a way back.
+    const authPage = doc('<header style="display:flex;justify-content:space-between;padding:12px"><a href="/">KINDRED</a><a href="/">Back to home</a></header><main><h1>Check your email</h1></main><footer><a href="/terms">Terms</a><a href="/privacy">Privacy</a><a href="/about">About</a></footer>');
+    for (const path of ["/sign-in", "/sign-up", "/forgot-password", "/reset-password", "/verify-email", "/auth/two-factor"]) {
+      site = { [path]: authPage };
+      await page.goto(ORIGIN + path, { waitUntil: "load" });
+      await page.waitForTimeout(100);
+      assert.deepEqual(await check(page), [], `${path} carries the minimal header of the sign-in flow`);
+    }
+    // And a page that is not part of it still has to show its navigation.
+    site = { "/dashboard": authPage };
+    await page.goto(ORIGIN + "/dashboard", { waitUntil: "load" });
+    await page.waitForTimeout(100);
+    assert.equal((await check(page)).length, 1, "/dashboard is not a step of signing in");
+  }, { width: 1440, height: 900 });
   await test("3.5 look-alike: a one-page site (2 destinations) at 1440", async (page) => {
     await load(page, doc('<header><a href="/">X</a><button aria-label="Menu" aria-expanded="false">☰</button></header><main><h1>X</h1></main><footer><a href="/terms">Terms</a><a href="/privacy">Privacy</a></footer>'));
     assert.deepEqual(await B.desktopHeaderNav(page), []);

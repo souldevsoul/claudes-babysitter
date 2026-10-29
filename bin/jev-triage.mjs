@@ -26,7 +26,18 @@ if (!list.length) { if (!quiet) console.log("Jev triage: no findings."); process
 const t0 = Date.now();
 const facts = jc.facts && existsSync(resolve(repo, jc.facts)) ? readFileSync(resolve(repo, jc.facts), "utf8").trim() : null;
 const J = makeJev({ cache: join(repo, ".babysitter/jev-cache"), concurrency: jc.concurrency, deadlineMin: jc.deadlineMin, budgetUsd: jc.budgetUsd, cfg });
-const { candidates, stats } = await triage(J, list, { facts });
+/* Triage is ordering only, so a provider that will not answer leaves every finding standing.
+   A refused token used to come out as an uncaught "Jev 401" and a Node stack with exit 1 —
+   after findings.json was written and the summary printed — which reads as a crashed run and
+   buries the one thing worth saying. (relaygpu, 2026-10.) */
+let triaged;
+try { triaged = await triage(J, list, { facts }); }
+catch (e) {
+  if (!e?.auth) throw e;
+  console.error(`Jev triage did not run: ${e.message}. The ${list.length} finding(s) of this run stand unordered — fix-plan lists them in the order they were measured. Refresh the token and run \`babysitter triage\` to sort them.`);
+  process.exit(0);
+}
+const { candidates, stats } = triaged;
 annotate(list, candidates);
 const count = (v) => candidates.filter((c) => c.verdict === v).length;
 doc.triage = { at: new Date().toISOString(), candidates: candidates.length, real: count("likely real"), unsure: count("unsure"), noise: count("likely noise"), notEvaluated: count("not evaluated"), costUsd: +stats.cost.toFixed(4), calls: stats.calls, cached: stats.cached, ms: Date.now() - t0 };

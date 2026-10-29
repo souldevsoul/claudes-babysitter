@@ -70,7 +70,11 @@ export function pageLib() {
   }
   function roleOf(f) {
     const tag = f.tagName.toLowerCase(), type = (f.getAttribute("type") || "text").toLowerCase(), k = keyOf(f);
-    if (tag === "textarea") return /subject|title/.test(k) ? "subject" : "message";
+    /* A box the reader writes a prompt in is an input to the product, not a message to a
+       person: a playground's one textarea made the page a "contact form", and the gibberish
+       check then asked the product to refuse "asdf" — which is a prompt somebody meant to
+       send. (relaygpu /dashboard/endpoints/<id>, 2026-10.) */
+    if (tag === "textarea") return /subject|title/.test(k) ? "subject" : /\bprompt\b/.test(k) ? "text" : "message";
     if (tag === "select") return "select";
     if (["checkbox", "radio", "file", "date", "datetime-local", "time", "month", "week", "range", "color"].includes(type)) return type;
     if (type === "password") return "password";

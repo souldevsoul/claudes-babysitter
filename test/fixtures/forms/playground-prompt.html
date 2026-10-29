@@ -1,0 +1,9 @@
+<!doctype html><html><body><main><h1>Qwen2.5 14B Instruct</h1>
+<p>The prompt goes to this endpoint's model on a rented GPU.</p>
+<div id="pg"><textarea id="p" rows="3" maxlength="4000" placeholder="Type a prompt to send to this endpoint..."></textarea>
+<span id="n">0/4000 chars</span>
+<button type="button" id="send">[SEND REQUEST]</button><pre id="out"></pre></div>
+<script>document.getElementById('send').addEventListener('click', async () => {
+const r = await fetch('/api/infer/demo', { method: 'POST', headers: {'content-type':'application/json'}, body: JSON.stringify({ prompt: document.getElementById('p').value }) });
+document.getElementById('out').textContent = r.ok ? 'ok' : 'failed'; });</script>
+</main></body></html>

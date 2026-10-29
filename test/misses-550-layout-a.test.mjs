@@ -49,6 +49,19 @@ try {
     await expectQuiet(page, ck, doc(row("flex-start", '<p style="margin:0;font-size:16px;line-height:28px;width:200px">Strictly necessary cookies keep you signed in and remember this choice</p>')), "a two-line description is not a one-line label");
   });
 
+  await test("2.7 a marker's label is the text beside it, not the first words of the card it sits in", async (page) => {
+    const ck = need(Rh.markerBadgeLevel);
+    /* A stage card: an eyebrow, a heading, prose, and then a panel whose status dot is level
+       with its own caption. The label was read as the item's first text node, which here is the
+       eyebrow four paragraphs above — so a dot that is exactly where it belongs was reported as
+       sitting 218px below "the label it marks". (relaygpu /, 2026-10.) */
+    const stage = (eyebrow, extra = "") => `<section style="width:520px;margin-bottom:24px"><div style="font-size:12px">[ ${eyebrow} ]</div><h3 style="font-size:28px;margin:8px 0 16px">Request received</h3><p style="margin:0 0 24px">Every call hits the router first.</p><div style="padding:20px"><div style="display:flex;align-items:center;gap:8px"><span style="width:8px;height:8px;border-radius:50%;background:#38e1ff;${extra}"></span><span style="font-size:12px;line-height:16px">router · relaygpu.app</span></div></div></section>`;
+    await expectQuiet(page, ck, doc(`<div>${stage("01/04")}${stage("02/04")}${stage("03/04")}${stage("04/04")}</div>`), "each dot is level with the caption beside it");
+    // The dot that really is off the line it marks is still caught.
+    const off = (n) => stage(n, "margin-top:16px");
+    await expectHits(page, ck, doc(`<div>${off("01/04")}${off("02/04")}${off("03/04")}</div>`), 1, /markers sit \d+px below/);
+  });
+
   /* ═════ 2.7 side nav vs content top ═════ */
   const shell = (pad) => `<header style="height:64px;border-bottom:1px solid #ddd">Site</header><div style="display:grid;grid-template-columns:12rem 1fr;padding-top:40px;width:1100px"><nav><p style="margin:0;font-size:11px">ACCOUNT</p><ul style="margin:0;padding:0"><li><a href="/d">Dashboard</a></li><li><a href="/t">Tasks</a></li><li><a href="/w">Wallet</a></li></ul></nav><section style="padding-top:${pad}px"><span style="font-size:11px">STATEMENT</span><h1 style="margin:0">Wallet</h1></section></div>`;
   await test("dbrs0h account pages: the page header starts 40px below the side nav label; one line passes; site-wide the content top differs between pages", async (page) => {
@@ -72,6 +85,26 @@ try {
     const card = (t) => `<div class="c" style="flex:1;border:1px solid #ddd;padding:8px"><p>${t}</p></div>`;
     await expectQuiet(page, ck, doc(`<div style="display:flex;gap:12px;width:600px">${card("Brief, then a shortlist of specialists who fit.")}${card("Short.")}${card("A long description of the work that wraps over lines.")}</div>`), "long text is not compared");
   });
+  await test("2.12 a section heading that fills the column is not a slot with too little room", async (page) => {
+    const ck = need(Rh.slotWraps);
+    /* On a phone the longest of a document's section headings takes two lines and its
+       neighbours take one. There is no narrower column to widen — the heading already spans
+       everything there is — so "give the slot room for its longest label" asks for a shorter
+       heading on a 390px screen. (relaygpu /docs, /security, /cookies, 2026-10.) */
+    const sec = (title) => `<section style="margin-bottom:24px"><h2 style="margin:0 0 8px;font-size:24px;line-height:32px;font-family:monospace">${title}</h2><p style="margin:0">Every call carries a bearer token.</p></section>`;
+    await expectQuiet(page, ck, doc(`<div style="width:358px">${sec("Authentication")}${sec("OpenAI-compatible chat completions")}${sec("Run inference")}${sec("Response")}</div>`), "the heading already has the whole column");
+    /* The same heading one cell along from a clause numeral: it is not the item's whole width
+       any more, but the row it shares with the numeral is full, so there is still nothing to
+       widen. Every legal document on the site is built this way, and the rule moved from one
+       page to another as the heading size changed: at 24px it reported /security and /cookies,
+       at 20px /terms and /privacy. (relaygpu, 2026-10.) */
+const nsec = (num, title) => `<section class="clause" style="margin-bottom:24px"><div class="head" style="display:flex;align-items:baseline;gap:12px"><span class="num" aria-hidden="true" style="font:700 30px/1 monospace;flex:none;width:36px">${num}</span><h2 class="ct" style="margin:0;font:700 20px/28px monospace">${title}</h2></div><p class="body" style="margin:8px 0 0">Every call carries a bearer token.</p></section>`;
+    const clauses = (w) => doc(`<div style="width:${w}px">${nsec("01", "Card Data")}${nsec("02", "Data Rights")}${nsec("03", "Cookies")}${nsec("04", "Security")}${nsec("05", "We Do Not Sell Data")}</div>`);
+    await expectQuiet(page, ck, clauses(260), "the heading fills what the row leaves it");
+    // a label that really does sit in a slot narrower than its row still fails
+    const row = (name, label) => `<div style="display:flex;justify-content:space-between;width:358px;padding:6px 0"><span>${name}</span><span style="width:96px;text-align:right">${label}</span></div>`;
+    await expectHits(page, ck, doc(`<div>${row("Erik", "Paid")}${row("Aysel", "Paid")}${row("Nadia", "Awaiting settlement")}${row("Omar", "Paid")}</div>`), 1, /\[2\.12\]/);
+  }, P390);
   const prow = (name, price) => `<div class="row" style="display:flex;justify-content:space-between;width:330px;padding:6px 0;border-bottom:1px solid #eee"><span>${name}</span><span class="price" style="max-width:140px;text-align:right">${price}</span></div>`;
   await test("tjm4fx AZ 360: the price block '1,200 kreditlər €107.00' wraps while the other rows' prices fit one line [2.12]; even rows pass", async (page) => {
     const ck = need(Rh.slotWraps);
@@ -163,6 +196,11 @@ try {
     await expectQuiet(page, sq, doc(`<ul style="width:80px">${["Audio", "Video", "Text", "Code"].map((x) => `<li>${x}</li>`).join("")}</ul>`), "single words");
     await expectHits(page, ov, doc(`<div style="position:relative;width:328px"><h3 style="margin:0">Cancelled work</h3><span style="position:absolute;top:0;left:60px;font-size:11px">BEFORE THE FIRST MESSAGE</span></div>`), 1, /drawn over each other/);
     await expectQuiet(page, ov, doc(`<div style="position:relative;width:328px"><h3 style="margin:0">Cancelled work</h3><span style="position:absolute;top:0;left:60px;opacity:.1;font-size:40px">WATERMARK</span></div>`), "a faint watermark");
+    // A row that ends in an ellipsis: the span clips its own text, so what runs under the key
+    // beside it is not drawn. (relaygpu /dashboard/endpoints, 2026-10.)
+    const row = (clip) => `<div style="display:flex;align-items:center;gap:8px;width:300px;font:12px monospace"><span style="flex:1;min-width:0;${clip}">http://localhost:3177/api/infer/production-chat</span><span style="flex-shrink:0">COPY</span></div>`;
+    await expectQuiet(page, ov, doc(row("overflow:hidden;text-overflow:ellipsis;white-space:nowrap")), "the long value is clipped by its own span");
+    await expectHits(page, ov, doc(row("white-space:nowrap")), 1, /drawn over each other/);
   }, PHONE);
 
   /* ═════ 2.22 two-column blocks ═════ */

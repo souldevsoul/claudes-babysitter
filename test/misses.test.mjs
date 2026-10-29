@@ -118,7 +118,11 @@ const NEXUS = `http://127.0.0.1:${server.address().port}`;
 const cli = (args, env = {}) => new Promise((resolve) => {
   // spawnSync would block the mock server's event loop: run the CLI asynchronously
   import("node:child_process").then(({ spawn }) => {
-    const p = spawn(process.execPath, [join(TOOL, "bin/babysitter.mjs"), "misses", ...args], { env: { PATH: process.env.PATH, NEXUS_URL: NEXUS, NEXUS_API_KEY: KEY, ...env } });
+    /* In a directory of its own: with no --findings the CLI falls back to .babysitter/findings.json
+       in the current one, so running the suite from a repo that had been checked (the tool's own,
+       after `babysitter text` is run there) silently gave the CLI findings and the assertions below
+       read a different report. A test must not depend on what is lying around the checkout. */
+    const p = spawn(process.execPath, [join(TOOL, "bin/babysitter.mjs"), "misses", ...args], { cwd: mkdtempSync(join(tmpdir(), "bs-misses-cwd-")), env: { PATH: process.env.PATH, NEXUS_URL: NEXUS, NEXUS_API_KEY: KEY, ...env } });
     let out = "", err = "";
     p.stdout.on("data", (d) => (out += d)); p.stderr.on("data", (d) => (err += d));
     p.on("close", (status) => resolve({ status, out, err }));

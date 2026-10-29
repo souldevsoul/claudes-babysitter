@@ -13,7 +13,7 @@ import { createHash } from "node:crypto";
 import { mockJev } from "./jev-mock.mjs";
 import { makeJev, jevProvider } from "../lib/jev/client.js";
 import { claimsOf, consistency } from "../lib/jev/consistency.js";
-import { jevTextPass, level, DEFAULTS } from "../lib/jev/text-pass.js";
+import { jevTextPass, level, DEFAULTS, ownIdentities, isOwnData } from "../lib/jev/text-pass.js";
 import { triage, annotate } from "../lib/jev/triage.js";
 import { buildFastPlan, fastSkip } from "../lib/fast-plan.js";
 import { buildProjectMap, placesOf, mergeRendered } from "../lib/project-map.js";
@@ -115,6 +115,51 @@ try {
     assert.equal(level({ rule: "f/copy-unclear", p: 0.4 }), "below");
     assert.equal(DEFAULTS.min, 0.7);
   });
+  await t("text pass: a site-wide finding quotes the evidence it was asked about, not just \"the site as a whole\"", async () => {
+    /* f/site-one-name 0.95, f/site-label-vs-title 0.96 and jev/site-two-names 0.98 all came back
+       as "the site as a whole" with an empty quote. A site rule reads a named list in the site
+       summary (LINK_NAMES here), so it can name the entry that fails the way a pair rule already
+       names its line — without that, the most confident findings of the run are the only ones
+       nobody can act on. (relaygpu, 2026-10.) */
+    const { siteRules, loadRules } = await import("../lib/jev/rules.js");
+    const home = page("/", [line("Home", "heading")]);
+    home.links = [
+      { label: "Studio", path: "/studio", region: "nav" },
+      { label: "Create", path: "/studio", region: "footer" },
+      { label: "Pricing", path: "/pricing", region: "nav" },
+    ];
+    const pages = [home, page("/studio", [line("Studio", "heading")]), page("/pricing", [line("Pricing", "heading")])];
+    const rules = loadRules({ profile: "house" }).filter((r) => r.id === "f/site-one-name");
+    assert.equal(rules.length, 1, "the rule under test is in the catalog");
+    const m2 = await mockJev((k, q) => (q.type === "noul" ? 0.95 : { [Object.keys(q.criteria || {})[0]]: 1 }));
+    const r = await siteRules(makeJev({ cache: null, env: { ...m2.env }, concurrency: 2, retryBaseMs: 1 }), pages, rules, {});
+    await m2.close();
+    assert.equal(r.flags.length, 1, JSON.stringify(r.flags));
+    const quote = r.flags[0].lines?.[0]?.text || "";
+    assert.ok(quote, `the flag carries the entry it was asked about, got ${JSON.stringify(r.flags[0])}`);
+    assert.match(quote, /\/studio/, `it is the LINK_NAMES entry, got "${quote}"`);
+  });
+  await t("text pass: the tool's own sign-in accounts are not reported as the product's placeholder copy", async () => {
+    /* An operator console lists the accounts that exist, and the ones that exist in a checked
+       build are the ones the babysitter signed in with. Four findings on relaygpu said
+       "babysitter@relaygpu.test" was placeholder copy on /admin, /admin/users and
+       /admin/billing — the tool reading its own seed data back as the product's words. A real
+       placeholder in real copy still has to fail. (relaygpu, 2026-10.) */
+    const env = { LOGIN_EMAIL: "babysitter@relaygpu.test", ADMIN_EMAIL: "babysitter-admin@relaygpu.test", OTHER: "nothing@example.com" };
+    const cfg = { roles: [{ name: "admin", env: { LOGIN_EMAIL: "ADMIN_EMAIL", LOGIN_PASSWORD: "ADMIN_PASSWORD" } }] };
+    const own = ownIdentities(cfg, env);
+    assert.deepEqual([...own].sort(), ["babysitter-admin@relaygpu.test", "babysitter@relaygpu.test"], "LOGIN_EMAIL and every role's e-mail, nothing else");
+    // a cell that holds one of them, with or without the chrome a table puts around it
+    assert.equal(isOwnData("babysitter@relaygpu.test", own), true);
+    assert.equal(isOwnData("  BABYSITTER@RELAYGPU.TEST  ", own), true, "case and padding do not matter");
+    assert.equal(isOwnData("babysitter-admin@relaygpu.test · admin", own), true, "a row's label beside it is still the row");
+    // real copy that happens to mention one is still copy, and a real placeholder still fails
+    assert.equal(isOwnData("Write to babysitter@relaygpu.test if your endpoint will not start and we will look into it today.", own), false);
+    assert.equal(isOwnData("This is an agreement between you and New Company 1 (company number 000000000).", own), false);
+    assert.equal(isOwnData("someone-else@relaygpu.test", own), false, "only the accounts we signed in with");
+    assert.equal(isOwnData("", own), false);
+    assert.equal(isOwnData("babysitter@relaygpu.test", new Set()), false, "no accounts configured, nothing suppressed");
+  });
   await t("text pass: a copy rule's hit stays the hard finding (Jev agrees); where the rule passed, Jev ≥ 0.8 is 'passed, Jev disagrees'", async () => {
     const pages = [page("/", [line("Welcome", "heading"), line("Full fine-tune · not open yet")]), page("/docs", [line("Docs", "heading"), line("Pick a model; the 70B model is not open yet.")])];
     const det = [{ id: "CT1", key: "/", what: 'unfinished copy: "Full fine-tune · not open yet" [CT1]', quote: "Full fine-tune · not open yet" }];
@@ -148,6 +193,26 @@ try {
     const src = readFileSync(join(TOOL, "playwright/content.spec.js"), "utf8");
     assert.match(src, /const TEXT_PASS = process\.env\.BABYSITTER_TEXT_PASS && existsSync/);
     assert.doesNotMatch(src, /jev/i);
+  });
+  await t("triage: a refused token ends the run with a line that says so, not an uncaught stack over findings already written", async () => {
+    /* VERCEL_OIDC_TOKEN lives ~12 h. Every run past its expiry ended with an uncaught
+       "Jev 401: the token was refused" and a Node stack, exit 1 — after findings.json was
+       written and the summary printed. A run that reads as crashed is a run nobody trusts the
+       findings of, and the one thing it had to say (refresh the token) was buried in the trace.
+       Triage is ordering only, so a dead token leaves the findings standing. (relaygpu, 2026-10.) */
+    const d = mkdtempSync(join(tmpdir(), "bs-triage-401-"));
+    mkdirSync(join(d, ".babysitter"), { recursive: true });
+    writeFileSync(join(d, ".babysitter/findings.json"), JSON.stringify({ findings: [{ route: "/", test: "6.4 contrast", items: [{ what: "text at 1.02:1 [6.4]", where: "p.muted" }], status: "failed" }] }));
+    const tj = await mockJev(() => null, { status: 401 });
+    const r = await spawnAsync(process.execPath, [join(TOOL, "bin/jev-triage.mjs"), "--repo", d], { cwd: d, encoding: "utf8", env: { ...process.env, ...tj.env } });
+    await tj.close();
+    const out = r.stdout + r.stderr;
+    assert.equal(r.status, 0, `a refused token must not fail the run:\n${out}`);
+    assert.doesNotMatch(out, /at process\.processTicksAndRejections|Node\.js v/, `no uncaught stack:\n${out}`);
+    assert.match(out, /token was refused|refresh/i, `it says what to do:\n${out}`);
+    const doc = JSON.parse(readFileSync(join(d, ".babysitter/findings.json"), "utf8"));
+    assert.equal(doc.findings.length, 1, "the findings are left exactly as they were");
+    rmSync(d, { recursive: true, force: true });
   });
   await t("triage: every finding is kept and labelled; a noise verdict carries its mechanism; hard stays hard", async () => {
     const findings = [

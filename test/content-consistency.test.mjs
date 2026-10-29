@@ -171,6 +171,23 @@ await t("CT21 (b) a nav / footer label the page does not carry; legal names left
   assert.equal(C.labelDrift({ links: [{ path: "/pricing", label: "Pricing", region: "nav", where: "n" }, { path: "/pricing", label: "How credits work", region: "body", where: "b" }], pages: [] }, {}).length, 0, "a question in the body is a call to action");
   assert.equal(C.labelDrift({ links: [{ path: "/privacy", label: "Privacy Notice", region: "footer", where: "f" }], pages: [{ path: "/privacy", names: ["Privacy Policy"], title: "", where: "" }] }, {}, { skipLegal: true }).length, 0, "same legal family on rendered pages: CT15 reports it");
 });
+await t("CT21 a status filter on the page it filters is not the nav's name for that page", () => {
+  /* The six filters of an operator list are links to the page they sit on, with a count in the
+     label. Read as nav items they said the nav calls /admin/requests "ALL 0" while the page
+     says "Requests" — six times over. (relaygpu, 2026-10.) */
+  const pages = [{ path: "/admin/requests", names: ["Requests"], title: "Requests | Acme", where: "app/admin/requests/page.tsx:14", file: "app/admin/requests/page.tsx" },
+    { path: "/dashboard/requests", names: ["Your requests"], title: "Your requests | Acme", where: "app/dashboard/requests/page.tsx:9", file: "app/dashboard/requests/page.tsx" }];
+  // another link calls a different page "Requests", which is what makes a stray label reportable
+  const elsewhere = { path: "/dashboard/requests", label: "Requests", region: "nav", where: "components/Nav.tsx:20", file: "components/Nav.tsx", line: 20 };
+  /* The labels carry a live count, so they are read off the rendered page and carry no file
+     of their own: what marks them is the route they were found on, which is the route they
+     point at. */
+  const filters = ["ALL 0", "PENDING 0", "IN PROGRESS 0", "DELIVERED 0", "CLOSED 0", "CANCELLED 0"]
+    .map((label) => ({ path: "/admin/requests", label, region: "nav", route: "/admin/requests", where: "/admin/requests nav" }));
+  assert.deepEqual(C.labelDrift({ links: [...filters, elsewhere], pages }, {}).map((x) => x.what), [], "filters on their own page name nothing");
+  const fromMenu = [{ path: "/admin/requests", label: "ALL 0", region: "nav", route: "/admin", where: "/admin nav" }];
+  assert.equal(C.labelDrift({ links: [...fromMenu, elsewhere], pages }, {}).length, 1, "the same label in a menu elsewhere still names the page");
+});
 await t("CT21 (c) one action, one label: action groups on buttons, the same onClick behind two labels; nav items are not actions", () => {
   const texts = [{ text: "Buy credits", kind: "button", locale: "en", where: "a:1" }, { text: "Top up", kind: "button", locale: "en", where: "b:2" }, { text: "Top up", kind: "button", locale: "en", where: "c:3" }, { text: "Buy credits", kind: "button", locale: "en", where: "d:4" }, { text: "Buy credits", kind: "body", locale: "en", where: "e:5" }];
   const g = C.labelDrift({ texts }, {});
