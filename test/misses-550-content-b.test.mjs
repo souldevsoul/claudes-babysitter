@@ -97,6 +97,22 @@ await unit("brypwi CT24: /pricing 'Investment in Excellence' vs a sibling's 'Inv
   assert.deepEqual(nearCopies([{ route: "/pricing", text: "Invest in Excellence" }], reg, "threshold"), [], "the same product");
 });
 
+await unit("CT24: a legal page's h1 carrying the brand ('Relaygpu Terms of Service') is still the generic page name, not a copy of a sibling's; a branded headline that is not generic still fires", () => {
+  const file = join(tmp("reg"), "copy.json");
+  recordCopy("kindred", [{ route: "/terms", text: "Kindred Terms of Service" }, { route: "/about", text: "Kindred Hire the best people" }], file);
+  const reg = readCopyRegistry(file);
+  assert.deepEqual(nearCopies([{ route: "/terms", text: "Relaygpu Terms of Service" }], reg, "relaygpu"), [],
+    "both pages are called what the document is called");
+  assert.deepEqual(nearCopies([{ route: "/terms", text: "RELAYGPU PRIVACY POLICY" }], reg, "relaygpu"), [],
+    "the generic name is recognised under the brand whatever its case");
+  recordCopy("deskhand", [{ route: "/how-it-works", text: "How it works" }], file);
+  assert.deepEqual(nearCopies([{ route: "/how-it-works", text: "Relaygpu How it works" }], readCopyRegistry(file), "relaygpu"), [],
+    "'How it works' is what the page is called, like Pricing or FAQ");
+  const f = nearCopies([{ route: "/about", text: "Relaygpu Hire the best people" }], reg, "relaygpu");
+  assert.equal(f.length, 1, JSON.stringify(f));
+  assert.match(f[0].what, /near-copy of kindred's/);
+});
+
 /* ───────── rendered ───────── */
 const browser = await chromium.launch({ channel: process.env.PW_CHANNEL || "chrome" });
 let site = { "/": "" };

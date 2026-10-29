@@ -27,7 +27,16 @@ export const numberGrouping = (page) => page.evaluate(({ MONEY, CREDIT }) => {
   const tw = document.createTreeWalker(document.body, NodeFilter.SHOW_TEXT, { acceptNode: (n) => n.parentElement && !n.parentElement.closest("script, style, noscript, template, code, pre, [aria-hidden=true]") ? 1 : 2 });
   const blocks = new Set();
   for (let n = tw.nextNode(); n; n = tw.nextNode()) if (/\d/.test(n.nodeValue) && W.__uiVisible(n.parentElement)) blocks.add(n.parentElement.closest("p, li, td, th, button, label, span, div, dd, dt, h1, h2, h3, h4, strong, b") || n.parentElement);
-  const kindOf = (num) => { const m = num.match(/^\d{1,3}([,.   ']).*\d{3}$/); if (!m) return null; return /[   ]/.test(m[1]) ? "space" : m[1] === "," ? "comma" : m[1] === "." ? "dot" : "apostrophe"; };
+  /* Grouping means the whole number is runs of exactly three: 20,000 / 1 234 567 / 1'000.
+     ".*" let a sub-cent rate in, so "$0.000111" beside "$20,000" read as a page using two
+     separators when the dot there is where the cents start (relaygpu, 2026-10: three findings,
+     every one a rate below a cent). A decimal tail is allowed after the groups, on the other
+     separator — "12,345.67" is grouped with a comma. */
+  const kindOf = (num) => {
+    const m = num.match(/^\d{1,3}([,.   '])(?:\d{3}\1)*\d{3}(?:([.,])\d+)?$/);
+    if (!m || (m[2] && m[2] === m[1])) return null;
+    return /[   ]/.test(m[1]) ? "space" : m[1] === "," ? "comma" : m[1] === "." ? "dot" : "apostrophe";
+  };
   for (const b of blocks) {
     const t = (b.innerText || "").replace(/\s+/g, (s) => (/[  ]/.test(s) ? s : " "));
     if (t.length > 200) continue;

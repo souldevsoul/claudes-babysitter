@@ -2,6 +2,22 @@
 
 Earlier releases (4.11.1 and before) are described in the README under "What changed in …".
 
+## 5.7.6 — two names for the same thing, and a decimal point read as a thousand (2026-10-28)
+
+**CT24 called every sibling's Terms of Service a copy of every other one's.** A page hero prints the product's
+name above the page's own, so the h1 reads "Relaygpu Terms of Service". The brand defeated the list of generic
+page names, and the rule then compared "relaygpu terms of service" with "kindred terms of service": one word
+apart, ten findings on relaygpu, every one of them the name the document legally has. The brand is now taken
+off both sides before the comparison, and "How it works", Features, Docs, Security, Status and the remaining
+policy pages joined Pricing and FAQ as names a page is simply called. A branded headline that is *not* a
+generic page name still fires.
+
+**B4 read a sub-cent rate as a second thousands separator.** Grouping was recognised with
+`^\d{1,3}([,. '])\.*\d{3}$` — anything after the separator, so "$0.000111" beside "$20,000" made a page look
+like it grouped thousands two ways. Grouping now has to be what grouping is: runs of exactly three all the way
+to the end, with a decimal tail allowed only on the other separator. Three findings on relaygpu, all of them
+rates below a cent; "1.000.000" next to "20,000" still fires.
+
 ## 5.7.5 — text with no element around it is content (2026-10-28)
 
 **2.20 again, the other half.** The scan for "is anything in here actually wider?" walks the panel's element

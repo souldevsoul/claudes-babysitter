@@ -68,6 +68,16 @@ try {
     assert.deepEqual(await check(page), [], "a number without money or credits is not an amount");
   }, PHONE);
 
+  await test("B4: a sub-cent rate's decimal point ($0.000111 beside $20,000) is not a second grouping separator; a real second separator still fires", async (page) => {
+    const check = need(M.numberGrouping);
+    await load(page, doc(`<p>Top up from $1 to $20,000. GPU time is $0.000111 per second and the floor is $0.00000.</p>`));
+    assert.deepEqual(await check(page), [], "a decimal point is where the cents start, not where the thousands are grouped");
+    await load(page, doc(`<p>Top up from $1 to $20,000. The yearly cap is $1.000.000.</p>`));
+    const bad = await check(page);
+    assert.equal(bad.length, 1, show(bad));
+    assert.match(bad[0].what, /"1\.000\.000" groups thousands with a dot/);
+  }, PHONE);
+
   /* ═════ 2.14 placeholder cut (Compass 7bouc8, kdn5xf) ═════ */
   await test("7bouc8 Add Credits (360): placeholder 'Any whole amount, €1 to €17,800' cut in a 200px field; '€1–€17,800' fits; a search field and a filled field are left out", async (page) => {
     const check = need(M.placeholderCut);
