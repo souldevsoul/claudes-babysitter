@@ -231,6 +231,17 @@ try {
     await load(page, doc(`<div style="padding:16px"><p style="margin:0">36 services listed</p><ul style="padding:0;margin:0;list-style:none"><li style="border-left:2px solid #111;padding-left:16px">Video Synthesis</li><li style="border-left:2px solid #111;padding-left:16px">Spatial AI</li></ul></div>`));
     const s = await ck(page);
     assert.deepEqual(s.hard, []); assert.equal(s.soft.length, 1); assert.match(s.soft[0].what, /lines up with the list's left rule/);
+    /* A row of cards is not a ruled list. A card is bordered on all four sides and holds its text
+       inside its own padding; the lead paragraph above it belongs on the card's edge, which is
+       where every designer puts it. Read as a rule, every such paragraph was asked to move into
+       the card's padding and line up with nothing else on the page. (relaygpu, 2026-10: ten of the
+       twenty-eight 2.7 findings, each one a paragraph above a row of cards.) */
+    const cards = (cols) => doc(`<div style="padding:16px"><p style="margin:0">Your model, deployed by an engineer</p><div style="display:grid;${cols}gap:16px"><div style="border:1px solid #3A4350;border-radius:12px;padding:20px">Starter</div><div style="border:1px solid #3A4350;border-radius:12px;padding:20px">Standard</div></div></div>`);
+    for (const [cols, label] of [["grid-template-columns:1fr 1fr;", "a row of cards"], ["", "a stack of cards"]]) {
+      await load(page, cards(cols));
+      const c = await ck(page);
+      assert.deepEqual([...c.hard, ...c.soft].map((x) => x.what), [], `a paragraph above ${label}`);
+    }
   });
 
   /* ═════ 2.5 brand on one line ═════ */

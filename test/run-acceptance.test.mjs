@@ -80,6 +80,26 @@ try {
     await load(bare("Acme"));
     assert.equal((await f3()).length, 1);
   });
+  /* C1/C6 essentialStorage: every other owner approval in babysitter.config.json is written
+     { "<name>": "<why>" }, and both findings say "name it in acceptance.essentialStorage with the
+     reason" — so that is the shape an owner writes. It used to be read as an array of patterns and
+     nothing else: a map threw "(acc.essentialStorage || []).map is not a function" and the whole
+     acceptance suite died on it. A key like "cart[0]" is a valid pattern for something else, so a
+     name is matched as its own text too. (relaygpu, 2026-10) */
+  await t("C1/C6: essentialStorage written as { name: why } names the item essential, as an array of patterns still does", async () => {
+    const stored = [{ kind: "sessionStorage", name: "relaygpu:scroll-positions" }];
+    const why = { "relaygpu:scroll-positions": "where the reader was on a long policy page" };
+    assert.deepEqual(a.nonEssentialOf(stored, a.acceptanceConfig({ acceptance: { essentialStorage: why } })), []);
+    assert.deepEqual(a.nonEssentialOf(stored, a.acceptanceConfig({ acceptance: { essentialStorage: ["relaygpu:scroll"] } })), []);
+    assert.deepEqual(a.nonEssentialOf(stored, a.acceptanceConfig({ acceptance: { essentialStorage: "relaygpu:scroll" } })), []);
+    assert.equal(a.nonEssentialOf(stored, a.acceptanceConfig({ acceptance: { essentialStorage: { "other:thing": "x" } } })).length, 1);
+  });
+  await t("C1/C6: a storage key with regex characters (cart[0]) is matched as the key it is, not as a pattern", async () => {
+    const stored = [{ kind: "localStorage", name: "cart[0]" }, { kind: "localStorage", name: "basket" }];
+    const out = a.nonEssentialOf(stored, a.acceptanceConfig({ acceptance: { essentialStorage: ["cart[0]"] } }));
+    assert.deepEqual(out.map((x) => x.name), ["basket"]);
+  });
+
 } finally {
   await browser.close();
 }

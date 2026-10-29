@@ -402,9 +402,33 @@ export const footer = (page, acc = DEFAULTS) => page.evaluate((acc) => {
 // the one button of a notice; whether that is enough depends on what the site stores (cookieConsent)
 export const ACCEPT_BTN = /^\s*(accept( all)?( cookies)?|allow( all)?( cookies)?|(i )?agree|ok(ay)?|got it|understood|i understand|принять( все)?|понятно|хорошо|qəbul et|razıyam|başa düşdüm|қабылдау|келісемін|түсінікті)\s*[.!]?\s*$/i;
 const OK_ONLY = /^\s*(ok(ay)?|got it|understood|i understand|понятно|хорошо|başa düşdüm|түсінікті)\s*[.!]?\s*$/i;
+/**
+ * The owner's extra "this one is strictly necessary" names, as patterns. Everything else an owner
+ * approves in babysitter.config.json is written { "<name>": "<why>" } and both C1 and C6 ask them to
+ * "name it in acceptance.essentialStorage with the reason" — so a map is what they write, and a bare
+ * string is what they write for one. Only an array was read, and the other two shapes stopped the
+ * whole acceptance suite ("(acc.essentialStorage || []).map is not a function"). (relaygpu, 2026-10)
+ *
+ * A name is also matched as its own text, not only as a pattern: a real storage key like "cart[0]"
+ * or "a.b" is a valid regular expression that matches something else ("cart0", "axb"), and an owner
+ * who pasted the key they saw would never learn why it was still reported.
+ * @param {object} acc acceptance config
+ * @returns {RegExp[]} one pattern per name, each also matching the name literally
+ */
+export function essentialStoragePatterns(acc = DEFAULTS) {
+    const v = acc?.essentialStorage;
+    const names = typeof v === "string" ? [v] : Array.isArray(v) ? v : v && typeof v === "object" ? Object.keys(v) : [];
+    return names.filter((x) => typeof x === "string" && x.trim()).map((x) => {
+        const literal = x.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+        let pattern = null;
+        try { new RegExp(x); pattern = x; } catch { /* not a pattern: the text is all we have */ }
+        return new RegExp(pattern && pattern !== literal ? `(?:${pattern})|(?:${literal})` : literal, "i");
+    });
+}
+
 /** Stored items that are not strictly necessary (names against ESSENTIAL_STORAGE + acceptance.essentialStorage; any cookie of an analytics host). */
 export function nonEssentialOf(list, acc = DEFAULTS) {
-    const essential = [ESSENTIAL_STORAGE, ...(acc.essentialStorage || []).map((x) => new RegExp(x, "i"))];
+    const essential = [ESSENTIAL_STORAGE, ...essentialStoragePatterns(acc)];
     const hosts = acc.analyticsHosts || [];
     return list.filter((x) => (x.kind === "cookie" && hosts.some((h) => String(x.domain || "").replace(/^\./, "").endsWith(h))) || !essential.some((re) => re.test(x.name)));
 }
@@ -509,7 +533,7 @@ async function storageNow(page) {
  */
 export async function cookieDecline(page, { acc = DEFAULTS, next = null } = {}) {
     const out = [];
-    const essential = [ESSENTIAL_STORAGE, ...(acc.essentialStorage || []).map((x) => new RegExp(x, "i"))];
+    const essential = [ESSENTIAL_STORAGE, ...essentialStoragePatterns(acc)];
     const hosts = acc.analyticsHosts || [];
     const tracked = [];
     page.on("request", (req) => { try { const h = new URL(req.url()).hostname; if (hosts.some((x) => h === x || h.endsWith("." + x))) tracked.push(h); } catch { } });

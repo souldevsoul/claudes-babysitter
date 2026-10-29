@@ -399,8 +399,17 @@ export async function fieldTops(page) {
     for (const list of Array.from(document.querySelectorAll("ul, ol, [role=list], div"))) {
       const items = R.kids(list);
       if (items.length < 2 || !R.vis(list)) continue;
-      const bl = items.map((it) => parseFloat(R.cs(it).borderLeftWidth) || 0);
-      if (!bl.every((x) => x > 0)) continue;
+      /* A rule, not a card: the left border is the only one the item has. A card is bordered on
+         all four sides and keeps its text inside its own padding, so the paragraph above it
+         belongs on the card's edge — asking it to move into the padding lines it up with nothing
+         else on the page. (relaygpu, 2026-10: ten findings, every one a lead paragraph above a
+         row of cards.) */
+      const isRule = (it) => {
+        const c = R.cs(it);
+        return (parseFloat(c.borderLeftWidth) || 0) > 0
+          && !(parseFloat(c.borderRightWidth) || 0) && !(parseFloat(c.borderTopWidth) || 0) && !(parseFloat(c.borderBottomWidth) || 0);
+      };
+      if (!items.every(isRule)) continue;
       const prev = list.previousElementSibling;
       if (!prev || !R.vis(prev) || !(prev.innerText || "").trim()) continue;
       const pi = R.firstInk(prev), ii = R.firstInk(items[0]);
