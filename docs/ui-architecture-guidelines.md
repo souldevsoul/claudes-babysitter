@@ -92,6 +92,8 @@ Tags like `[P06]` reference the bug pattern IDs in `nexus-ui-consistency-bugs.js
 
 3.8 Navigation to a new page **MUST** start at the top (the router's default scroll-to-top is never disabled, and pages never auto-scroll to a block on load). Only browser back/forward restores the previous scroll position. `[P52]`
 
+3.9 Every role has its own door. When the product has a supply side (specialists, assistants, engineers, reviewers, crew, partners …), every entry point to it ("Apply as a …", "Become a …", "Work with us", "For specialists") **MUST** land on a sign-in / sign-up that names the role in its heading, lead, badge and `<title>`, carries the role's own side panel (what they get, requirements, how approval works — **NEVER** the customer marketing), sends "New here?" to the role's own sign-up / application, and after sign-in lands in the role's area. The customer sign-in does not advertise the role path as its main action. One auth layout driven by a table keyed by role. `[FM16]`
+
 ## 4. State, errors & interactions
 
 4.1 Wrap complex blocks (generation, charts, editors) in Error Boundaries; local errors use non-blocking toasts. A DOM error **MUST NOT** crash the page. `[—]`

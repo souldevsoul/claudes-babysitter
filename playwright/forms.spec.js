@@ -1,5 +1,5 @@
 // FORMS: inputs, validation, the auth lifecycle, feedback after a submit, state freshness (docs/checks-forms.md).
-// Ids FM1…FM10; babysitter.config.json → forms.skip turns one off (reason in forms.skipReasons).
+// Ids FM1…FM16; babysitter.config.json → forms.skip turns one off (reason in forms.skipReasons).
 // SAFETY: every submit runs inside checks/forms.js sandbox() — non-GET requests are answered in the browser and
 // never reach the server; payment and destructive forms are typed into, never submitted. Service workers are
 // blocked so they cannot carry a request past the sandbox.
@@ -9,8 +9,10 @@ import { resolve } from "node:path";
 import * as c from "./checks.js";
 import * as a from "./acceptance.js";
 import * as fm from "./checks/forms.js";
+import { roleDoors } from "./checks/role-auth.js";
+import { roleAuthConfig } from "../lib/role-auth.js";
 import { loadConfig, loadRoutes, STORAGE, ROOT, storageFor, authTag } from "./project.js";
-import { scope, config, setup, decision } from "./skip.js";
+import { scope, config, setup, decision, noteDecision } from "./skip.js";
 const cfg = loadConfig();
 const acc = a.acceptanceConfig(cfg);
 const F = { skip: [], skipReasons: {}, zeroBalanceStorage: null, zeroBalanceRole: null, protectedRoute: null, forgot: null, ...(cfg.forms || {}) };
@@ -156,6 +158,31 @@ test.describe("forms site-wide", () => {
             await ctx.close();
         }
         report(out, "FM11");
+    });
+    test("FM16 every role has its own door: Apply as a specialist / Become a … / Work with us lands on a sign-in / sign-up that names the role, not the customer's [role-auth-surface]", async ({ browser }) => {
+        test.skip(!on("FM16"), why("FM16"));
+        test.skip(!SIGN_IN && !SIGN_UP, decision("FM16", "no customer sign-in / sign-up page found to compare a role's with (acceptance.auth.signIn / signUp sets them)"));
+        test.setTimeout(300_000);
+        const rc = roleAuthConfig(cfg);
+        const pages = rc.pages || [...new Set(["/", ...PUBLIC.map((r) => r.path).filter((p) => !AUTH_PAGES.includes(p) && !p.includes(":"))])].slice(0, 8);
+        const openPage = async (p) => {
+            const ctx = await ctxFor(browser);
+            const page = await ctx.newPage();
+            await c.gotoStable(page, p);
+            await page.waitForLoadState("networkidle", { timeout: 8_000 }).catch(() => { });
+            await page.waitForTimeout(400);
+            return page;
+        };
+        const res = await roleDoors(openPage, { customer: { signIn: SIGN_IN, signUp: SIGN_UP }, pages, rc });
+        if (res.notes.length)
+            test.info().annotations.push({ type: "not checked", description: res.notes.join("\n") });
+        // no door found: a decision when the config says the product has a supply-side role, else simply nothing to check
+        const supply = (cfg.roles || []).some((r) => rc.roleWords.includes(String(r.name || "").toLowerCase()));
+        if (!res.checked && supply)
+            noteDecision("FM16", `no door for the ${(cfg.roles || []).map((r) => r.name).join(" / ")} role found (Apply as … / Become a … / Work with us / For specialists) on ${pages.join(", ")} — list its sign-in / sign-up in forms.roleAuth.routes`);
+        else if (!res.checked)
+            test.info().annotations.push({ type: "not checked", description: `FM16: no role door (Apply as … / Become a … / Work with us / For specialists) on ${pages.join(", ")} — no supply side to compare` });
+        report(res.findings, "FM16");
     });
     test("FM9 no other page flashes before an auth redirect (signed out → protected page, signed in → sign-in) [loading-state ×25]", async ({ browser }) => {
         test.skip(!on("FM9"), why("FM9"));

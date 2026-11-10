@@ -76,6 +76,18 @@ Or install it as a dev dependency: `npm i -D github:souldevsoul/claudes-babysitt
 | `docs/` | The guidelines the rules enforce |
 | `test/`, `fixtures/` | `npm test`: RuleTester, Stylelint fixtures, end-to-end cases |
 
+## What changed in 5.8.0 (every role has its own door)
+
+New rule **FM16** (export-rules/01-ui-components.md 8.17, docs/checks-forms.md): when a product has a supply side —
+specialists, assistants, engineers, reviewers, crew, partners — every "Apply as a …" / "Become a …" / "Work with us" /
+"For specialists" link must land on a sign-in / sign-up that is visibly that role's: its own heading and lead naming the
+role, a badge, its own side panel (what they get, requirements, how approval works), "New here?" to the role's own
+application, a `<title>` naming the role. Babysitter follows every such link (one landing page deep), reads the page it
+reaches and compares it with the customer's: the same words (≥ 80%), no role named, the customer side panel or "New
+here?" to the customer sign-up fail. Guildhall's `/signin?role=specialist` — the customer sign-in word for word — fails
+on all four. Settings: `forms.roleAuth` (role words, door words and selectors, explicit routes, threshold).
+Details: [`CHANGELOG.md`](CHANGELOG.md).
+
 ## What changed in 5.6.0 (express runs: one load per page, only what a change touches)
 
 - **`e2e --express`**: every per-route describe of the tool's specs runs as one Playwright test per route × project
@@ -246,7 +258,7 @@ LOGIN_PASSWORD for signed-in pages) now runs, in one pass:
 |---|---|---|
 | UI | `babysitter.spec.ts` | the guideline checks on every page |
 | Layout | `layout.spec.ts` | nav parity and names, logos home, current nav item, heading styles, mid-word breaks, alignment, empty space, sticky header, long lists, favicon, dropdowns, hover, one mobile menu, money in every currency |
-| Forms | `forms.spec.ts` | FM1–FM10 in a network sandbox: bounds, gibberish, failed/successful submit, stale header, credits up front, password lifecycle, auth shell, redirect flash, settings email |
+| Forms | `forms.spec.ts` | FM1–FM16 in a network sandbox: bounds, gibberish, failed/successful submit, stale header, credits up front, password lifecycle, auth shell, redirect flash, settings email, autofill, phone / file fields, a role's own sign-in door |
 | States, languages, scroll | `run.spec.ts` | every dialog / menu / empty submit / wizard step / pagination, every language, 3.8 after navigation and `#anchors` |
 | Acceptance | `acceptance.spec.ts` | money, footer, cookies, sign-in, policies, dead links … |
 | Copy | `content.spec.ts` | CT1–CT18 in every language: unfinished copy, test data, raw errors, dates, untranslated text, emails that receive mail, legal names, numbers that agree |

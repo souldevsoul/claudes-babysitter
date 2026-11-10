@@ -50,9 +50,12 @@ A check is either hard, soft or "not checked". A **hard** check fails the test. 
 | FM11 | The browser saves the e-mail as the login. (5.2.0) | In a form with a password and two or more text fields before it (a sign-up), one of them says `autocomplete="username"`; a name field never does. The e-mail field is `type=email`; passwords say `new-password` on a sign-up and `current-password` on a sign-in. | Missing username: hard. Type and password tokens: soft. |
 | FM12 | One failed submit, one error message. (5.2.0) | After a failed submit (the sandbox answers 500) the error is not shown both in a toast and in the form. | Hard. |
 | FM13 | Success does not look like an error. (5.2.0) | Where a success can be imitated, the success message must not share the error message's styled look (the same box fill and border, or the same error-red text). | Hard. |
+| FM14 | A phone field takes a real number. (5.5.0) | See "5.5.0 — from the miss loop" below. | Hard / soft. |
+| FM15 | A file field says what it takes. (5.5.0) | See "5.5.0 — from the miss loop" below. | Hard. |
+| FM16 | Every role has its own door. (5.8.0) | Links on the home page and the public pages whose words open the supply side ("Apply as a specialist", "Become an engineer", "Join as a reviewer", "Work with us", "For assistants", "Specialist portal") are followed — through one landing page if needed — to the sign-in / sign-up they reach. That page is read (heading, lead, badge, side panel, main text, "New here?" link, `<title>`) and compared with the customer's page of the same kind. See "FM16" below. | Same words (≥ 80%), no role named, the customer side panel, "New here?" to the customer sign-up: hard. Same `<title>`, a customer sign-in that opens as the role's door: soft. |
 
 `forms.spec.js` runs FM1 to FM4 and FM7c on every route. On signed-in routes it also runs FM5, FM6 and FM10. FM7a,
-FM7b, FM8, FM9 and data export run once for the whole site.
+FM7b, FM8, FM9, FM11, FM16 and data export run once for the whole site.
 
 ## Acceptance A6 and FM8
 
@@ -109,15 +112,60 @@ A handler that returns the response to its caller also passes.
     "skipReasons": { "FM2": "contact form is a third-party widget" },
     "zeroBalanceRole": "empty-wallet",
     "protectedRoute": "/dashboard",
-    "forgot": "/forgot-password"
+    "forgot": "/forgot-password",
+    "roleAuth": {
+      "routes": [{ "role": "specialist", "signIn": "/specialists/sign-in", "signUp": "/specialists/apply" }],
+      "roleWords": ["scout"],
+      "entryText": ["\\bscout hub\\b"],
+      "entrySelectors": ["[data-role-entry]"],
+      "pages": ["/", "/how-it-works"],
+      "maxEntries": 6,
+      "maxSimilarity": 0.8
+    }
   }
 }
 ```
 
+`forms.roleAuth` (FM16) is optional. Every key has a default: the role words are a built-in list of supply-side nouns
+(specialist, assistant, expert, engineer, reviewer, crew, partner, provider, freelancer, tutor, coach, host, driver,
+seller, vendor, creator, consultant …) plus every name in `roles` except admin-like ones; the pages searched for doors
+are `/` and up to 7 public routes; `routes` adds a role's sign-in / sign-up even when no link points at it.
+
 The sign-in, sign-up and settings paths come from `acceptance.auth`. If those are not set, the checks look for routes
 named `/login`, `/register` and similar. `acceptance.auth.passwordless` turns off the password checks.
 
+## FM16 — every role has its own door (5.8.0)
+
+The owner's words: the sign-in and sign-up of an assistant or a specialist must differ from the customer's — "right now
+they are absolutely identical, not even a line of text tells them apart". Guildhall: "Apply as a specialist" opened
+`/signin?role=specialist`, the customer sign-in word for word — "Welcome back", the customer marketing panel on the
+left, "New here? Open your hall" — only the URL differed. The rule is export-rules/01-ui-components.md 8.17.
+
+1. **Doors.** On `/` and up to 7 public routes (`forms.roleAuth.pages`), every same-origin link — hidden mobile-menu
+   copies too — whose text matches the door words, or `forms.roleAuth.entrySelectors`. "Apply coupon", "Join now", "Get
+   started" are not doors; "Join as a customer" is the customer's own. `forms.roleAuth.routes` adds doors by path.
+2. **Where it lands.** A sign-in / sign-up is a page with a password field, or an e-mail field and auth words in the
+   heading / path / title. A landing page ("Become a specialist") is followed one hop, through its main
+   "Apply / Start your application / Sign up" link. A door that reaches neither is listed as "not checked".
+3. **Whose door.** The role is the noun after "as a" / "become a" / "for", a role word in the link (`?role=specialist`,
+   `/engineers/apply`), else in the heading or title it reached.
+4. **Compared with** the customer page of the same kind (`acceptance.auth.signIn` / `signUp`, else `/login`, `/register`):
+   - main text (header, nav, footer left out) ≥ `maxSimilarity` (0.8) the same words — **hard**;
+   - the role is named nowhere in the heading, lead, badge / eyebrow or `<title>` — **hard**;
+   - half or more of the customer side panel's sentences appear on the role's page — **hard**;
+   - the "New here?" link goes to the customer sign-up (and does not name the role) — **hard**;
+   - the `<title>` is the customer's — **soft**.
+5. **The customer door** may not open as the role's: a customer sign-in / sign-up headed for a role, or whose "New
+   here?" link goes to the role's application, is **soft**.
+
+No door found: on a product whose `roles` hold a supply-side role it is a decision ("Babysitter decided not to check",
+list the doors in `forms.roleAuth.routes`); on any other product it is a "not checked" note. Fixtures:
+`test/fixtures/role-auth`, `test/role-auth.test.mjs`.
+
 ## Known limits
+
+- FM16 compares signed-out pages. Where a role lands **after** signing in (its own area, not the customer dashboard)
+  is not checked at runtime: review it by hand or in the product's own journeys (`e2e/journeys.spec.ts`).
 
 - Only `<form>` and `[role=form]` count as forms. A formless group of inputs plus a button is checked by FM1 (number
   fields outside forms) and is not covered by FM2, FM3 or FM4.

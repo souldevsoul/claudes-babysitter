@@ -496,6 +496,110 @@ One component, one fixed height for all marks, the canonical files.
 | 8.14 | No duplicates: the same link never appears twice in the header or footer, two labels never lead to one page, the same image never appears twice on a page. | `[N4, D3]` |
 | 8.15 | Paged card grids end on a full row; column counts divide the item count, or the incomplete last row follows one product-wide rule. | `[L1, 2.12]` |
 | 8.16 | Charts draw a label only if the measured text width fits the shape; otherwise hide it and expose it in a tooltip. **NEVER** decide by shape size alone. | `[4.5, P41]` |
+| 8.17 | Every role has its own door: a supply-side role (specialist, assistant, engineer, reviewer, crew, partner …) signs in and signs up on screens that are visibly its own — never the customer's with another URL. See 8.17 below. | `[FM16]` — **hard** |
+
+### 8.17 Every role has its own door `[FM16]` — **hard**
+
+When a product has a supply side — specialists, assistants, experts, engineers, reviewers, crew,
+partners, providers, tutors, hosts, sellers — every entry point into it ("Apply as a specialist",
+"Become an engineer", "Join as a reviewer", "Work with us", "For assistants", "Specialist portal")
+**MUST** land on a sign-in / sign-up screen that is visibly for that role:
+
+- **Heading and lead name the role.** "Specialist sign-in" / "Apply as a specialist", and a lead
+  that speaks to them ("Manage your schedule, quotes and payouts") — not "Welcome back".
+- **A badge or eyebrow** above the heading: "For specialists".
+- **A side panel of its own** (when the screen has one): what the role gets, what it needs
+  (documents, experience, area), how approval works and how long it takes. **NEVER** the
+  customer marketing panel.
+- **"New here?" goes to the role's own sign-up / application**, and the role's sign-up's
+  "Already have an account?" goes to the role's sign-in. **NEVER** to the customer sign-up.
+- **The `<title>` names the role**: "Specialist sign-in · Guildhall".
+- **After signing in the role lands in its own area** (its dashboard or its application
+  status), not on the customer home.
+- **The customer door stays the customer's.** The customer sign-in / sign-up is headed for
+  the customer, and its main "New here?" link opens the customer sign-up. A small secondary
+  "Are you a specialist? Sign in here" link below the form is fine; the role path as the
+  main call to action is not.
+
+A shared component is fine — one `AuthLayout` / `SignInForm` with a `role` prop — as long as the
+role decides the words, the panel, the links and the title. A `?role=` parameter the page never
+reads is the defect.
+
+**Why.** People must know which door they are going through. A specialist who lands on "Open your
+hall" signs up as a customer by mistake, ends up with the wrong account, and support has to untangle
+it; a customer who sees "Apply as a specialist" as the main action wonders what the site is. A door
+that looks like every other door also reads as unfinished, which costs trust in both audiences.
+
+**Bad — Guildhall.** "Apply as a specialist" opens `/signin?role=specialist`. The page is the
+customer sign-in word for word: "Welcome back", "Sign in to your hall", the customer marketing panel
+on the left ("Book trusted specialists for every job…"), "New here? Open your hall" → `/signup`, the
+title "Sign in · Guildhall". Only the URL differs.
+
+```jsx
+// ❌ Нельзя — the role is in the URL and nowhere else
+export default function SignIn() {
+  return (
+    <AuthLayout aside={<CustomerPitch />}>
+      <h1>Welcome back</h1>
+      <p>Sign in to your hall to see your bookings.</p>
+      <SignInForm />
+      <p>New here? <Link href="/signup">Open your hall</Link></p>
+    </AuthLayout>
+  )
+}
+```
+
+**Good.**
+
+```jsx
+// ✅ Как надо — the role decides the words, the panel, the links and the title
+const DOORS = {
+  customer:   { title: "Sign in", eyebrow: null, heading: "Welcome back",
+                lead: "Sign in to your hall to see your bookings.",
+                aside: <CustomerPitch />, signUp: { href: "/signup", label: "Open your hall" },
+                after: "/hall" },
+  specialist: { title: "Specialist sign-in", eyebrow: "For specialists", heading: "Specialist sign-in",
+                lead: "Manage your schedule, quotes and payouts.",
+                aside: <SpecialistPitch />,           // what you get · what you need · how approval works
+                signUp: { href: "/specialists/apply", label: "Apply to join" },
+                after: "/specialist" },
+}
+
+export function generateMetadata({ searchParams }) {
+  return { title: `${DOORS[roleOf(searchParams)].title} · Guildhall` }
+}
+export default function SignIn({ searchParams }) {
+  const d = DOORS[roleOf(searchParams)]
+  return (
+    <AuthLayout aside={d.aside}>
+      {d.eyebrow && <Badge>{d.eyebrow}</Badge>}
+      <h1>{d.heading}</h1>
+      <p>{d.lead}</p>
+      <SignInForm redirectTo={d.after} />
+      <p>New here? <Link href={d.signUp.href}>{d.signUp.label}</Link></p>
+    </AuthLayout>
+  )
+}
+```
+
+**How to check.**
+
+- *Statically:* find every auth route and component that takes a role (`role=` in links,
+  `searchParams.role`, `/specialist(s)/sign-in`, `/apply`, `/join`, `AuthLayout role=`). For each,
+  the heading, lead, aside, "New here?" `href`, metadata title and post-sign-in redirect must
+  depend on the role. A role parameter that is read nowhere, or read only to pick the redirect,
+  is a finding.
+- *At runtime (Babysitter FM16):* follow every link whose text matches apply / become a / join
+  as / work with us / for specialists|assistants|engineers… (one landing page deep if needed) to
+  the auth page it reaches and compare it with the customer page of the same kind: heading, lead,
+  side-panel text, "New here?" target, `<title>`. It fails when ≥ 80% of the words are the same,
+  when the role is named nowhere, when the customer side panel appears, or when "New here?" goes
+  to the customer sign-up.
+
+**Fix pattern.** One auth layout, one table of doors keyed by role (as above). Every door link
+carries the role in its path (`/specialists/sign-in`, `/specialists/apply`) or a parameter the page
+reads; every field of the table differs between the customer and the role; `redirectTo` sends the
+role to its own area. Then re-run FM16.
 
 ---
 
@@ -536,3 +640,4 @@ Run through this list against any screen before calling it done.
 - [ ] Current nav item is distinct and carries `aria-current="page"`
 - [ ] Every text ≥ 4.5:1 (≥ 3:1 large); no `opacity` on text
 - [ ] One shape language, one palette, one logo component, one icon library, no emoji
+- [ ] Every supply-side door (Apply as … / Become a … / Work with us) lands on a sign-in / sign-up that names the role — its own heading, lead, badge, side panel, "New here?" link and `<title>` — never the customer's with another URL `[FM16]`

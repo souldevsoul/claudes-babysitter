@@ -2,6 +2,33 @@
 
 Earlier releases (4.11.1 and before) are described in the README under "What changed in …".
 
+## 5.8.0 — every role has its own door (2026-11-10)
+
+**FM16, new.** The owner: the sign-in and sign-up of an assistant or a specialist must differ from the customer's —
+"right now they are absolutely identical, not even a line of text tells them apart". Guildhall: "Apply as a specialist"
+led to `/signin?role=specialist`, the customer sign-in word for word — "Welcome back", the customer marketing panel on
+the left, "New here? Open your hall" — and only the URL differed.
+
+- **The rule** — export-rules/01-ui-components.md 8.17 (with a bad and a good example and the fix pattern: one auth
+  layout, one table of doors keyed by role), 03-code-structure.md 8.3 and the repository checklist (a static grep for
+  role doors), docs/ui-architecture-guidelines.md 3.9, both review checklists.
+- **The check** (`forms.spec.js`, once per run at 1440; `lib/role-auth.js` decides, `playwright/checks/role-auth.js`
+  reads): the links on `/` and up to 7 public pages whose words open the supply side ("Apply as a specialist", "Become
+  an engineer", "Join as a reviewer", "Work with us", "For assistants", "Specialist portal" — not "Apply coupon", "Join
+  now", "Join as a customer") are followed, through one landing page if needed, to the sign-in / sign-up they reach.
+  Its heading, lead, badge, side panel, main text, "New here?" link and `<title>` are compared with the customer page
+  of the same kind. Hard: ≥ 80% the same words; the role named in none of heading, lead, badge, title; half the
+  customer side panel's sentences on the role's page; "New here?" to the customer sign-up. Soft: the customer's
+  `<title>`; a customer sign-in headed for the role or whose "New here?" is the role's application.
+- **Config** `forms.roleAuth`: `roleWords` (added to a built-in list and to the names in `roles`), `entryText`,
+  `entrySelectors`, `pages`, `routes` (a role's sign-in / sign-up by path), `maxEntries` (6), `maxSimilarity` (0.8);
+  `forms.skip: ["FM16"]` turns it off. No door on a product whose `roles` hold a supply-side role is a decision.
+- **Not checked at runtime:** where the role lands after signing in (it needs the role's credentials on its own sign-in
+  page) — the rule requires it, the review checks it.
+- Fixtures `test/fixtures/role-auth`, `test/role-auth.test.mjs` (in `npm run test:forms`): the Guildhall door fails on
+  all four, a page with its own words but the customer "New here?" fails on exactly that and the missing role name, the
+  specialist's own sign-in passes.
+
 ## 5.7.6 — two names for the same thing, and a decimal point read as a thousand (2026-10-28)
 
 **CT24 called every sibling's Terms of Service a copy of every other one's.** A page hero prints the product's

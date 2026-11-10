@@ -344,6 +344,10 @@ is a finding of its own.
   `current-password` on sign-in.
 - The account e-mail in settings is read-only unless the same box says a verification link
   will be sent.
+- A role-specific auth door (`?role=specialist`, `/specialists/sign-in`, `/apply`) is driven by
+  data keyed by role: heading, lead, badge, side panel, the "New here?" `href`, the metadata
+  title and the post-sign-in redirect all come from it. A role parameter read nowhere — or only
+  for the redirect — is a finding `[FM16]` (rule 8.17 in file 01).
 
 ---
 
@@ -438,6 +442,9 @@ grep -n -E '^[.#a-zA-Z\[*:][^{]*\{' "$SRC"/app/globals.css 2>/dev/null | head -4
 
 # duplicate roles in the kit — expect one file per role, no *-2 / new-* / pill-* / sheet+dialog
 ls "$SRC"/components/ui | sort
+
+# role doors (8.17 in file 01) — every hit's page must change heading, lead, aside, "New here?", title by role
+grep -rn -E "role=(specialist|assistant|expert|engineer|reviewer|crew|partner|provider)|searchParams\??\.role|/(specialists?|assistants?|engineers?|partners?)/(sign-?in|sign-?up|login|apply)|href=\"/(apply|join|become)" "$SRC" --include=*.tsx --include=*.ts --include=*.jsx | head -40
 ```
 
 With `ripgrep` installed the same searches run faster, but **the path argument is still
@@ -455,5 +462,6 @@ required**: `rg -n --glob '*.tsx' '<pattern>' src`.
 - [ ] The kit is themed for this product — not the stock shadcn defaults
 - [ ] Every `<img>` has dimensions; logos and marks are SVG; rasters ≥ 2×
 - [ ] Every mutation updates the page; every numeric field is bounded and states its range
+- [ ] Every role-specific auth door reads its role: heading, lead, aside, "New here?", title and redirect come from one table keyed by role `[FM16]`
 - [ ] Every overlay has enter **and** exit; no `transition-all`
 - [ ] Allowances declared in config with a reason — no `eslint-disable` comments
