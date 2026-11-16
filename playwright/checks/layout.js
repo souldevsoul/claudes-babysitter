@@ -705,6 +705,9 @@ export async function emptySpace(page, ratio = 2.5) {
       for (const v of iv) { const last = merged[merged.length - 1]; if (last && v[0] <= last[1] + 1) last[1] = Math.max(last[1], v[1]); else merged.push([...v]); }
       return merged;
     };
+    // a section holding a sticky element shorter than itself: the empty band is where the sticky part travels
+    // (a contents list beside an article, a pinned horizontal rail scrubbed by scroll), empty by design
+    const pinned = (s) => { const h = s.getBoundingClientRect().height; return Array.from(s.querySelectorAll("*")).some((e) => getComputedStyle(e).position === "sticky" && e.getBoundingClientRect().height < h * 0.8); };
     const info = secs.map((s) => { const r = s.getBoundingClientRect(); return { s, top: r.top + scrollY, bottom: r.bottom + scrollY, b: bands(s) }; }).filter((x) => x.b.length);
     // tall, mostly empty sections first: the air inside them is reported once, not again as a gap after them
     const airy = [];
@@ -713,7 +716,7 @@ export async function emptySpace(page, ratio = 2.5) {
       if (h <= innerHeight || pictured(x.s)) continue;
       // 5.5.0 (Kindred legal pages, issue #4 item 15): a column whose content is a sticky contents list keeps the
       // height of the article beside it — the band is where the sticky nav travels, empty by design
-      if (Array.from(x.s.querySelectorAll("*")).some((e) => getComputedStyle(e).position === "sticky" && e.getBoundingClientRect().height < h * 0.8)) continue;
+      if (pinned(x.s)) continue;
       const edges = [x.top, ...x.b.flat(), x.bottom];
       let worst = 0, at = x.top;
       for (let i = 0; i < edges.length; i += 2) { const band = edges[i + 1] - edges[i]; if (band > worst) { worst = band; at = edges[i]; } }
@@ -730,6 +733,8 @@ export async function emptySpace(page, ratio = 2.5) {
     if (pos.length >= 2) for (const g of gaps) {
       if (g.gap > 160 && g.gap > ratio * median) {
         const a = info[g.i - 1], b = info[g.i];
+        // 5.8.1 (lanternwake landing): the gap under a pinned rail is its scroll travel, not air between sections
+        if (pinned(a.s)) continue;
         const y = a.b[a.b.length - 1][1];
         if (airy.some(([p, q]) => Math.min(q, y + g.gap) - Math.max(p, y) > g.gap / 2)) continue;
         soft.push(L.at(b.s, `${Math.round(g.gap)} px of empty space above this section (the page's usual gap between sections is ${Math.round(median)} px) — trim the section padding/min-height so the page keeps one rhythm [2.7]`));

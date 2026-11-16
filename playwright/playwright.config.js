@@ -21,8 +21,10 @@ const productE2E = resolve(ROOT, process.env.BABYSITTER_E2E_DIR || cfg.e2eDir ||
 // named in the summary (lib/product-specs.js → describeSpecs) so they are left out loudly.
 const productSpecs = classifySpecs(productE2E);
 const hasProductE2E = productSpecs.ours.length > 0;
-// workers scale with the machine: one Chrome per ~2.5 GB of RAM, leaving two cores free; WORKERS overrides
-const workers = Number(process.env.WORKERS || Math.max(2, Math.min(8, availableParallelism() - 2, Math.floor(totalmem() / 2.5e9))));
+// workers scale with the machine: one Chrome per ~4 GB of RAM, at most 4, leaving two cores free; WORKERS overrides.
+// 5.8.1: one per 2.5 GB (up to 8) gave a 17 GB Mac six Chromes at ~700 MB each (DPR 2, 1440 wide) on top of the
+// editors, dev servers and agents the machine already ran — swap reached 15 GB and the disk filled.
+const workers = Number(process.env.WORKERS || Math.max(1, Math.min(4, availableParallelism() - 2, Math.floor(totalmem() / 4e9))));
 export default defineConfig({
     testDir: ".",
     // a page checked in several states / languages takes longer; the state and locale tests set their own budgets
