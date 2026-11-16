@@ -46,6 +46,7 @@
 //                      runtime checks on the routes it reached (when a dev server / preview answers)
 import { spawnSync, spawn } from "node:child_process";
 import { forward } from "../lib/forward.js";
+import { reapOrphans, watchRun } from "../lib/reap.js";
 import { dirname, join, relative } from "node:path";
 import { existsSync, statSync as statSync0 } from "node:fs";
 import { fileURLToPath } from "node:url";
@@ -64,7 +65,11 @@ function playwright(args, env = process.env) {
   let cli;
   try { cli = createRequire(join(root, "package.json")).resolve("@playwright/test/cli"); }
   catch { console.error("babysitter: @playwright/test is not installed next to Claude's Babysitter (npm install)"); return 2; }
-  return forward(process.execPath, [cli, "test", "-c", join(root, "playwright/playwright.config.js"), ...args], { stdio: "inherit", cwd: process.cwd(), env });
+  // browsers a killed run left behind are closed before this run starts and after it ends, and a detached watchdog
+  // closes them even when this process is killed outright (lib/reap.js, 5.8.1)
+  reapOrphans();
+  watchRun();
+  return forward(process.execPath, [cli, "test", "-c", join(root, "playwright/playwright.config.js"), ...args], { stdio: "inherit", cwd: process.cwd(), env, cleanup: () => reapOrphans() });
 }
 const node = (file, args) => process.exit(spawnSync(process.execPath, [join(root, file), ...args], { stdio: "inherit" }).status ?? 1);
 switch (cmd) {

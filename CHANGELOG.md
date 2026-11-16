@@ -2,6 +2,12 @@
 
 Earlier releases (4.11.1 and before) are described in the README under "What changed in …".
 
+## 5.8.1 — no browser outlives its run (2026-11-16)
+
+- A run that was killed outright (the 15 s SIGKILL fallback, a wrapper's SIGKILL, a closed terminal) left its headless Chromes running under launchd, about 700 MB each. They piled up across runs: on a 17 GB Mac four of them plus a live run pushed swap to 15 GB and filled the disk. `babysitter e2e` and `babysitter test` now close such orphans before a run starts and after it ends, including when the run is stopped by a signal (`lib/reap.js`). An orphan is a headless Chrome with launchd as parent and a Playwright temporary profile, so the user's own Chrome, the Playwright MCP browser and another run that is still going are never touched. `BABYSITTER_NO_REAP=1` turns the sweep off.
+- The default worker count is now one per 4 GB of RAM, at most 4 (it was one per 2.5 GB, at most 8). A 17 GB machine runs 4 Chromes instead of 6. `WORKERS` still overrides it.
+- 2.7 no longer reports the scroll travel under a pinned section as empty space between sections. The tall-section rule already skipped a section holding a sticky element; the gap rule did not, and the lanternwake landing's pinned Wardens rail (a sticky stage scrubbed sideways by 4,400 px of scroll) was reported as "4418 px of empty space above this section".
+
 ## 5.8.0 — every role has its own door (2026-11-10)
 
 **FM16, new.** The owner: the sign-in and sign-up of an assistant or a specialist must differ from the customer's —
